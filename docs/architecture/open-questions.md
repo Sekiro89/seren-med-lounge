@@ -111,11 +111,27 @@ session, not a committed automated test — see #10.
 `prisma/migrations/20260921070409_audit_log_organization`, with the same
 `FORCE ROW LEVEL SECURITY` + fail-closed policy as `clinics`/`users`/
 `patients`. `AuditService` (`apps/api/src/audit`) got a minimal real
-implementation (`record()`, `listForOrganization()`, both via
-`withTenant`) so the column isn't just schema decoration — `GET /audit`
-is guarded by the pre-existing `audit-log:read` permission.
-`verify-tenant-isolation.ts` now asserts AuditLog RLS the same way it
-does for the other tables (fail-closed, cross-tenant isolation).
+implementation (`record()`, `listForOrganization()`) so the column isn't
+just schema decoration — `GET /audit` is guarded by the pre-existing
+`audit-log:read` permission. `verify-tenant-isolation.ts` now asserts
+AuditLog RLS the same way it does for the other tables (fail-closed,
+cross-tenant isolation).
+
+**Follow-up closed**: `record()` sat uncalled by every other module for
+a while — real infrastructure, but not wired into any actual write path,
+found by checking rather than assuming it was used. Now called from
+every real mutation in the clinic journey spine and `users`:
+`UsersService.create` (`user.create`), `AppointmentsService.checkIn`
+(`appointment.check_in`), `VitalsService.record` (`vitals.record`), and
+all three `ClinicalNotesService` transitions (`clinical_note.create_draft`
+/ `sign_off` / `amend`). `record()` itself was refactored to take the
+caller's own `tx` instead of opening a second transaction, so the audit
+entry commits or rolls back atomically with the action it's recording
+— it can't succeed independently and leave the two out of sync. Verified
+live: `clinic-journey.e2e-spec.ts`'s "audit trail" tests perform a real
+check-in → vitals → draft → sign-off → amend sequence, then assert
+`GET /audit` actually contains each entry with the correct `actorId`,
+not just that the requests returned 2xx.
 
 **Still a real decision, not fully resolved**: `organizationId` was made
 _required_ on the assumption that every actor today (`User`, `Patient`)

@@ -2,21 +2,28 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import type { CreateUserInput } from '@serenemed/validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { toAppStaffRole, toPrismaStaffRole } from './staff-role.mapper';
 
 const BCRYPT_COST = 12;
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   /**
    * Creates a user in `organizationId` — always the caller's own
    * organization (from TenantContextService in the controller), never a
    * value taken from request input. See createUserSchema's comment in
-   * @serenemed/validation.
+   * @serenemed/validation. `actorId` is the already-authenticated admin
+   * making the call (TenantContextService.userId in the controller) —
+   * who granted a new staff account access is exactly the kind of thing
+   * an audit trail exists for.
    */
-  async create(organizationId: string, input: CreateUserInput) {
+  async create(organizationId: string, actorId: string, input: CreateUserInput) {
     const passwordHash = await bcrypt.hash(input.password, BCRYPT_COST);
 
     const user = await this.prisma.withTenant(organizationId, async (tx) => {
@@ -27,7 +34,7 @@ export class UsersService {
         throw new ConflictException('A user with this email already exists in this organization.');
       }
 
-      return tx.user.create({
+      const created = await tx.user.create({
         data: {
           organizationId,
           clinicId: input.clinicId,
@@ -46,6 +53,17 @@ export class UsersService {
           createdAt: true,
         },
       });
+
+      await this.auditService.record(tx, organizationId, {
+        actorType: 'USER',
+        actorId,
+        action: 'user.create',
+        entityType: 'User',
+        entityId: created.id,
+        metadata: { role: created.role, email: created.email },
+      });
+
+      return created;
     });
 
     return { ...user, role: toAppStaffRole(user.role) };

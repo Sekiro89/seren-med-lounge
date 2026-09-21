@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { ClinicalRecordSource, ClinicalRecordStatus } from '@prisma/client';
 import type { ClinicalNoteContentInput } from '@serenemed/validation';
 import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * Proves docs/architecture/security.md's clinical-record-immutability
@@ -15,7 +16,10 @@ import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.servi
  */
 @Injectable()
 export class ClinicalNotesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async createDraft(
     organizationId: string,
@@ -49,6 +53,15 @@ export class ClinicalNotesService {
           authorId,
           ...content,
         },
+      });
+
+      await this.auditService.record(tx, organizationId, {
+        actorType: 'USER',
+        actorId: authorId,
+        action: 'clinical_note.create_draft',
+        entityType: 'ClinicalNote',
+        entityId: note.id,
+        metadata: { encounterId, patientId: encounter.patientId, versionNumber: 1 },
       });
 
       return { ...note, status: version.status, versions: [version] };
@@ -107,6 +120,15 @@ export class ClinicalNotesService {
         data: { status: ClinicalRecordStatus.FINALIZED, currentVersionNumber: nextVersionNumber },
       });
 
+      await this.auditService.record(tx, organizationId, {
+        actorType: 'USER',
+        actorId: signingUserId,
+        action: 'clinical_note.sign_off',
+        entityType: 'ClinicalNote',
+        entityId: clinicalNoteId,
+        metadata: { versionNumber: nextVersionNumber },
+      });
+
       return finalized;
     });
   }
@@ -148,6 +170,15 @@ export class ClinicalNotesService {
       await tx.clinicalNote.update({
         where: { id: clinicalNoteId },
         data: { status: ClinicalRecordStatus.AMENDED, currentVersionNumber: nextVersionNumber },
+      });
+
+      await this.auditService.record(tx, organizationId, {
+        actorType: 'USER',
+        actorId: authorId,
+        action: 'clinical_note.amend',
+        entityType: 'ClinicalNote',
+        entityId: clinicalNoteId,
+        metadata: { versionNumber: nextVersionNumber },
       });
 
       return amended;

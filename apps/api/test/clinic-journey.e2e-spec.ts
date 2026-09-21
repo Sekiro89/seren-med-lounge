@@ -40,10 +40,13 @@ describe('Clinic journey spine (e2e)', () => {
     admin = new PrismaClient({ datasources: { db: { url: process.env.DIRECT_DATABASE_URL } } });
 
     // Deleted in FK-dependency order — a previous run left
-    // clinical_note_versions rows referencing this run's users
-    // (authorId) and patients, so those have to go first or
-    // user.deleteMany()/patient.deleteMany() hit a foreign key violation.
+    // clinical_note_versions/audit_logs rows referencing this run's
+    // organizations (and clinical_note_versions referencing its users
+    // via authorId), so those have to go first or
+    // user.deleteMany()/organization.deleteMany() hit a foreign key
+    // violation.
     const orgFilter = { organizationId: { in: [orgA.id, orgB.id] } };
+    await admin.auditLog.deleteMany({ where: orgFilter });
     await admin.clinicalNoteVersion.deleteMany({ where: orgFilter });
     await admin.clinicalNote.deleteMany({ where: orgFilter });
     await admin.vital.deleteMany({ where: orgFilter });
@@ -328,6 +331,119 @@ describe('Clinic journey spine (e2e)', () => {
         .expect(200);
       expect(encounterRes.body.vitals).toHaveLength(1);
       expect(encounterRes.body.vitals[0]).toMatchObject({ pulseBpm: 80, spo2Percent: 98 });
+    });
+  });
+
+  describe('audit trail', () => {
+    // AuditService.record() used to exist with nobody calling it — real
+    // rows are what actually prove it's wired into the write paths that
+    // matter, not just that the app boots. Each assertion below checks
+    // both that the entry exists AND that its actorId is the real
+    // authenticated caller, not a hardcoded/missing value.
+    it('check-in, vitals, and every clinical note transition each write a real AuditLog entry', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const meRes = await request(app.getHttpServer())
+        .get('/users')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const adminAId = (meRes.body as { id: string; email: string }[]).find(
+        (u) => u.email === 'admin@journey-a.example.com',
+      )!.id;
+
+      const appt = await request(app.getHttpServer())
+        .post('/appointments')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          patientId: patientAId,
+          entrySource: 'RECEPTION_WALK_IN',
+          scheduledAt: new Date().toISOString(),
+        })
+        .expect(201);
+      const checkIn = await request(app.getHttpServer())
+        .post(`/appointments/${appt.body.id}/check-in`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+      const encounterId = checkIn.body.id as string;
+
+      await request(app.getHttpServer())
+        .post('/vitals')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, pulseBpm: 72 })
+        .expect(201);
+
+      const draftRes = await request(app.getHttpServer())
+        .post('/clinical-notes')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, subjective: 'Audit trail check.' })
+        .expect(201);
+      const noteId = draftRes.body.id as string;
+
+      await request(app.getHttpServer())
+        .post(`/clinical-notes/${noteId}/sign-off`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/clinical-notes/${noteId}/amend`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ subjective: 'Audit trail check, corrected.' })
+        .expect(201);
+
+      const auditRes = await request(app.getHttpServer())
+        .get('/audit')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const entries = auditRes.body as {
+        action: string;
+        entityType: string;
+        entityId: string;
+        actorId: string;
+      }[];
+
+      expect(entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            action: 'appointment.check_in',
+            entityType: 'Appointment',
+            entityId: appt.body.id,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'vitals.record',
+            entityType: 'Vital',
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'clinical_note.create_draft',
+            entityType: 'ClinicalNote',
+            entityId: noteId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'clinical_note.sign_off',
+            entityType: 'ClinicalNote',
+            entityId: noteId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'clinical_note.amend',
+            entityType: 'ClinicalNote',
+            entityId: noteId,
+            actorId: adminAId,
+          }),
+        ]),
+      );
+    });
+
+    it("org B's admin cannot see org A's audit entries", async () => {
+      const tokenB = await login(orgB.id, 'admin@journey-b.example.com', adminBPassword);
+      const auditRes = await request(app.getHttpServer())
+        .get('/audit')
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(200);
+      const entries = auditRes.body as { entityType: string }[];
+      expect(entries.some((e) => e.entityType === 'ClinicalNote')).toBe(false);
+      expect(entries.some((e) => e.entityType === 'Appointment')).toBe(false);
     });
   });
 });

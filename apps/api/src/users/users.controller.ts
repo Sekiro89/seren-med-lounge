@@ -21,6 +21,10 @@ export class UsersController {
   @Post()
   @RequirePermissions('user:manage')
   create(@Body(new ZodValidationPipe(createUserSchema)) body: CreateUserInput) {
-    return this.usersService.create(this.tenantContext.organizationId, body);
+    return this.usersService.create(
+      this.tenantContext.organizationId,
+      this.tenantContext.userId,
+      body,
+    );
   }
 }

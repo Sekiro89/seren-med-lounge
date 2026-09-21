@@ -35,6 +35,10 @@ export class AppointmentsController {
   @Post(':id/check-in')
   @RequirePermissions('appointment:write')
   checkIn(@Param('id') id: string) {
-    return this.appointmentsService.checkIn(this.tenantContext.organizationId, id);
+    return this.appointmentsService.checkIn(
+      this.tenantContext.organizationId,
+      this.tenantContext.userId,
+      id,
+    );
   }
 }

@@ -15,6 +15,10 @@ export class VitalsController {
   @Post()
   @RequirePermissions('vitals:write')
   record(@Body(new ZodValidationPipe(recordVitalSchema)) body: RecordVitalInput) {
-    return this.vitalsService.record(this.tenantContext.organizationId, body);
+    return this.vitalsService.record(
+      this.tenantContext.organizationId,
+      this.tenantContext.userId,
+      body,
+    );
   }
 }

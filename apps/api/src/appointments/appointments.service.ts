@@ -2,10 +2,14 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { AppointmentStatus, EncounterStatus } from '@prisma/client';
 import type { CreateAppointmentInput } from '@serenemed/validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async create(organizationId: string, input: CreateAppointmentInput) {
     return this.prisma.withTenant(organizationId, (tx) =>
@@ -36,7 +40,7 @@ export class AppointmentsService {
    * writes go through the same `tx` from one `withTenant` call, so
    * they're the same Postgres transaction, not two separate ones.
    */
-  async checkIn(organizationId: string, appointmentId: string) {
+  async checkIn(organizationId: string, actorId: string, appointmentId: string) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const appointment = await tx.appointment.findUnique({ where: { id: appointmentId } });
       if (!appointment) {
@@ -67,6 +71,15 @@ export class AppointmentsService {
           appointmentId: appointment.id,
           status: EncounterStatus.OPEN,
         },
+      });
+
+      await this.auditService.record(tx, organizationId, {
+        actorType: 'USER',
+        actorId,
+        action: 'appointment.check_in',
+        entityType: 'Appointment',
+        entityId: appointment.id,
+        metadata: { encounterId: encounter.id, patientId: appointment.patientId },
       });
 
       return encounter;

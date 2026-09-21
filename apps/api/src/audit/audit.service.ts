@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 
 export interface RecordAuditEntryInput {
   actorType: 'USER' | 'PATIENT' | 'SYSTEM';
@@ -11,12 +11,10 @@ export interface RecordAuditEntryInput {
 }
 
 /**
- * Minimal, real implementation — proves AuditLog's organizationId/RLS
- * addition is load-bearing, not just a schema change nobody calls. Other
- * modules should inject this and call `record()` when they gain a real
- * write path worth auditing; there isn't one yet (no module has a real
- * mutation beyond `users`, which doesn't call this — not asked for
- * here). No delete method: AuditLog has no `deletedAt` and its
+ * Real callers as of the clinic journey spine: UsersService.create,
+ * AppointmentsService.checkIn, VitalsService.record, and every
+ * ClinicalNotesService mutation — see each for what's logged and why.
+ * No delete method: AuditLog has no `deletedAt` and its
  * `.delete()`/`.deleteMany()` are real (not soft) — see
  * soft-delete.extension.ts — but nothing should be calling them on an
  * audit trail regardless.
@@ -25,20 +23,25 @@ export interface RecordAuditEntryInput {
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async record(organizationId: string, entry: RecordAuditEntryInput) {
-    return this.prisma.withTenant(organizationId, (tx) =>
-      tx.auditLog.create({
-        data: {
-          organizationId,
-          actorType: entry.actorType,
-          actorId: entry.actorId,
-          action: entry.action,
-          entityType: entry.entityType,
-          entityId: entry.entityId,
-          metadata: entry.metadata,
-        },
-      }),
-    );
+  /**
+   * Takes the caller's own `tx` (from their `withTenant` call)
+   * deliberately, rather than opening a separate transaction itself —
+   * the audit entry needs to commit or roll back atomically with the
+   * action it's recording, not as an independent write that could
+   * succeed (or fail) on its own and leave the two out of sync.
+   */
+  async record(tx: ExtendedPrismaClient, organizationId: string, entry: RecordAuditEntryInput) {
+    return tx.auditLog.create({
+      data: {
+        organizationId,
+        actorType: entry.actorType,
+        actorId: entry.actorId,
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        metadata: entry.metadata,
+      },
+    });
   }
 
   async listForOrganization(organizationId: string) {
