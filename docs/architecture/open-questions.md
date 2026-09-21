@@ -211,10 +211,22 @@ them. Caught by live end-to-end testing (a real HTTP call through the
 full pipe/guard stack), not by typecheck, lint, or a unit test that
 mocks the framework's parameter-binding behavior.
 
-**Still open, unchanged from #8(a):** nothing _enforces_ that a future
-module follows the `TenantContextService` + `withTenant` pattern beyond
-code review and now two working examples to copy from
-(`users`/`patients` and `appointments`/`encounters`/`vitals`/
+**Partially resolved, was open as #8(a):** `verify-tenant-isolation.ts`
+now includes a generic RLS _coverage_ check (`assertRlsCoverage`) — it
+asks Postgres's own catalogs (`pg_class`, `pg_policies`) which tables in
+`public` have an `organizationId` column, then asserts every one of
+them has RLS enabled, forced, and at least one policy, instead of the
+old hardcoded `patient`/`auditLog`-only checks. It needs no update when
+a new table is added; it discovers the table set itself. Run live, it
+correctly found and validated all 9 real tenant-scoped tables. What this
+does _not_ do: there's still no CI wired up in this repo at all (no
+`.github/workflows`) to run it automatically, so it's still a manual
+`pnpm --filter api run verify:tenant-isolation` step someone has to
+remember to run — the check itself just got harder to pass accidentally
+by forgetting the RLS SQL, not automatic. Also still open: nothing
+_enforces_ that a future module follows the `TenantContextService` +
+`withTenant` pattern beyond code review and now two working examples to
+copy from (`users`/`patients` and `appointments`/`encounters`/`vitals`/
 `clinical-notes`). Also still open: the enum-duplication problem
 (Prisma generates its own copy of every `@serenemed/types` enum) has no
 generic mapper yet — this slice's services consume Prisma's own enum

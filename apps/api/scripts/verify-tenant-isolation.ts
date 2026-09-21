@@ -19,6 +19,18 @@
  *      ran outside the caller's transaction, so it escaped RLS entirely
  *      once RLS was actually enforcing.
  * Re-run this after touching either mechanism.
+ *
+ * Below the mechanism checks (patients/auditLog, hand-picked examples)
+ * is a generic RLS *coverage* check (`assertRlsCoverage`): it asks
+ * Postgres's own catalogs which tables have an `organizationId` column,
+ * then asserts every one of them has RLS enabled+forced and at least one
+ * policy — instead of trusting that whoever added the next table also
+ * remembered to hand-write the RLS SQL in their migration (nothing else
+ * in the toolchain checks this; see
+ * docs/architecture/domain-modules.md rule 6 and
+ * docs/architecture/open-questions.md #8(a)/#13). This check needs no
+ * updates when a new table is added — it discovers the table set itself
+ * every run.
  */
 import 'reflect-metadata';
 import { PrismaClient } from '@prisma/client';
@@ -33,6 +45,65 @@ function assert(condition: boolean, message: string) {
   }
 }
 
+/**
+ * Discovers every table in the `public` schema with an `organizationId`
+ * column (via information_schema, not a hardcoded list) and asserts each
+ * one has RLS enabled, forced, and at least one policy defined — the
+ * exact three things `ALTER TABLE ... ENABLE/FORCE ROW LEVEL SECURITY`
+ * + `CREATE POLICY` in a migration are responsible for. `Organization`
+ * itself is correctly excluded: it has no `organizationId` column since
+ * it IS the tenant, not a tenant-scoped table.
+ *
+ * Runs via `admin` (the superuser/DIRECT_DATABASE_URL role) because it
+ * needs to read `pg_class`/`pg_policies`, not app data — has nothing to
+ * do with RLS bypass here.
+ */
+async function assertRlsCoverage(admin: PrismaClient) {
+  const tables = await admin.$queryRaw<
+    { table_name: string; row_security: boolean; force_row_security: boolean }[]
+  >`
+    SELECT
+      c.relname AS table_name,
+      c.relrowsecurity AS row_security,
+      c.relforcerowsecurity AS force_row_security
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'r'
+      AND c.relname IN (
+        SELECT table_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND column_name = 'organizationId'
+      )
+    ORDER BY c.relname
+  `;
+
+  assert(
+    tables.length > 0,
+    'found at least one organizationId-scoped table to check (sanity check on the query itself)',
+  );
+
+  const policyRows = await admin.$queryRaw<
+    { tablename: string }[]
+  >`SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'`;
+  const tablesWithPolicies = new Set(policyRows.map((r) => r.tablename));
+
+  for (const table of tables) {
+    assert(table.row_security, `${table.table_name}: ROW LEVEL SECURITY is enabled`);
+    assert(
+      table.force_row_security,
+      `${table.table_name}: ROW LEVEL SECURITY is forced (FORCE ROW LEVEL SECURITY — without this, the table's owner role bypasses RLS)`,
+    );
+    assert(
+      tablesWithPolicies.has(table.table_name),
+      `${table.table_name}: has at least one RLS policy defined`,
+    );
+  }
+
+  console.log(
+    `  (checked ${tables.length} table(s): ${tables.map((t) => t.table_name).join(', ')})`,
+  );
+}
+
 async function main() {
   const prisma = new PrismaService();
   await prisma.onModuleInit();
@@ -44,6 +115,10 @@ async function main() {
   const admin = new PrismaClient({
     datasources: { db: { url: process.env.DIRECT_DATABASE_URL } },
   });
+
+  console.log('\n--- RLS coverage: every organizationId-scoped table, not just the ones below ---');
+  await assertRlsCoverage(admin);
+
   await admin.$executeRawUnsafe('TRUNCATE "patients", "clinics", "users", "organizations" CASCADE');
 
   // Organization has no RLS policy (it IS the tenant, nothing to scope
