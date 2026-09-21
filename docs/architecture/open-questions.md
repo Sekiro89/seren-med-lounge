@@ -86,16 +86,22 @@ is a schema decision (should an audit log entry always belong to exactly
 one org, even for cross-org admin actions?) that wasn't asked for here.
 **Assumption made:** left as a known gap rather than guessed at.
 
-## 10. No automated test covers the auth/tenant-isolation HTTP path
+## 10. No automated test covers the auth/tenant-isolation HTTP path — RESOLVED
 
-`apps/api/scripts/verify-tenant-isolation.ts` automates the DB-level RLS
-and soft-delete checks, but the full request path (login → JWT →
-`JwtAuthGuard` → `PermissionsGuard` → `TenantContextService` →
-`withTenant`) was verified by hand (curl, two seeded orgs) when `users`/
-`auth` were built, not by a committed Jest e2e spec. Given this exact
-class of mechanism has already produced two silent bugs once (see the
-Row-level security section's history), this is a real gap, not a nitpick.
-**Assumption made:** left as a follow-up rather than building it now,
-since it wasn't asked for — recommend a Supertest e2e spec that boots
-the full `AppModule`, seeds two orgs directly via Prisma, and asserts the
-same checks the manual session did.
+`apps/api/test/auth-tenant.e2e-spec.ts` (`pnpm --filter api run
+test:e2e`) now automates what was previously a manual curl session:
+default-deny (401 unauthenticated, 401 on a garbage token, `/health`
+still public), login (wrong password, right password/wrong org, and
+correct credentials all 401/401/201 as expected), tenant isolation on
+`GET /users` for two independently-seeded/independently-logged-in orgs,
+RBAC (a `NURSE` token gets 403 on the same route), and that `POST /users`
+has no field a caller could use to create a user in a different org than
+their own. 11 assertions, all passing, part of the normal `test:e2e` run
+now (needs a live Postgres — see the root README's local setup).
+
+Building it surfaced two issues, both in the test itself, not the app:
+an invalid test-fixture TLD (`.e2e`) that Zod's `.email()` correctly
+rejected (real TLDs never contain digits), and non-idempotent seeding
+that left stale rows across runs once the email fixtures changed — the
+seed step now does a real `deleteMany` scoped to the test's org IDs
+before creating fixtures, so repeated runs don't accumulate state.

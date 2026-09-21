@@ -125,11 +125,19 @@ tenant-isolation policies silently do nothing. `DIRECT_DATABASE_URL`
 — this was a real bug in an earlier version of this setup, caught by
 actually running it, not by lint/typecheck/build.
 
-After migrating, `pnpm --filter api run verify:tenant-isolation` is a
-manual script (not part of `pnpm test`) that seeds two organizations
-against the real database and asserts Row-Level Security and the
-soft-delete convention actually behave as documented — worth running
-after touching either.
+After migrating, two checks run against the real database (not part of
+the root `pnpm test`, which only runs unit tests — both of these need
+Postgres up):
+
+- `pnpm --filter api run verify:tenant-isolation` — manual script,
+  asserts Row-Level Security and the soft-delete convention behave as
+  documented at the Prisma level.
+- `pnpm --filter api run test:e2e` — Jest/Supertest, drives the full
+  login → JWT → guard → tenant-isolation HTTP path end to end (default-
+  deny, RBAC, cross-org isolation).
+
+Worth running both after touching auth, `PrismaService`, or the RLS
+policies.
 
 **Logging in**: there's no signup flow yet — `POST /users` requires an
 already-authenticated admin. To get a first user:

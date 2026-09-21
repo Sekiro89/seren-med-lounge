@@ -162,18 +162,17 @@ scale.
 schema, so it isn't RLS-scoped. Flagged, not fixed here — adding it is a
 schema change plus a migration, not just a policy.
 
-**Verifying this**: `pnpm --filter api run verify:tenant-isolation`
-(`apps/api/scripts/verify-tenant-isolation.ts`) exercises `PrismaService`
-directly against a real Postgres. For the full HTTP path (login → JWT →
-guard → `TenantContextService` → `withTenant`), the manual check was:
-seed two organizations (`apps/api/scripts/seed-dev.ts` + an ad hoc
-second-org seed), start the server, log in as each org's admin
-independently, and confirm `GET /users` returns only that org's users —
-plus that a non-admin role gets `403` on the same route (RBAC) and an
-unauthenticated request gets `401` (default-deny). That HTTP-level check
-isn't itself a committed script; re-run it by hand after touching
-`JwtAuthGuard`, `TenantContextService`, or the guard registration order
-in `app.module.ts`.
+**Verifying this**: two committed, automated checks — `pnpm --filter api
+run verify:tenant-isolation` (`apps/api/scripts/verify-tenant-isolation.ts`)
+exercises `PrismaService` directly against a real Postgres, and `pnpm
+--filter api run test:e2e` includes `test/auth-tenant.e2e-spec.ts`,
+which drives the full HTTP path — login, `JwtAuthGuard`,
+`PermissionsGuard`, `TenantContextService`, `withTenant` — for two
+independently-seeded, independently-logged-in organizations, plus
+default-deny and RBAC checks on the same routes. Both need a live
+Postgres (see the root README). Re-run both after touching
+`JwtAuthGuard`, `TenantContextService`, the RLS policies, or the guard
+registration order in `app.module.ts`.
 
 ## Soft delete
 
