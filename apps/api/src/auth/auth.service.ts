@@ -1,15 +1,57 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import type { LoginInput } from '@serenemed/validation';
+import { UsersService } from '../users/users.service';
+import type { JwtPayload } from './jwt-payload.interface';
 
 /**
- * Boundary established (JWT issuance, password hashing, refresh tokens),
- * implementation intentionally deferred until the Users module has a
- * persisted credential to check against. See docs/architecture/security.md
- * for the intended password-hashing / JWT-lifetime approach.
+ * Issues short-lived access tokens only — no refresh-token flow yet
+ * (JWT_REFRESH_TTL in .env.example is reserved for it). That's a
+ * deliberate scope cut, not an oversight: refresh rotation/revocation is
+ * its own piece of design (rotation on use? a refresh_tokens table for
+ * revocation? sliding vs. fixed expiry?) that wasn't asked for here —
+ * see docs/architecture/open-questions.md.
  */
 @Injectable()
 export class AuthService {
-  login(_credentials: LoginInput): never {
-    throw new NotImplementedException('Auth is not wired to a user store yet.');
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+  ) {}
+
+  async login(credentials: LoginInput) {
+    const user = await this.usersService.findByOrgAndEmailWithPassword(
+      credentials.organizationId,
+      credentials.email,
+    );
+
+    // Same error for "no such user" and "wrong password" — distinguishing
+    // them lets an attacker enumerate valid emails per organization.
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
+    const passwordMatches = await bcrypt.compare(credentials.password, user.passwordHash);
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      organizationId: user.organizationId,
+      role: user.role,
+    };
+
+    return {
+      accessToken: await this.jwtService.signAsync(payload),
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        organizationId: user.organizationId,
+      },
+    };
   }
 }

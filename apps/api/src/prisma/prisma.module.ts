@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { TenantContextService } from './tenant-context.service';
 
 /**
  * Global so every domain module can inject PrismaService without each one
@@ -10,7 +11,7 @@ import { PrismaService } from './prisma.service';
  */
 @Global()
 @Module({
-  providers: [PrismaService],
-  exports: [PrismaService],
+  providers: [PrismaService, TenantContextService],
+  exports: [PrismaService, TenantContextService],
 })
 export class PrismaModule {}

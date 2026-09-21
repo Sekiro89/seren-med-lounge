@@ -131,6 +131,25 @@ against the real database and asserts Row-Level Security and the
 soft-delete convention actually behave as documented — worth running
 after touching either.
 
+**Logging in**: there's no signup flow yet — `POST /users` requires an
+already-authenticated admin. To get a first user:
+
+```bash
+pnpm --filter api exec ts-node -O '{"module":"commonjs"}' scripts/seed-dev.ts
+# prints an organizationId, email, and password
+
+curl -X POST http://localhost:4000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"organizationId":"seed-org","email":"admin@dev.local","password":"dev-password-123"}'
+# → { accessToken, user }
+
+curl http://localhost:4000/users -H "Authorization: Bearer <accessToken>"
+```
+
+`scripts/seed-dev.ts` is dev-only — see its header comment. Every route
+except `/health` and `/auth/login` requires that `Authorization` header;
+see [`docs/architecture/security.md#authentication--staff-access-tokens-only`](docs/architecture/security.md#authentication--staff-access-tokens-only).
+
 ## Development commands
 
 ```bash

@@ -5,18 +5,15 @@ without inventing product requirements. Each needs a real answer before
 the relevant module is implemented — flagged here rather than assumed
 silently.
 
-## 1. Default-deny vs. default-open authorization
+## 1. Default-deny vs. default-open authorization — RESOLVED
 
-`PermissionsGuard` is registered globally, but a route with no
-`@RequirePermissions(...)` decorator currently **passes through**
-(open). This is safe only as an interim state because no route yet reads
-`req.user` (auth isn't wired). Once JWT auth lands, decide: should
-undecorated routes become **default-deny** (explicit `@Public()` opt-out
-per route), or stay default-open (explicit `@RequirePermissions`
-opt-in)? Default-deny is the safer default for a healthcare system.
-**Assumption made:** left default-open for now since flipping it is a
-one-line change in `PermissionsGuard`, but it must be revisited before
-any real route ships.
+Went with **default-deny**: `JwtAuthGuard` is now global and runs before
+`PermissionsGuard`, and every route requires a valid Bearer token unless
+explicitly marked `@Public()`
+(`apps/api/src/common/decorators/public.decorator.ts`) — used today by
+`/health` and `/auth/login` only. Verified live: an unauthenticated
+request to `GET /users` returns `401`, not a route that happened to have
+no data. See `docs/architecture/security.md#authentication--staff-access-tokens-only`.
 
 ## 2. Exact role → permission matrix
 
@@ -67,21 +64,18 @@ MinIO, DigitalOcean Spaces, etc.) but no specific provider was named.
 so a self-hosted MinIO in dev and a managed provider in prod both work
 without code changes.
 
-## 8. RLS tenant context isn't wired to a real request yet
+## 8. RLS tenant context isn't wired to a real request yet — RESOLVED
 
-`PrismaService.withTenant()` and the RLS policies on `clinics`/`users`/
-`patients` exist and are verified working against a real Postgres —
-`pnpm --filter api run verify:tenant-isolation` seeds two organizations
-and confirms cross-tenant reads/writes are actually blocked, not just
-that the SQL applies without erroring (see
-`docs/architecture/security.md#row-level-security`). But nothing calls
-`withTenant` from a real request yet — there's no `req.user.organizationId`
-to call it with until `auth` is implemented. **Assumption made:** shipped
-and verified the DB-level policy and the transaction helper now (the
-part that doesn't depend on auth), left the guard/interceptor that wires
-`withTenant` into every request for when `auth` lands, rather than
-building it against a `req.user` shape that doesn't exist yet and might
-not match what auth actually produces.
+`JwtAuthGuard` → `TenantContextService` → `PrismaService.withTenant()` is
+wired end to end and verified against real, independently-logged-in HTTP
+sessions for two separate organizations (`users` module is the reference
+implementation — see
+`docs/architecture/security.md#row-level-security`). Two things remain
+open, not resolved by this: (a) every _other_ module still needs to
+follow the same `TenantContextService` + `withTenant` pattern when it's
+built — nothing enforces that a future module does this correctly other
+than code review; (b) the HTTP-level verification was a manual curl
+session, not a committed automated test — see #10.
 
 ## 9. AuditLog has no organizationId
 
@@ -91,3 +85,17 @@ policy in this pass; `AuditLog` got neither, because it has no
 is a schema decision (should an audit log entry always belong to exactly
 one org, even for cross-org admin actions?) that wasn't asked for here.
 **Assumption made:** left as a known gap rather than guessed at.
+
+## 10. No automated test covers the auth/tenant-isolation HTTP path
+
+`apps/api/scripts/verify-tenant-isolation.ts` automates the DB-level RLS
+and soft-delete checks, but the full request path (login → JWT →
+`JwtAuthGuard` → `PermissionsGuard` → `TenantContextService` →
+`withTenant`) was verified by hand (curl, two seeded orgs) when `users`/
+`auth` were built, not by a committed Jest e2e spec. Given this exact
+class of mechanism has already produced two silent bugs once (see the
+Row-level security section's history), this is a real gap, not a nitpick.
+**Assumption made:** left as a follow-up rather than building it now,
+since it wasn't asked for — recommend a Supertest e2e spec that boots
+the full `AppModule`, seeds two orgs directly via Prisma, and asserts the
+same checks the manual session did.

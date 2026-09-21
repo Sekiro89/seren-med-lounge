@@ -8,6 +8,12 @@ import { z } from 'zod';
 export const apiEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
+  // Privileged connection used only by `prisma migrate` (see prisma
+  // schema's `directUrl`) — optional here because it's not read via
+  // ConfigService anywhere; Prisma resolves it from process.env
+  // directly. Listed so the schema stays an accurate description of
+  // every env var this app actually uses.
+  DIRECT_DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(16),
   JWT_ACCESS_TTL: z.string().default('15m'),

@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { parseApiEnv } from '@serenemed/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -51,7 +53,7 @@ import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: parseApiEnv }),
     PrismaModule,
 
     // --- identity & access ---
@@ -117,9 +119,13 @@ import { ReportsModule } from './reports/reports.module';
   controllers: [AppController],
   providers: [
     AppService,
-    // Applies to every route by default. A route with no @RequirePermissions
-    // is open — see docs/architecture/open-questions.md for the pending
-    // decision on default-deny once the auth guard populates req.user.
+    // Order matters: NestJS runs multiple APP_GUARD providers in
+    // registration order. JwtAuthGuard must run first — it's what
+    // populates request.user — so PermissionsGuard has something to
+    // read. Every route requires a valid Bearer token by default;
+    // @Public() (see common/decorators/public.decorator.ts) is the
+    // explicit opt-out, used today only by /health and /auth/login.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })

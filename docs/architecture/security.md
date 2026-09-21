@@ -27,21 +27,47 @@
   business data is retained, not destroyed, unless a model is explicitly
   excluded from that convention (currently only `AuditLog`).
 
-## Authentication (planned, not yet implemented)
+## Authentication — staff, access tokens only
 
-`apps/api/src/auth` establishes the controller/service boundary
-(`POST /auth/login`) but `AuthService.login` currently throws
-`NotImplementedException` — there is no user store to check credentials
-against yet (`users` module is a lean shell). When implemented:
+`POST /auth/login` (`apps/api/src/auth`) is real and verified end-to-end
+against a live server (curl, not just typecheck — see "Verifying this"
+under Row-level security). What exists:
 
-- Passwords are hashed with argon2id (or bcrypt as a fallback), never
-  stored or logged in plaintext.
-- Sessions are short-lived JWT access tokens + longer-lived refresh
-  tokens (see `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` in `.env.example`),
-  not long-lived opaque sessions.
+- Passwords hashed with bcrypt (cost 12), never stored or logged
+  plaintext.
+- `AuthService.login({ organizationId, email, password })` looks up the
+  user scoped to that organization (via `UsersService`, which itself goes
+  through `withTenant` — see Row-level security), compares the password
+  hash, and — on success — signs a JWT (`{ sub, organizationId, role }`)
+  with `JWT_SECRET`/`JWT_ACCESS_TTL`. The same `UnauthorizedException` is
+  thrown for "no such user" and "wrong password" so a caller can't
+  enumerate valid emails per organization.
+- `JwtAuthGuard` (`apps/api/src/common/guards/jwt-auth.guard.ts`) is
+  registered globally, before `PermissionsGuard`, and is **default-deny**:
+  every route requires a valid Bearer token unless decorated `@Public()`
+  (`apps/api/src/common/decorators/public.decorator.ts`) — used today
+  only by `/health` and `/auth/login`. This resolves what was open
+  question #1; see `docs/architecture/open-questions.md`.
 - Patient auth and staff auth are separate credential stores (`Patient`
   vs. `User` in `prisma/schema.prisma`) — a patient is never granted a
-  staff role by sharing a table.
+  staff role by sharing a table. Only staff login exists so far; patient
+  auth is unimplemented (method itself is still open — see
+  `open-questions.md#3`).
+
+**Requires `organizationId` in the login request** — a documented
+assumption (`loginSchema`'s comment in `@serenemed/validation`), not a
+resolved UX: `User.email` is unique per `(organizationId, email)`, so
+something has to say which org before a lookup can happen, and there's
+no product decision yet on how a real UI resolves that (subdomain, org
+picker, email-domain lookup).
+
+**Not implemented**: refresh tokens (`JWT_REFRESH_TTL` is reserved for
+this — access tokens only today, so a client must re-login every
+`JWT_ACCESS_TTL`), and any user-facing signup/invite flow (`POST /users`
+exists but requires an already-authenticated `user:manage` caller — see
+`apps/api/scripts/seed-dev.ts` for how the _first_ user in a fresh
+database gets created, which is a dev-only bootstrap script, not a
+production flow).
 
 ## Clinical record immutability
 
@@ -115,25 +141,39 @@ Every query against an RLS-protected table must go through the `tx` it
 provides — RLS applies to every access path, including `findUnique`, not
 just `findMany`.
 
-**Not yet wired to a real request.** Nothing calls `withTenant` from
-request-handling code yet, because nothing populates a request's
-`organizationId` yet — `auth` isn't implemented (`AuthService.login` is a
-stub), so there's no `req.user` to read it from. Once JWT auth lands, a
-guard/interceptor reading `req.user.organizationId` should be the one
-place that calls `withTenant`, wrapping each request's handler — see
-`docs/architecture/open-questions.md#8`.
+**Wired to real requests, reference implementation in `users`.**
+`TenantContextService` (`apps/api/src/prisma/tenant-context.service.ts`,
+request-scoped) reads `request.user.organizationId` — populated by
+`JwtAuthGuard` — and `UsersController`/`UsersService` show the intended
+pattern: a controller calls
+`usersService.listForOrganization(tenantContext.organizationId)`, and the
+service wraps its query in `prisma.withTenant(organizationId, tx => ...)`.
+Every new module doing tenant-scoped reads/writes should follow this
+same shape. Verified against real, independently-logged-in HTTP sessions
+for two different organizations — see "Verifying this" below.
+
+Being request-scoped, `TenantContextService` forces anything that
+injects it (so far: `UsersController`) to become request-scoped too,
+which is a real, accepted perf cost (no longer a singleton) — worth
+watching as more modules adopt the pattern; not a problem yet at this
+scale.
 
 **Known gap**: `AuditLog` has no `organizationId` column in the current
 schema, so it isn't RLS-scoped. Flagged, not fixed here — adding it is a
 schema change plus a migration, not just a policy.
 
 **Verifying this**: `pnpm --filter api run verify:tenant-isolation`
-(`apps/api/scripts/verify-tenant-isolation.ts`) is a manual script — not
-part of `jest`/CI — that seeds two organizations against a real Postgres
-and asserts RLS actually isolates them, including that a query with no
-tenant context returns zero rows and that cross-tenant `findUnique` is
-blocked. Re-run it after touching RLS policies, `withTenant`, or the
-docker-compose Postgres init script.
+(`apps/api/scripts/verify-tenant-isolation.ts`) exercises `PrismaService`
+directly against a real Postgres. For the full HTTP path (login → JWT →
+guard → `TenantContextService` → `withTenant`), the manual check was:
+seed two organizations (`apps/api/scripts/seed-dev.ts` + an ad hoc
+second-org seed), start the server, log in as each org's admin
+independently, and confirm `GET /users` returns only that org's users —
+plus that a non-admin role gets `403` on the same route (RBAC) and an
+unauthenticated request gets `401` (default-deny). That HTTP-level check
+isn't itself a committed script; re-run it by hand after touching
+`JwtAuthGuard`, `TenantContextService`, or the guard registration order
+in `app.module.ts`.
 
 ## Soft delete
 

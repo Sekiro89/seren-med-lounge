@@ -7,7 +7,11 @@ today:
 - **Full pattern** (`*.controller.ts` + `*.service.ts` + `*.module.ts` +
   `dto/`) — used where establishing the convention mattered now:
   `auth`, `users`, `patients`, `appointments`, `encounters`,
-  `clinical-notes`, `notifications`, `audit`.
+  `clinical-notes`, `notifications`, `audit`. `auth`/`users` are further
+  along than the rest — real persistence, real JWT issuance, verified
+  against a live server — and are the reference implementation for how a
+  tenant-scoped module should look: see rule 6 below and
+  `docs/architecture/security.md#row-level-security`.
 - **Lean shell** (`*.module.ts` only, `@Module({})`) — every other module
   below. Controllers/services/DTOs are added when that module's first
   real workflow is implemented, per the instruction not to generate files
@@ -43,6 +47,16 @@ today:
 5. Routes that should be restricted use `@RequirePermissions(...)` from
    `common/decorators/require-permissions.decorator.ts` — the backend
    check, not a frontend `can()` check, is what's authoritative.
+6. A module reading/writing an organizationId-scoped table (`Clinic`,
+   `User`, `Patient` today) does it through `PrismaService.withTenant()`,
+   with the organizationId coming from `TenantContextService` — never
+   from a client-supplied field in the request body. See `users` for the
+   pattern: `UsersController` reads `tenantContext.organizationId` and
+   passes it to `UsersService`, which wraps its Prisma calls in
+   `withTenant(organizationId, tx => ...)`. Querying via
+   `prisma.client` directly on one of these tables from inside a request
+   handler is a bug — RLS will silently return zero rows rather than the
+   caller's data.
 
 ## `patients` vs. CRM `leads`
 
