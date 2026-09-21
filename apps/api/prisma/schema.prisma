@@ -1,0 +1,127 @@
+// SereneMed Lounge — initial Prisma schema.
+//
+// INTENTIONALLY MINIMAL. This bootstraps the multi-tenant shell and the
+// root of the Unified Patient Record so migrations/tooling can be
+// exercised end to end. It is NOT the full domain model.
+//
+// The proposed full ERD (Appointment, Encounter, ClinicalNote +
+// versioning, Prescription, LabOrder, Invoice, Payment, InsuranceCase,
+// CarePlan, AuditLog detail, etc.) is documented in
+// docs/database/erd.md and gets added table-by-table as each backend
+// module is implemented — see docs/architecture/domain-modules.md.
+//
+// Keep StaffRole in sync by hand with packages/types/src/roles.ts
+// (Prisma cannot import a TS enum) until/unless we generate one from the other.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StaffRole {
+  ADMINISTRATOR
+  RECEPTION
+  NURSE
+  JUNIOR_DOCTOR
+  SENIOR_DOCTOR
+  SURGERY_COORDINATOR
+  PHARMACY
+  BILLING
+  INSURANCE
+  MARKETING
+}
+
+/// Tenancy root. A deployment can host multiple organizations later;
+/// today there is exactly one, but every table hangs off this from day one.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  clinics   Clinic[]
+  users     User[]
+  patients  Patient[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+/// A physical/operational clinic location under an organization.
+model Clinic {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  users          User[]
+  patients       Patient[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@map("clinics")
+}
+
+/// Staff identity — NOT the patient identity (see Patient below). Kept
+/// separate deliberately: staff auth/roles and patient auth/consent are
+/// different concerns and must never be merged into one "users" table.
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String?
+  clinic         Clinic?      @relation(fields: [clinicId], references: [id])
+  email          String       @unique
+  passwordHash   String
+  fullName       String
+  role           StaffRole
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+/// Root of the Unified Patient Record. Every other domain (clinical,
+/// billing, pharmacy, follow-up, CRM/lead-once-converted, timeline) will
+/// attach to this same Patient row by patientId — never duplicated per
+/// module. See docs/database/erd.md.
+model Patient {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String?
+  clinic         Clinic?      @relation(fields: [clinicId], references: [id])
+  firstName      String
+  lastName       String
+  dateOfBirth    DateTime
+  phone          String
+  email          String?
+  passwordHash   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([phone])
+  @@map("patients")
+}
+
+/// Foundational audit trail — see docs/architecture/security.md.
+/// Detailed per-domain audit needs (e.g. clinical note amendment history)
+/// get their own tables later; this is the generic cross-cutting log.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorType  String // "USER" | "PATIENT" | "SYSTEM"
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}

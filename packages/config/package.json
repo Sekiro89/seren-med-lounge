@@ -1,0 +1,22 @@
+{
+  "name": "@serenemed/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared, validated environment configuration schema. Each app parses process.env through this schema at startup instead of reading process.env ad hoc.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings=0"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "eslint": "^9.18.0"
+  }
+}

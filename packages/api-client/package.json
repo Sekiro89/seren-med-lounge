@@ -1,0 +1,18 @@
+{
+  "name": "@serenemed/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed HTTP client the frontends use to talk to the backend API. All patient/staff data access goes through here — never fetched ad hoc from components.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings=0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "eslint": "^9.18.0"
+  }
+}
