@@ -77,14 +77,24 @@ built — nothing enforces that a future module does this correctly other
 than code review; (b) the HTTP-level verification was a manual curl
 session, not a committed automated test — see #10.
 
-## 9. AuditLog has no organizationId
+## 9. AuditLog has no organizationId — RESOLVED
 
-Every other table added a `deletedAt` field and (where relevant) an RLS
-policy in this pass; `AuditLog` got neither, because it has no
-`organizationId` column to scope by in the first place — and adding one
-is a schema decision (should an audit log entry always belong to exactly
-one org, even for cross-org admin actions?) that wasn't asked for here.
-**Assumption made:** left as a known gap rather than guessed at.
+`AuditLog.organizationId` (required, FK'd to `Organization`) landed in
+`prisma/migrations/20260921070409_audit_log_organization`, with the same
+`FORCE ROW LEVEL SECURITY` + fail-closed policy as `clinics`/`users`/
+`patients`. `AuditService` (`apps/api/src/audit`) got a minimal real
+implementation (`record()`, `listForOrganization()`, both via
+`withTenant`) so the column isn't just schema decoration — `GET /audit`
+is guarded by the pre-existing `audit-log:read` permission.
+`verify-tenant-isolation.ts` now asserts AuditLog RLS the same way it
+does for the other tables (fail-closed, cross-tenant isolation).
+
+**Still a real decision, not fully resolved**: `organizationId` was made
+_required_ on the assumption that every actor today (`User`, `Patient`)
+already belongs to exactly one org, so every auditable action has one to
+record. A future cross-org/platform-level admin action (e.g. a
+super-admin managing multiple organizations) wouldn't fit this shape —
+not designed for here, since no such actor exists yet.
 
 ## 10. No automated test covers the auth/tenant-isolation HTTP path — RESOLVED
 
@@ -105,3 +115,16 @@ rejected (real TLDs never contain digits), and non-idempotent seeding
 that left stale rows across runs once the email fixtures changed — the
 seed step now does a real `deleteMany` scoped to the test's org IDs
 before creating fixtures, so repeated runs don't accumulate state.
+
+## 11. `withTenant`'s connection pool cost — measured, threshold not decided
+
+`docs/architecture/security.md#connection-pool-sizing` has real numbers
+now (default pool size, `max_connections`, and where it actually breaks
+under load), and `connection_limit`/`pool_timeout` are explicit env vars
+instead of an implicit default. What's still not decided: the actual
+threshold at which this deployment should introduce PgBouncer or another
+pooler — that depends on real instance count and real traffic shape,
+neither of which exist yet. **Assumption made:** documented the
+mechanism and its real behavior so the decision is informed when it's
+needed, rather than picking a threshold now with no traffic data to
+justify it.

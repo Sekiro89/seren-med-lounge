@@ -158,9 +158,11 @@ which is a real, accepted perf cost (no longer a singleton) — worth
 watching as more modules adopt the pattern; not a problem yet at this
 scale.
 
-**Known gap**: `AuditLog` has no `organizationId` column in the current
-schema, so it isn't RLS-scoped. Flagged, not fixed here — adding it is a
-schema change plus a migration, not just a policy.
+`AuditLog` is RLS-scoped the same way as the rest — `organizationId` was
+added in a follow-up migration (`20260921070409_audit_log_organization`)
+after the table already existed. See
+`docs/architecture/open-questions.md#9` for what's still a genuine
+open decision (required vs. optional `organizationId`) rather than a gap.
 
 **Verifying this**: two committed, automated checks — `pnpm --filter api
 run verify:tenant-isolation` (`apps/api/scripts/verify-tenant-isolation.ts`)
@@ -173,6 +175,73 @@ default-deny and RBAC checks on the same routes. Both need a live
 Postgres (see the root README). Re-run both after touching
 `JwtAuthGuard`, `TenantContextService`, the RLS policies, or the guard
 registration order in `app.module.ts`.
+
+## Connection pool sizing
+
+Every tenant-scoped query opens a transaction (`withTenant`'s `BEGIN` →
+`set_config` → query → `COMMIT`), which holds a Postgres connection for
+longer than a plain query would. This is a real cost of the RLS design,
+not a hypothetical one — measured, not just reasoned about:
+
+- Prisma's default pool size is `num_cpus * 2 + 1` — **17** on the
+  8-core machine this was measured on. Confirmed via `pg_stat_activity`:
+  the app held exactly 17 `serenemed_app` connections after a burst of
+  200 concurrent `GET /users` requests, and never exceeded it.
+- The docker-compose Postgres's default `max_connections` is **100**.
+  17 per instance means roughly 5 API instances (100 / 17, minus
+  headroom for migrations/psql/monitoring) before instances start
+  fighting over connections — with zero code changes, just from
+  scaling out replicas.
+- That default pool size is a real footgun in containers: `num_cpus`
+  often reflects the **host's** core count, not a container's CPU
+  _limit_, so it can silently size a pool much larger than intended.
+
+**Fix applied**: `DATABASE_URL` now sets `connection_limit` and
+`pool_timeout` explicitly (`.env.example`) instead of relying on
+Prisma's default — a deliberate, visible number instead of an implicit
+one. `connection_limit=10` was verified to actually take effect (same
+`pg_stat_activity` check, capped at exactly 10).
+
+**How it behaves under load** — measured against a live server, not
+assumed:
+
+| Pool size    | Timeout       | Concurrent requests | Result                          |
+| ------------ | ------------- | ------------------- | ------------------------------- |
+| 17 (default) | 10s (default) | 200                 | all `200`, 178ms total          |
+| 10           | 10s           | 200                 | all `200`, 207ms total          |
+| 2            | 2s            | 100                 | all `200`, 123ms total          |
+| 2            | 2s            | 2,000               | all `200`, ~2s total            |
+| 2            | 2s            | 5,000               | **1,044 / 5,000 failed** (~21%) |
+
+Excess requests **queue** for a free connection rather than failing
+immediately — confirmed by the 2-connection pool handling 2,000
+concurrent requests without a single error. It only actually breaks once
+genuinely overloaded: at 5,000 requests against a 2-connection pool, the
+failures were real `PrismaClientKnownRequestError`s — "Timed out
+fetching a new connection from the connection pool" — not a hang, a
+crash, or (this being the thing that actually mattered to check) not a
+mysterious RLS-shaped failure. NestJS's default exception filter turns
+that into a `500`; giving it a friendlier `503`/`Retry-After` response
+would be a reasonable follow-up, not done here.
+
+**Not tested here**: PgBouncer. Prisma's own guidance is that
+transaction-mode pooling is compatible with this app's pattern
+specifically because `set_config(...)` and the query it scopes always
+run inside one `$transaction()` — i.e. one logical transaction, which is
+exactly PgBouncer transaction-mode's unit of connection reuse — but it
+requires adding `?pgbouncer=true` to `DATABASE_URL` to disable prepared-statement
+caching behavior that doesn't work with connection multiplexing. That's
+documented Prisma behavior, not something exercised against a real
+PgBouncer in this session — flag it as unverified if it matters before
+relying on it.
+
+**When this actually needs attention**: multiple API instances against
+one Postgres (the 100-connection ceiling divided among them), or
+individual `withTenant` callbacks doing slow work (a slow query, a slow
+external call inside the transaction) rather than the fast single
+`SELECT`s measured here. Neither is true yet — this documents real
+numbers so the next person doesn't have to re-derive them from scratch
+when it does become true.
 
 ## Soft delete
 
@@ -224,12 +293,17 @@ a surprise reactivation), documented at the constraint in
 
 ## Audit logging
 
-`apps/api/src/audit` (full pattern) and the `AuditLog` Prisma model
-(`prisma/schema.prisma`) capture actor, action, entity, and metadata for
-security-relevant events. Per-domain audit trails with richer semantics
+`apps/api/src/audit` and the `AuditLog` Prisma model (`prisma/schema.prisma`)
+capture actor, action, entity, organization, and metadata for
+security-relevant events. `AuditService.record()`/`listForOrganization()`
+go through `withTenant` like every other tenant-scoped write/read — see
+Row-level security above. Per-domain audit trails with richer semantics
 (e.g. clinical note amendment history) get dedicated tables as those
 modules are built — `AuditLog` is the generic cross-cutting log, not a
-replacement for domain-specific versioning tables.
+replacement for domain-specific versioning tables. Nothing calls
+`AuditService.record()` yet — no other module has a real mutation worth
+auditing (only `users` does real writes so far, and wasn't asked to call
+this) — so `GET /audit` returns an empty list until something does.
 
 ## Other foundations already in place
 

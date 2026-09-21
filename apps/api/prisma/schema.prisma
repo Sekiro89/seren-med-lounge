@@ -27,20 +27,27 @@
 // handler in soft-delete.extension.ts for why.) See
 // docs/architecture/security.md#soft-delete.
 //
-// TENANT ISOLATION: Clinic/User/Patient (every table with organizationId)
-// have Postgres Row-Level Security policies applied in the migration SQL
-// (Prisma's schema language cannot express RLS) — see
-// prisma/migrations/20260921000000_init/migration.sql and
-// docs/architecture/security.md#row-level-security. RLS only works
+// TENANT ISOLATION: every table with organizationId (Clinic/User/Patient/
+// AuditLog) has Postgres Row-Level Security policies applied in the
+// migration SQL (Prisma's schema language cannot express RLS) — see
+// prisma/migrations/20260921000000_init/migration.sql,
+// prisma/migrations/20260921010000_audit_log_organization/migration.sql,
+// and docs/architecture/security.md#row-level-security. RLS only works
 // because the app connects as a non-superuser role — see
 // infrastructure/docker/postgres-init/01-app-role.sql.
+//
+// AuditLog.organizationId is required, not optional: every actor today
+// (User, Patient) already belongs to exactly one organization, so every
+// auditable action has one to record. A future cross-org/platform-level
+// admin action would need a different answer — not guessed at here, see
+// docs/architecture/open-questions.md#9.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Runtime queries (the query engine) use `url` — this MUST be a
   // non-superuser role (see infrastructure/docker/postgres-init/01-app-role.sql).
   // Postgres superusers always bypass Row-Level Security, so if the app
@@ -68,14 +75,15 @@ enum StaffRole {
 /// Tenancy root. A deployment can host multiple organizations later;
 /// today there is exactly one, but every table hangs off this from day one.
 model Organization {
-  id        String    @id @default(cuid())
+  id        String     @id @default(cuid())
   name      String
   clinics   Clinic[]
   users     User[]
   patients  Patient[]
+  auditLogs AuditLog[]
   deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   @@index([deletedAt])
   @@map("organizations")
@@ -159,16 +167,22 @@ model Patient {
 /// Foundational audit trail — see docs/architecture/security.md.
 /// Detailed per-domain audit needs (e.g. clinical note amendment history)
 /// get their own tables later; this is the generic cross-cutting log.
+///
+/// No deletedAt — an audit trail must never be deletable, soft or
+/// otherwise (see the SOFT DELETE CONVENTION note above).
 model AuditLog {
-  id         String   @id @default(cuid())
-  actorType  String // "USER" | "PATIENT" | "SYSTEM"
-  actorId    String?
-  action     String
-  entityType String
-  entityId   String
-  metadata   Json?
-  createdAt  DateTime @default(now())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  actorType      String // "USER" | "PATIENT" | "SYSTEM"
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
 
+  @@index([organizationId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
 }

@@ -155,17 +155,53 @@ async function main() {
     `an explicit deletedAt filter overrides the default and finds the deleted row (got ${explicitlyIncludingDeleted.length})`,
   );
 
+  console.log('\n--- RLS also covers AuditLog (added after this table already existed) ---');
+  const logA = await prisma.withTenant(orgA.id, (tx) =>
+    tx.auditLog.create({
+      data: {
+        organizationId: orgA.id,
+        actorType: 'SYSTEM',
+        action: 'test',
+        entityType: 'Test',
+        entityId: '1',
+      },
+    }),
+  );
+  await prisma.withTenant(orgB.id, (tx) =>
+    tx.auditLog.create({
+      data: {
+        organizationId: orgB.id,
+        actorType: 'SYSTEM',
+        action: 'test',
+        entityType: 'Test',
+        entityId: '2',
+      },
+    }),
+  );
+
+  const orgAAuditView = await prisma.withTenant(orgA.id, (tx) => tx.auditLog.findMany());
+  assert(
+    orgAAuditView.length === 1 && orgAAuditView[0]?.id === logA.id,
+    `withTenant(orgA) sees exactly orgA's audit log entry, not orgB's (got ${orgAAuditView.length})`,
+  );
+
+  const noContextAuditResults = await prisma.client.auditLog.findMany();
+  assert(
+    noContextAuditResults.length === 0,
+    `querying audit_logs with no tenant context returns 0 rows too (got ${noContextAuditResults.length})`,
+  );
+
   console.log(
     '\n--- Soft delete: AuditLog is unaffected (no deletedAt, real deletes still work) ---',
   );
-  // AuditLog has no organizationId / RLS policy, so no withTenant needed.
-  const log = await prisma.client.auditLog.create({
-    data: { actorType: 'SYSTEM', action: 'test', entityType: 'Test', entityId: '1' },
-  });
-  await prisma.client.auditLog.delete({ where: { id: log.id } });
+  // AuditLog has no deletedAt, so it's outside the soft-delete extension's
+  // scope entirely — .delete() here is a real DELETE, not the "throws"
+  // behavior soft-deletable models get. Still RLS-protected, so still
+  // goes through withTenant.
+  await prisma.withTenant(orgA.id, (tx) => tx.auditLog.delete({ where: { id: logA.id } }));
   const rawLogGone = await admin.$queryRaw<
     { id: string }[]
-  >`SELECT id FROM audit_logs WHERE id = ${log.id}`;
+  >`SELECT id FROM audit_logs WHERE id = ${logA.id}`;
   assert(
     rawLogGone.length === 0,
     'AuditLog.delete() is a real DELETE, not soft-deleted (row is actually gone)',
