@@ -15,7 +15,8 @@ DOCTOR → CONSENT VERIFICATION → RECORDING → SPEECH-TO-TEXT → TRANSCRIPT
 - `ai` (domain module — owns this workflow's orchestration)
 - `integrations/ai` (`AiProvider` port — see `docs/architecture/integrations.md`)
 - `clinical-notes` (owns the draft → reviewed → finalized → amended
-  lifecycle and the eventual `ClinicalNoteVersion` table)
+  lifecycle and the `ClinicalNoteVersion` table — implemented, see
+  Status below)
 - `patient-consent` (the consent-verification step reads/writes here)
 
 ## Non-negotiable safety rule
@@ -37,9 +38,20 @@ same rule as any other clinical record (`docs/architecture/security.md`).
 
 ## Status
 
-`ai` module is a lean shell; `integrations/ai` has the interface and a
-stub provider (`StubAiProvider`) that logs and returns empty output — no
-real speech-to-text or LLM call is wired yet. `clinical-notes` has the
-full controller/service/module pattern established but no persistence
-logic yet (Prisma models for `ClinicalNote`/`ClinicalNoteVersion` are
-proposed in `docs/database/erd.md`, not yet migrated).
+`ai` module is still a lean shell; `integrations/ai` has the interface
+and a stub provider (`StubAiProvider`) that logs and returns empty
+output — no real speech-to-text or LLM call is wired yet, so the
+DOCTOR → CONSENT → RECORDING → SPEECH-TO-TEXT → AI PROCESSING steps above
+are not implemented.
+
+`clinical-notes` itself, however, is now fully implemented and
+live-verified as part of the clinic-journey-spine slice — real
+`ClinicalNote`/`ClinicalNoteVersion` tables, migrated and RLS-protected,
+with `ClinicalNotesService` covering `createDraft` → `signOff` → `amend`,
+each a new `ClinicalNoteVersion` row rather than an update in place (see
+`docs/architecture/security.md#clinical-record-immutability` for the
+DB-level enforcement, and `apps/api/test/clinic-journey.e2e-spec.ts` for
+the automated coverage). What's proven end-to-end today is the
+DOCTOR REVIEW/EDIT → DOCTOR SIGN-OFF → FINAL CLINICAL RECORD tail of the
+diagram above, entered via a manual draft rather than an AI-generated
+one — the AI-assisted front half is what remains unbuilt.

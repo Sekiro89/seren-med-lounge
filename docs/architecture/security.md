@@ -250,20 +250,61 @@ place.
 
 ## Clinical record immutability
 
-Finalized clinical records (clinical notes, diagnoses, prescriptions,
-procedure notes, reports) are **never updated in place**. The lifecycle
-is:
+Finalized clinical records (clinical notes today; diagnoses,
+prescriptions, procedure notes, and reports are proposed but not yet
+modeled — see `docs/database/erd.md`) are **never updated in place**.
+Implemented for `ClinicalNote` as part of the clinic-journey-spine slice.
+The lifecycle is:
 
 ```
 Draft → (AI Draft, if AI-assisted) → Reviewed → Finalized → Amendment → new Version
 ```
 
+`ClinicalNote` is a mutable "thread" pointer (current `status` +
+`currentVersionNumber`); every actual state is a new
+`ClinicalNoteVersion` row, inserted, never updated — see
+`ClinicalNotesService` (`createDraft`/`signOff`/`amend`, plus the private
+`requireLatestVersion` helper all three build on).
+
+This is enforced at **two independent layers**, not just app-level
+convention:
+
+1. **App layer.** `ClinicalNotesService` only ever calls
+   `clinicalNoteVersion.create(...)` — there is no method that updates or
+   deletes a version. The Prisma soft-delete extension
+   (`soft-delete.extension.ts`) also throws if any future code calls
+   `.delete()`/`.deleteMany()` on any soft-deletable model, though
+   `ClinicalNoteVersion` isn't one (it has no `deletedAt` — see below).
+2. **Database layer, independent of the app.** The migration that adds
+   these tables
+   (`prisma/migrations/20260921090000_clinic_journey_spine/migration.sql`)
+   includes `REVOKE UPDATE, DELETE ON "clinical_note_versions" FROM
+serenemed_app;` — the app's own Postgres role has no privilege to
+   write to that table at all, once a row exists. Verified live: a raw
+   `UPDATE`/`DELETE` against `clinical_note_versions`, issued directly
+   through Prisma (bypassing the app's own guard entirely), fails with
+   Postgres error 42501 (`permission denied for table
+clinical_note_versions`). A future bug in application code — even one
+   that reintroduces a `.update()` call on a version row — cannot
+   silently corrupt history; the database itself refuses the write.
+
+`ClinicalNoteVersion` has no `deletedAt` field, the same exception as
+`AuditLog` (see `#soft-delete` below) — an append-only clinical record,
+like an audit trail, must never be deletable, soft or otherwise. Unlike
+`AuditLog`, it goes one step further: `AuditLog` still permits `INSERT`
+and read from the app role indefinitely (append-only by convention),
+while `ClinicalNoteVersion` additionally has `UPDATE`/`DELETE` privilege
+actively revoked (append-only by database grant).
+
 - A finalized record is closed for writes. Correcting it creates a new
-  version linked to the original (`ClinicalNoteVersion`-style table — see
-  `docs/database/erd.md`), preserving full history.
+  version linked to the original, preserving full history — verified via
+  `apps/api/test/clinic-journey.e2e-spec.ts`, which checks that version 1
+  (the original draft) is still readable, unchanged, after two further
+  amendments have run.
 - This applies whether the correction originates from a doctor's own
   edit or from an AI-assisted draft being revised — the versioning rule
-  is the same either way.
+  is the same either way. (The AI-assisted path itself is not yet built —
+  see the next section.)
 
 ## AI consultation assistant — safety boundary
 

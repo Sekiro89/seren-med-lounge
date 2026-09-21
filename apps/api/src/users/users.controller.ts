@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { createUserSchema, type CreateUserInput } from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
@@ -20,8 +20,7 @@ export class UsersController {
 
   @Post()
   @RequirePermissions('user:manage')
-  @UsePipes(new ZodValidationPipe(createUserSchema))
-  create(@Body() body: CreateUserInput) {
+  create(@Body(new ZodValidationPipe(createUserSchema)) body: CreateUserInput) {
     return this.usersService.create(this.tenantContext.organizationId, body);
   }
 }

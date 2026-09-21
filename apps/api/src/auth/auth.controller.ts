@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, UsePipes } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { loginSchema, type LoginInput } from '@serenemed/validation';
@@ -25,8 +25,7 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Public()
   @Post('login')
-  @UsePipes(new ZodValidationPipe(loginSchema))
-  login(@Body() body: LoginInput) {
+  login(@Body(new ZodValidationPipe(loginSchema)) body: LoginInput) {
     return this.authService.login(body);
   }
 
@@ -53,8 +52,7 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Public()
   @Post('patient/login')
-  @UsePipes(new ZodValidationPipe(loginSchema))
-  patientLogin(@Body() body: LoginInput) {
+  patientLogin(@Body(new ZodValidationPipe(loginSchema)) body: LoginInput) {
     return this.patientAuthService.login(body);
   }
 

@@ -41,6 +41,20 @@
 // auditable action has one to record. A future cross-org/platform-level
 // admin action would need a different answer — not guessed at here, see
 // docs/architecture/open-questions.md#9.
+//
+// CLINICAL RECORD VERSIONING (ClinicalNote/ClinicalNoteVersion): proves
+// the "never overwrite finalized clinical records" requirement for
+// real, not just in a comment. ClinicalNote is a mutable "thread"
+// pointer (current status + which version is latest); every actual
+// state — DRAFT, FINALIZED, an AMENDED correction — is a brand new
+// ClinicalNoteVersion row. ClinicalNoteVersion has no `deletedAt` (like
+// AuditLog) AND, unlike AuditLog, the app's own DB role has UPDATE and
+// DELETE actively revoked on it in the migration SQL — see
+// prisma/migrations/20260921090000_clinic_journey_spine/migration.sql.
+// So this isn't "the app promises not to update it," it's "the app
+// physically cannot" — a bug that tries anyway gets a Postgres
+// permission error, not silently-corrupted history. See
+// docs/architecture/security.md#clinical-record-versioning.
 
 generator client {
   provider = "prisma-client-js"
@@ -75,15 +89,20 @@ enum StaffRole {
 /// Tenancy root. A deployment can host multiple organizations later;
 /// today there is exactly one, but every table hangs off this from day one.
 model Organization {
-  id        String     @id @default(cuid())
-  name      String
-  clinics   Clinic[]
-  users     User[]
-  patients  Patient[]
-  auditLogs AuditLog[]
-  deletedAt DateTime?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                   String                @id @default(cuid())
+  name                 String
+  clinics              Clinic[]
+  users                User[]
+  patients             Patient[]
+  auditLogs            AuditLog[]
+  appointments         Appointment[]
+  encounters           Encounter[]
+  vitals               Vital[]
+  clinicalNotes        ClinicalNote[]
+  deletedAt            DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  clinicalNoteVersions ClinicalNoteVersion[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -91,15 +110,17 @@ model Organization {
 
 /// A physical/operational clinic location under an organization.
 model Clinic {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization  @relation(fields: [organizationId], references: [id])
   name           String
   users          User[]
   patients       Patient[]
+  appointments   Appointment[]
+  encounters     Encounter[]
   deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([organizationId, deletedAt])
   @@map("clinics")
@@ -109,19 +130,20 @@ model Clinic {
 /// separate deliberately: staff auth/roles and patient auth/consent are
 /// different concerns and must never be merged into one "users" table.
 model User {
-  id             String       @id @default(cuid())
+  id             String                @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization          @relation(fields: [organizationId], references: [id])
   clinicId       String?
-  clinic         Clinic?      @relation(fields: [clinicId], references: [id])
+  clinic         Clinic?               @relation(fields: [clinicId], references: [id])
   email          String
   passwordHash   String
   fullName       String
   role           StaffRole
-  isActive       Boolean      @default(true)
+  isActive       Boolean               @default(true)
+  authoredNotes  ClinicalNoteVersion[]
   deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -143,20 +165,24 @@ model User {
 /// attach to this same Patient row by patientId — never duplicated per
 /// module. See docs/database/erd.md.
 model Patient {
-  id             String       @id @default(cuid())
+  id             String         @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
   clinicId       String?
-  clinic         Clinic?      @relation(fields: [clinicId], references: [id])
+  clinic         Clinic?        @relation(fields: [clinicId], references: [id])
   firstName      String
   lastName       String
   dateOfBirth    DateTime
   phone          String
   email          String?
   passwordHash   String?
+  appointments   Appointment[]
+  encounters     Encounter[]
+  vitals         Vital[]
+  clinicalNotes  ClinicalNote[]
   deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -191,4 +217,192 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+// =============================================================================
+// CLINIC JOURNEY SPINE — the first vertical slice past the identity/auth
+// shell (Organization/Clinic/User/Patient/AuditLog). Deliberately scoped
+// to prove two previously-unproven patterns end to end — RLS/soft-delete
+// at a second reference point, and clinical record versioning for real —
+// before the rest of docs/database/erd.md's proposed tables get built.
+// See docs/architecture/security.md#clinical-record-versioning and
+// docs/workflows/clinic-journey.md.
+//
+// Keep these enums in sync by hand with packages/types/src/journey.ts and
+// clinical-record-status.ts — same caveat as StaffRole above.
+// =============================================================================
+
+enum AppointmentEntrySource {
+  ONLINE_BOOKING
+  RECEPTION_WALK_IN
+  VIDEO_CONSULTATION
+  CAMP
+}
+
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum EncounterStatus {
+  OPEN
+  IN_CONSULTATION
+  CLOSED
+}
+
+enum ClinicalRecordStatus {
+  DRAFT
+  AI_DRAFT
+  REVIEWED
+  FINALIZED
+  AMENDED
+}
+
+enum ClinicalRecordSource {
+  MANUAL
+  AI_ASSISTED
+}
+
+/// Entry point of the clinic journey (see docs/workflows/clinic-journey.md).
+/// Checking in an appointment creates its Encounter — one multi-table
+/// transaction, see AppointmentsService.checkIn().
+model Appointment {
+  id             String                 @id @default(cuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  clinicId       String?
+  clinic         Clinic?                @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient                @relation(fields: [patientId], references: [id])
+  encounter      Encounter?
+  entrySource    AppointmentEntrySource
+  status         AppointmentStatus      @default(REQUESTED)
+  scheduledAt    DateTime
+  notes          String?
+  deletedAt      DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([patientId])
+  @@index([clinicId])
+  @@map("appointments")
+}
+
+/// One visit's clinical record root — vitals and clinical notes attach
+/// here, not directly to Patient, since they belong to a specific visit.
+/// patientId is denormalized from appointment.patientId (not derived via
+/// join) so Vital/ClinicalNote queries scoped to a patient don't need to
+/// traverse through Appointment — same rationale as Patient.clinicId
+/// being denormalized rather than requiring a Clinic join everywhere.
+model Encounter {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  clinicId       String?
+  clinic         Clinic?         @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient         @relation(fields: [patientId], references: [id])
+  appointmentId  String          @unique
+  appointment    Appointment     @relation(fields: [appointmentId], references: [id])
+  vitals         Vital[]
+  clinicalNotes  ClinicalNote[]
+  status         EncounterStatus @default(OPEN)
+  startedAt      DateTime        @default(now())
+  endedAt        DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([patientId])
+  @@map("encounters")
+}
+
+/// Intake/vitals for one encounter. Ordinary soft-delete (a mistyped
+/// reading gets corrected via update, not versioned like ClinicalNote —
+/// vitals aren't the "clinical record" the immutability requirement in
+/// docs/architecture/security.md targets).
+model Vital {
+  id                     String       @id @default(cuid())
+  organizationId         String
+  organization           Organization @relation(fields: [organizationId], references: [id])
+  patientId              String
+  patient                Patient      @relation(fields: [patientId], references: [id])
+  encounterId            String
+  encounter              Encounter    @relation(fields: [encounterId], references: [id])
+  bloodPressureSystolic  Int?
+  bloodPressureDiastolic Int?
+  pulseBpm               Int?
+  spo2Percent            Int?
+  temperatureCelsius     Float?
+  bmi                    Float?
+  recordedAt             DateTime     @default(now())
+  deletedAt              DateTime?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([encounterId])
+  @@map("vitals")
+}
+
+/// Mutable "thread" pointer — current status and which version is
+/// latest. NOT the clinical record itself; see ClinicalNoteVersion and
+/// the CLINICAL RECORD VERSIONING note above. Soft-deletable (deleting
+/// the thread, e.g. created in error, is different from amending a
+/// finalized version's content).
+model ClinicalNote {
+  id                   String                @id @default(cuid())
+  organizationId       String
+  organization         Organization          @relation(fields: [organizationId], references: [id])
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id])
+  encounterId          String
+  encounter            Encounter             @relation(fields: [encounterId], references: [id])
+  versions             ClinicalNoteVersion[]
+  status               ClinicalRecordStatus  @default(DRAFT)
+  currentVersionNumber Int                   @default(0)
+  deletedAt            DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("clinical_notes")
+}
+
+/// The actual clinical documentation — append-only, never updated or
+/// deleted once written (see the CLINICAL RECORD VERSIONING note above
+/// and the REVOKE UPDATE/DELETE in this migration's SQL). A SOAP-note
+/// shape (subjective/objective/assessment/plan) — a concrete, common
+/// clinical documentation structure rather than one vague "content"
+/// blob. organizationId is denormalized from clinicalNote (required for
+/// RLS — the policy checks this table's own column, not a joined one).
+model ClinicalNoteVersion {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  clinicalNoteId String
+  clinicalNote   ClinicalNote         @relation(fields: [clinicalNoteId], references: [id])
+  versionNumber  Int
+  status         ClinicalRecordStatus
+  source         ClinicalRecordSource @default(MANUAL)
+  subjective     String?
+  objective      String?
+  assessment     String?
+  plan           String?
+  authorId       String
+  author         User                 @relation(fields: [authorId], references: [id])
+  createdAt      DateTime             @default(now())
+
+  @@unique([clinicalNoteId, versionNumber])
+  @@index([organizationId])
+  @@map("clinical_note_versions")
 }

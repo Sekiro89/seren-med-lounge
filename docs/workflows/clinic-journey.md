@@ -41,7 +41,16 @@ entries are created for the patient.
 
 ## Status
 
-All modules referenced above exist as boundaries in `apps/api/src/*`
-(mostly lean shells; `encounters` has the full controller/service
-pattern). No workflow logic is implemented yet — this document defines
-the target shape so implementation order is deliberate rather than ad hoc.
+All modules referenced above exist as boundaries in `apps/api/src/*`.
+`appointments`, `encounters`, `vitals`, and `clinical-notes` are
+implemented and live-verified — the "clinic journey spine" slice: book
+an appointment, check in (atomically opens an `Encounter` — see
+`AppointmentsService.checkIn()`), record vitals against that encounter,
+and write a clinical note through its full draft → sign-off → amend
+lifecycle (see `docs/architecture/security.md#clinical-record-immutability`).
+Everything else on this page — `registration`, `queue`, `diagnoses`,
+`prescriptions`, `labs`, `referrals`, `procedures`, `patient-timeline`,
+and the billing/fulfilment/discharge/follow-up/review/retention steps —
+remains a lean shell or unimplemented; this document still defines the
+target shape for those so implementation order stays deliberate rather
+than ad hoc.

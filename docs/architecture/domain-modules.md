@@ -4,19 +4,27 @@ All modules live under `apps/api/src/*`, one folder per module, each
 importing only its own module file into `AppModule`. Two shapes exist
 today:
 
-- **Full pattern** (`*.controller.ts` + `*.service.ts` + `*.module.ts` +
-  `dto/`) — used where establishing the convention mattered now:
-  `auth`, `users`, `patients`, `appointments`, `encounters`,
-  `clinical-notes`, `notifications`, `audit`. `auth`/`users`/`patients`
-  are further along than the rest — real persistence, real JWT issuance
-  for both staff and patients, verified against a live server, plus a
-  real (if minimal) `patient-web` login UI — and are the reference
-  implementation for how a tenant-scoped module should look: see rule 6
-  below and `docs/architecture/security.md#row-level-security`.
-  `patients` specifically is the reference for a module with two actor
-  types needing different authorization (RBAC for staff routes,
-  own-record checks for patient routes) — see
-  `docs/architecture/security.md#patient-authentication`.
+- **Full pattern** (`*.controller.ts` + `*.service.ts` + `*.module.ts`,
+  Zod schemas from `@serenemed/validation` in place of a `dto/` folder) —
+  used where establishing the convention mattered now: `auth`, `users`,
+  `patients`, `appointments`, `encounters`, `vitals`, `clinical-notes`,
+  `notifications`, `audit`. `auth`/`users`/`patients` are further along
+  than the rest — real persistence, real JWT issuance for both staff and
+  patients, verified against a live server, plus a real (if minimal)
+  `patient-web` login UI — and are the reference implementation for how a
+  tenant-scoped module should look: see rule 6 below and
+  `docs/architecture/security.md#row-level-security`. `patients`
+  specifically is the reference for a module with two actor types needing
+  different authorization (RBAC for staff routes, own-record checks for
+  patient routes) — see `docs/architecture/security.md#patient-authentication`.
+  `appointments`/`encounters`/`vitals`/`clinical-notes` are the second
+  reference implementation — the "clinic journey spine" — built
+  specifically to prove a multi-table transaction
+  (`AppointmentsService.checkIn()`) and DB-enforced clinical-record
+  versioning (`ClinicalNotesService`) for real, live-verified against a
+  real Postgres with RLS actually enforced, not just typechecked. See
+  `docs/architecture/security.md#clinical-record-immutability` and
+  `apps/api/test/clinic-journey.e2e-spec.ts`.
 - **Lean shell** (`*.module.ts` only, `@Module({})`) — every other module
   below. Controllers/services/DTOs are added when that module's first
   real workflow is implemented, per the instruction not to generate files
@@ -53,15 +61,20 @@ today:
    `common/decorators/require-permissions.decorator.ts` — the backend
    check, not a frontend `can()` check, is what's authoritative.
 6. A module reading/writing an organizationId-scoped table (`Clinic`,
-   `User`, `Patient` today) does it through `PrismaService.withTenant()`,
-   with the organizationId coming from `TenantContextService` — never
-   from a client-supplied field in the request body. See `users` for the
-   pattern: `UsersController` reads `tenantContext.organizationId` and
-   passes it to `UsersService`, which wraps its Prisma calls in
-   `withTenant(organizationId, tx => ...)`. Querying via
-   `prisma.client` directly on one of these tables from inside a request
-   handler is a bug — RLS will silently return zero rows rather than the
-   caller's data.
+   `User`, `Patient`, `Appointment`, `Encounter`, `Vital`,
+   `ClinicalNote`, `ClinicalNoteVersion` today) does it through
+   `PrismaService.withTenant()`, with the organizationId coming from
+   `TenantContextService` — never from a client-supplied field in the
+   request body. See `users` for the single-table pattern
+   (`UsersController` reads `tenantContext.organizationId` and passes it
+   to `UsersService`, which wraps its Prisma calls in
+   `withTenant(organizationId, tx => ...)`), and
+   `AppointmentsService.checkIn()` for the same pattern inside a
+   multi-table transaction (one `withTenant` call, sequential awaits on
+   the same `tx` — see its doc comment for why not `Promise.all`).
+   Querying via `prisma.client` directly on one of these tables from
+   inside a request handler is a bug — RLS will silently return zero rows
+   rather than the caller's data.
 
 ## `patients` vs. CRM `leads`
 

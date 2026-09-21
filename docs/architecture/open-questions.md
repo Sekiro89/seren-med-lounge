@@ -177,3 +177,49 @@ concretely askable and verifiable now; left the two broader capabilities
 above undesigned rather than guessing at a shape (per-user token
 tracking? a `tokenValidAfter` timestamp on `User`? something else)
 without a concrete use case driving the choice.
+
+## 13. Clinic journey spine — a second reference implementation, before scaling to the full ERD
+
+Before building out the ~35+ table proposed schema
+(`docs/database/erd.md`), one vertical slice — `Appointment` →
+`Encounter` → `Vital` → `ClinicalNote`/`ClinicalNoteVersion` — was built
+end-to-end specifically to de-risk two patterns the `users`/`patients`
+slice never exercised: a multi-table transaction
+(`AppointmentsService.checkIn()`, one `withTenant` call doing a status
+update and an `Encounter` create atomically) and append-only clinical
+record versioning with DB-enforced immutability (`ClinicalNotesService`
+— see `docs/architecture/security.md#clinical-record-immutability`).
+Both are now live-verified, not just typechecked: automated coverage in
+`apps/api/test/clinic-journey.e2e-spec.ts`, plus a manual pass that
+issued a raw `UPDATE`/`DELETE` directly against `clinical_note_versions`
+as the app's own Postgres role and confirmed Postgres itself — not the
+app — rejects it (error 42501).
+
+This also surfaced a real, previously-latent bug: `@UsePipes(new
+ZodValidationPipe(schema))` applied at the **method** level validates
+_every_ parameter, not just `@Body()`. It happened to be harmless on
+every existing route (each had only a single decorated parameter), but
+`ClinicalNotesController.amend()` was the first route with both a
+`@Param('id')` and a `@Body()`, and the id string failed validation
+against the body schema ("Expected object, received string"). Fixed by
+moving every `ZodValidationPipe` from `@UsePipes(...)` on the method to
+the `@Body(new ZodValidationPipe(...))` parameter decorator itself,
+across all six routes that used the old pattern — not just the one that
+broke — since the trap was latent in the others too and would have
+resurfaced the next time someone added a second parameter to any of
+them. Caught by live end-to-end testing (a real HTTP call through the
+full pipe/guard stack), not by typecheck, lint, or a unit test that
+mocks the framework's parameter-binding behavior.
+
+**Still open, unchanged from #8(a):** nothing _enforces_ that a future
+module follows the `TenantContextService` + `withTenant` pattern beyond
+code review and now two working examples to copy from
+(`users`/`patients` and `appointments`/`encounters`/`vitals`/
+`clinical-notes`). Also still open: the enum-duplication problem
+(Prisma generates its own copy of every `@serenemed/types` enum) has no
+generic mapper yet — this slice's services consume Prisma's own enum
+types directly (`AppointmentStatus`, `EncounterStatus`,
+`ClinicalRecordStatus`, `ClinicalRecordSource`) rather than
+`@serenemed/types`'s copies, sidestepping the problem rather than
+solving it, the same way `StaffRole` needed a hand-written mapper
+(`apps/api/src/users/staff-role.mapper.ts`) instead.

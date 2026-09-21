@@ -2,8 +2,14 @@
 
 ## What's actually in `prisma/schema.prisma` today
 
-Deliberately minimal — see the file header. It proves the multi-tenant
-shell and the Unified Patient Record root, nothing more:
+Two layers now. `Organization`/`Clinic`/`User`/`Patient`/`AuditLog` prove
+the multi-tenant shell and the Unified Patient Record root.
+`Appointment`/`Encounter`/`Vital`/`ClinicalNote`/`ClinicalNoteVersion` —
+the "clinic journey spine" — is the first vertical slice built on top of
+that root, chosen specifically to de-risk the two patterns nothing else
+in the schema had exercised yet: a multi-table transaction (check-in) and
+append-only clinical-record versioning with DB-enforced immutability. See
+`docs/architecture/security.md#clinical-record-immutability`.
 
 ```
 Organization ──< Clinic
@@ -12,7 +18,27 @@ Organization ──< Patient (patient identity — root of the Unified Patient R
 Organization ──< AuditLog
 Clinic ──< User
 Clinic ──< Patient
+
+Patient ──< Appointment ──< Encounter ─┬─< Vital
+                                        └─< ClinicalNote ──< ClinicalNoteVersion
 ```
+
+`Appointment.status` moves REQUESTED/CONFIRMED → CHECKED_IN via
+`AppointmentsService.checkIn()`, which also creates the `Encounter` row —
+both writes happen inside one `withTenant` transaction (sequential
+awaits, not `Promise.all`; see the comment on `checkIn()` for why a
+single interactive-transaction connection can't safely run concurrent
+queries). `ClinicalNote` is a mutable "thread" pointer (current status +
+latest version number); every actual state — DRAFT, FINALIZED, an
+AMENDED correction — is a new `ClinicalNoteVersion` row, and the
+database itself (not just the app) refuses to UPDATE or DELETE one: see
+`REVOKE UPDATE, DELETE ON "clinical_note_versions" FROM serenemed_app;`
+in `prisma/migrations/20260921090000_clinic_journey_spine/migration.sql`.
+Verified live, at the SQL level, that a raw `UPDATE`/`DELETE` against
+`clinical_note_versions` as `serenemed_app` fails with Postgres error
+42501 (permission denied) — this holds even if a future bug in the
+application code tried to bypass the extension-level guard, because the
+privilege to write isn't there at all.
 
 `User.email` and `Patient.email` are each unique per `(organizationId,
 email)`, not globally — the same person can hold separate staff accounts
@@ -28,12 +54,14 @@ this clinic"), not just `organizationId`.
 future table below attaches to `Patient.id`, never to a copy of patient
 fields.
 
-`Organization`, `Clinic`, `User`, and `Patient` all carry `deletedAt` and
-go through the soft-delete convention (nothing is hard-deleted).
-`Clinic`, `User`, `Patient`, and `AuditLog` all have a Postgres RLS
-policy enforcing tenant isolation at the database — `AuditLog` is the
-exception to the soft-delete convention (it has no `deletedAt`; an audit
-trail must never be deletable, soft or otherwise) but not to RLS — see
+`Organization`, `Clinic`, `User`, `Patient`, `Appointment`, `Encounter`,
+`Vital`, and `ClinicalNote` all carry `deletedAt` and go through the
+soft-delete convention (nothing is hard-deleted). All of those plus
+`AuditLog` and `ClinicalNoteVersion` have a Postgres RLS policy enforcing
+tenant isolation at the database. `AuditLog` and `ClinicalNoteVersion`
+are both exceptions to the soft-delete convention (neither has a
+`deletedAt`) but not to RLS — an audit trail and a finalized clinical
+record must never be deletable, soft or otherwise — see
 `docs/architecture/security.md#soft-delete` and `#row-level-security`.
 
 ## Proposed full ERD (not yet implemented — added table-by-table per module)
@@ -49,10 +77,10 @@ Patient ─┬─ PatientDocument
          │
          ├─ Appointment ─┬─ QueueEntry
          │                ├─ Registration
-         │                └─ Encounter ─┬─ Vital
+         │                └─ Encounter ─┬─ Vital                        (implemented — see above)
          │                              ├─ MedicalHistory
          │                              ├─ Diagnosis
-         │                              ├─ ClinicalNote ── ClinicalNoteVersion
+         │                              ├─ ClinicalNote ── ClinicalNoteVersion  (implemented — see above)
          │                              ├─ Prescription ── PrescriptionItem
          │                              ├─ LabOrder ─┬─ LabOrderItem
          │                              │            └─ LabResult
@@ -68,6 +96,11 @@ Patient ─┬─ PatientDocument
          └─ CarePlan ── FollowUp
 ```
 
+`Appointment` and `Encounter` themselves are also implemented (see
+above) — `QueueEntry`, `Registration`, `MedicalHistory`, `Diagnosis`,
+`Prescription`/`PrescriptionItem`, `LabOrder`/`LabOrderItem`/`LabResult`,
+`Referral`, and `Procedure`/`Surgery` remain proposed.
+
 Cross-cutting, not attached to a single patient:
 
 ```
@@ -81,11 +114,12 @@ AuditLog                                    (already implemented — generic)
 - **Patient is the single root.** Appointment, Encounter, and everything
   clinical/billing/pharmacy/follow-up hangs off `patientId`. No module
   gets its own copy of name/DOB/contact fields.
-- **Clinical record versioning.** `ClinicalNote` holds the current
-  pointer; `ClinicalNoteVersion` (not yet modeled) holds full history.
-  Diagnoses, prescriptions, and procedure notes follow the same
+- **Clinical record versioning (implemented).** `ClinicalNote` holds the
+  current pointer; `ClinicalNoteVersion` holds full history, one row per
+  state transition, DB-enforced append-only. Diagnoses, prescriptions,
+  and procedure notes (not yet modeled) are expected to follow the same
   draft → reviewed → finalized → amended shape — see
-  `docs/architecture/security.md`.
+  `docs/architecture/security.md#clinical-record-immutability`.
 - **Lead vs. Patient.** `Lead` exists only pre-conversion. Converting a
   lead creates exactly one `Patient` and links back to the originating
   `Lead` for attribution — it does not become a parallel patient record.
