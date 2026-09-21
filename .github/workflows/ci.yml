@@ -38,6 +38,15 @@ jobs:
         # types, which don't exist until this has run once.
         run: pnpm --filter api run prisma:generate
 
+      - name: Build
+        # Must run before typecheck/lint-across-workspace: apps import
+        # @serenemed/* packages by name (workspace symlink), resolved via
+        # each package's compiled dist/ (its package.json "types"/"main"),
+        # which doesn't exist on a fresh checkout until this runs. `pnpm
+        # -r build` is topologically ordered, so packages build before
+        # the apps that consume them.
+        run: pnpm run build
+
       - name: Format check
         run: pnpm run format:check
 
@@ -46,9 +55,6 @@ jobs:
 
       - name: Typecheck
         run: pnpm run typecheck
-
-      - name: Build
-        run: pnpm run build
 
       - name: Unit tests
         run: pnpm run test
@@ -96,6 +102,14 @@ jobs:
 
       - name: Generate Prisma client
         run: pnpm --filter api run prisma:generate
+
+      - name: Build workspace packages
+        # apps/api's own code (and its e2e specs) import @serenemed/*
+        # packages by name, resolved via each package's compiled dist/ —
+        # same reason as the `checks` job's Build step. Only the packages
+        # are needed here, not the two frontends, so this filters to
+        # those rather than running the full `pnpm run build`.
+        run: pnpm --filter "./packages/*" build
 
       - name: Create the non-superuser app role
         # docker-compose gets this for free via postgres-init/'s
