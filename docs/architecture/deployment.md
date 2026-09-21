@@ -252,17 +252,32 @@ the same backing services), and:
 This is the concrete answer to "does this actually work with more than
 one instance," not an inference from "the code uses Redis so it should."
 
+## Image publishing (GitHub Container Registry) — not the same as deploying
+
+`.github/workflows/ci.yml`'s `publish-image` job builds the same
+`apps/api/Dockerfile` proven above and pushes it to
+`ghcr.io/<owner>/serenemed-api` on every push to `main`, tagged both
+`latest` and the full commit SHA — but only after both the `checks` and
+`db-tests` jobs pass, so a broken commit never gets published. This
+does **not** deploy anywhere; it just means a tested image exists
+somewhere other than a developer's laptop, ready to be pulled by
+whatever host gets chosen later. Uses the repo's own `GITHUB_TOKEN`
+(package-write permission granted explicitly in that job, since the
+repo's default workflow permission is read-only) — no separate registry
+account or secret needed.
+
 ## Not done yet
 
 - **No hosting target chosen.** The Dockerfile is host-agnostic (works
   on Fly/Railway/Render/ECS/k8s/a plain VPS running `docker run`) —
   deliberately deferred rather than building against a guess.
-- **No CD pipeline.** `.github/workflows/ci.yml` only tests; nothing
-  builds or pushes an image anywhere yet. Building this depends on the
-  hosting decision above.
+- **No actual deploy step.** Publishing the image (above) isn't the
+  same as running it anywhere — once a host is picked, that host still
+  needs to be told to pull and run `ghcr.io/<owner>/serenemed-api:latest`
+  (or a specific SHA tag).
 - **No frontend Dockerfiles.** `apps/patient-web`/`apps/staff-web`
-  aren't containerized yet — same `pnpm deploy`-based pattern should
-  apply once/if they're needed for the same launch.
+  aren't containerized or published yet — same pattern should apply
+  once/if they're needed for the same launch.
 
 ## Already closed (was "Not done yet")
 
