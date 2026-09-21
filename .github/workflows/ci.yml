@@ -77,6 +77,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        # RedisService (apps/api/src/redis/redis.service.ts) connects to
+        # REDIS_URL at startup — a fake/unreachable URL isn't enough,
+        # the app actually needs a live Redis, same as docker-compose.yml
+        # gives it locally.
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       # DATABASE_URL: the non-superuser serenemed_app role created by the
@@ -86,6 +99,7 @@ jobs:
       # must never run as the superuser (it would bypass RLS entirely).
       DATABASE_URL: postgresql://serenemed_app:serenemed_app@localhost:5432/serenemed?schema=public&connection_limit=10&pool_timeout=10
       DIRECT_DATABASE_URL: postgresql://serenemed:serenemed@localhost:5432/serenemed?schema=public
+      REDIS_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@v4
