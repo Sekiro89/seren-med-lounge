@@ -1,9 +1,23 @@
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import * as Sentry from '@sentry/node';
 import { AppModule } from './app.module';
 import { JsonLogger } from './common/json-logger.service';
+import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
+
+// Before NestFactory.create(), per Sentry's own Node SDK guidance — it
+// needs to be initialized before the rest of the app's instrumentable
+// code runs. A no-op if SENTRY_DSN isn't set: every Sentry.* call used
+// elsewhere (SentryExceptionFilter) is a documented safe no-op without
+// init, so there's exactly one code path whether or not this is
+// configured — not "wired for prod, skipped for dev" branching to keep
+// in sync. See docs/architecture/deployment.md for what's verified here
+// versus what still needs a real account to confirm.
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV });
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -18,6 +32,9 @@ async function bootstrap() {
   // connections cleanly on a container restart or rolling deploy, only
   // ever have them cut mid-request when the process is killed outright.
   app.enableShutdownHooks();
+
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new SentryExceptionFilter(httpAdapter));
 
   // Applied before CORS/routes deliberately — standard security headers
   // (CSP, X-Frame-Options, etc.) on every response, including error

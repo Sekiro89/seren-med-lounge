@@ -159,6 +159,45 @@ by hand, as a CI/CD one-off step, or from some future first-run setup
 UI — that's a product decision the script doesn't need an answer to
 either way.
 
+## Error tracking (Sentry) — wired, inactive until configured
+
+`@sentry/node` is installed and `Sentry.init()` runs at the top of
+`main.ts`, but **only if `SENTRY_DSN` is set** — unset (the default),
+it's a real no-op, same optional-until-configured shape as the S3/
+payments/messaging env vars already in `.env.example`. A global
+`SentryExceptionFilter` (`common/filters/sentry-exception.filter.ts`)
+reports every exception via `Sentry.captureException()` and then
+delegates to Nest's own `BaseExceptionFilter` for the actual HTTP
+response, unchanged — it's an observer, not a response-shaping filter.
+
+What's verified, without a real Sentry account (there still isn't one):
+
+- A real unhandled exception thrown from a live route, run through the
+  actual Nest HTTP pipeline (not a hand-mocked host), triggers
+  `captureException` exactly once and still gets Nest's normal
+  unchanged response (`apps/api/src/common/filters/sentry-exception.filter.spec.ts`).
+- The full unit + e2e suite still passes. Caveat worth being honest
+  about: the e2e specs build the app straight from `AppModule` via
+  `Test.createTestingModule`, bypassing `main.ts`'s `bootstrap()`
+  entirely — same as they've never exercised helmet/CORS/the global
+  `ValidationPipe` either. So that pass doesn't by itself prove the
+  filter behaves inside the real bootstrap path.
+- To cover that gap, the actual dev server (`pnpm run start:dev`, going
+  through real `bootstrap()`) was started and hit with a spread of real
+  error-producing requests (401 unauthenticated, 401 garbage token, 400
+  Zod validation error, 404 unknown route) — all four responses came
+  back byte-for-byte what they were before this filter existed.
+- The full production Docker image was rebuilt and booted against fresh
+  Postgres+Redis with `SENTRY_DSN` set to a syntactically valid but fake
+  DSN — confirmed the app still starts cleanly and serves `/health/ready`
+  and a real 404 correctly, i.e. `Sentry.init()` against an
+  unreachable/fake project doesn't crash the process.
+
+What's **not** verified, and can't be without a real account: that a
+captured exception is actually delivered to a Sentry project.
+`captureException` is a documented safe no-op without `Sentry.init()`
+having run — that guarantee is Sentry's, not something re-tested here.
+
 ## Not done yet
 
 - **No hosting target chosen.** The Dockerfile is host-agnostic (works
@@ -170,26 +209,19 @@ either way.
 - **No frontend Dockerfiles.** `apps/patient-web`/`apps/staff-web`
   aren't containerized yet — same `pnpm deploy`-based pattern should
   apply once/if they're needed for the same launch.
-- **No error tracking (Sentry or equivalent).** Deliberately not wired:
-  there's no real account/DSN to verify delivery against, and stubbing
-  in SDK calls that have never actually been confirmed to deliver an
-  event anywhere would be exactly the "fake integration that looks
-  production-ready" anti-pattern this project avoids elsewhere (see
-  `docs/architecture/open-questions.md` #3 on the same reasoning for
-  OTP). When there's a real DSN: `@sentry/node`, initialized only if
-  `SENTRY_DSN` is set (same optional-until-configured shape as the S3/
-  payments/messaging env vars already in `.env.example`), is a small,
-  well-understood addition at that point — not attempted blind now.
-- **Distributed rate limiting, structured logging, graceful shutdown, a
-  real readiness check, and gating `/docs` in production** were all
-  fixed in the same pass as this doc — see `app.module.ts` (Redis-backed
-  `ThrottlerStorageRedisService`, sharing `RedisService`'s connection),
-  `main.ts` (`enableShutdownHooks()`, the `NODE_ENV==='production'`
-  guards around Swagger and the logger), `common/json-logger.service.ts`,
-  and `GET /health/ready` (`app.service.ts` — checks real Postgres +
-  Redis reachability, not just "the process is up"). All verified live:
-  the Redis-backed throttler's keys were confirmed actually landing in
-  Redis (`docker exec ... redis-cli keys`), `/docs` confirmed 200 in dev
-  and 404 with `NODE_ENV=production`, the JSON logger's output confirmed
-  to be 100% valid JSON lines end to end, and `/health/ready` confirmed
-  live against real Postgres + Redis.
+
+## Already closed (was "Not done yet")
+
+Distributed rate limiting, structured logging, graceful shutdown, a real
+readiness check, gating `/docs` in production, and error tracking
+(above) — see `app.module.ts` (Redis-backed `ThrottlerStorageRedisService`,
+sharing `RedisService`'s connection), `main.ts` (`enableShutdownHooks()`,
+the `NODE_ENV==='production'` guards around Swagger and the logger),
+`common/json-logger.service.ts`, and `GET /health/ready`
+(`app.service.ts` — checks real Postgres + Redis reachability, not just
+"the process is up"). All verified live: the Redis-backed throttler's
+keys were confirmed actually landing in Redis
+(`docker exec ... redis-cli keys`), `/docs` confirmed 200 in dev and 404
+with `NODE_ENV=production`, the JSON logger's output confirmed to be
+100% valid JSON lines end to end, and `/health/ready` confirmed live
+against real Postgres + Redis.

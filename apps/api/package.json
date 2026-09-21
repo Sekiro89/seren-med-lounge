@@ -31,6 +31,7 @@
     "@nestjs/swagger": "^11.4.7",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.1.0",
+    "@sentry/node": "^10.75.0",
     "@serenemed/config": "workspace:*",
     "@serenemed/permissions": "workspace:*",
     "@serenemed/types": "workspace:*",

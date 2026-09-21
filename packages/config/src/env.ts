@@ -33,6 +33,10 @@ export const apiEnvSchema = z.object({
   ZOHO_REFRESH_TOKEN: z.string().optional(),
   LAB_API_URL: z.string().optional(),
   INSURANCE_API_URL: z.string().optional(),
+  // Optional-until-configured, same shape as the integration keys above
+  // — unset means Sentry.init() never runs (see main.ts) and error
+  // tracking is a no-op, not a crash.
+  SENTRY_DSN: z.string().optional(),
   API_PORT: z.coerce.number().default(4000),
   // Comma-separated allowed origins for CORS — see main.ts. Defaults to
   // the two local frontend dev ports if unset.
