@@ -70,15 +70,18 @@ without code changes.
 ## 8. RLS tenant context isn't wired to a real request yet
 
 `PrismaService.withTenant()` and the RLS policies on `clinics`/`users`/
-`patients` exist and are ready to use (see
-`docs/architecture/security.md#row-level-security`), but nothing calls
-`withTenant` yet — there's no `req.user.organizationId` to call it with
-until `auth` is implemented. **Assumption made:** shipped the DB-level
-policy and the transaction helper now (the part that doesn't depend on
-auth), left the guard/interceptor that wires `withTenant` into every
-request for when `auth` lands, rather than building it against a
-`req.user` shape that doesn't exist yet and might not match what auth
-actually produces.
+`patients` exist and are verified working against a real Postgres —
+`pnpm --filter api run verify:tenant-isolation` seeds two organizations
+and confirms cross-tenant reads/writes are actually blocked, not just
+that the SQL applies without erroring (see
+`docs/architecture/security.md#row-level-security`). But nothing calls
+`withTenant` from a real request yet — there's no `req.user.organizationId`
+to call it with until `auth` is implemented. **Assumption made:** shipped
+and verified the DB-level policy and the transaction helper now (the
+part that doesn't depend on auth), left the guard/interceptor that wires
+`withTenant` into every request for when `auth` lands, rather than
+building it against a `req.user` shape that doesn't exist yet and might
+not match what auth actually produces.
 
 ## 9. AuditLog has no organizationId
 

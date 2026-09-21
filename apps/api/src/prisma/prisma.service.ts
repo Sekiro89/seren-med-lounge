@@ -56,11 +56,15 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
    * safe, but it means "my query returns nothing" during development
    * usually means "you forgot withTenant", not a data problem.
    *
-   * NOT YET CALLED ANYWHERE: nothing populates a request's
+   * NOT YET CALLED FROM ANY REQUEST PATH: nothing populates a request's
    * organizationId yet because auth isn't wired (AuthService.login is a
    * stub) — see docs/architecture/open-questions.md. Once it is, a
    * guard/interceptor reading `req.user.organizationId` should be the
    * only thing that calls this, wrapping each request's handler.
+   *
+   * Verified end-to-end against a real Postgres by
+   * scripts/verify-tenant-isolation.ts (`pnpm run verify:tenant-isolation`)
+   * — run that after changing this method or the RLS policies.
    */
   async withTenant<T>(
     organizationId: string,

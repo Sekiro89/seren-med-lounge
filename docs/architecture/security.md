@@ -94,24 +94,46 @@ true — so a request that forgets to set tenant context sees zero rows on
 these tables, not other tenants' rows. During development this usually
 means "you forgot to go through `withTenant`", not a data bug.
 
+**The app must connect as a non-superuser role, or none of this does
+anything.** Postgres superusers always bypass RLS, `FORCE` included. The
+official `postgres` Docker image makes `POSTGRES_USER` the cluster
+superuser, so a naive setup — the app connecting as that same user —
+makes RLS a complete no-op while looking correctly configured.
+`infrastructure/docker/postgres-init/01-app-role.sql` creates a second,
+ordinary role, `serenemed_app` (`NOSUPERUSER NOBYPASSRLS`), that the app
+connects as at runtime; the schema's `directUrl` (superuser) is used only
+for `prisma migrate`. This was a real, live bug in an earlier version of
+this setup — caught by actually running it against Postgres with a real
+non-superuser role, not by lint/typecheck/build, which all passed while
+RLS was silently doing nothing. See "Verifying this" below.
+
 **Application side**: `PrismaService.withTenant(organizationId, work)`
 (`apps/api/src/prisma/prisma.service.ts`) runs `work` inside a
 transaction with `app.current_organization_id` set via `set_config` (a
 real bound parameter, not string-interpolated into a `SET` statement).
 Every query against an RLS-protected table must go through the `tx` it
-provides.
+provides — RLS applies to every access path, including `findUnique`, not
+just `findMany`.
 
-**Not yet wired end to end.** Nothing calls `withTenant` yet, because
-nothing populates a request's `organizationId` yet — `auth` isn't
-implemented (`AuthService.login` is a stub), so there's no `req.user` to
-read it from. Once JWT auth lands, a guard/interceptor reading
-`req.user.organizationId` should be the one place that calls
-`withTenant`, wrapping each request's handler — see
-`docs/architecture/open-questions.md`.
+**Not yet wired to a real request.** Nothing calls `withTenant` from
+request-handling code yet, because nothing populates a request's
+`organizationId` yet — `auth` isn't implemented (`AuthService.login` is a
+stub), so there's no `req.user` to read it from. Once JWT auth lands, a
+guard/interceptor reading `req.user.organizationId` should be the one
+place that calls `withTenant`, wrapping each request's handler — see
+`docs/architecture/open-questions.md#8`.
 
 **Known gap**: `AuditLog` has no `organizationId` column in the current
 schema, so it isn't RLS-scoped. Flagged, not fixed here — adding it is a
 schema change plus a migration, not just a policy.
+
+**Verifying this**: `pnpm --filter api run verify:tenant-isolation`
+(`apps/api/scripts/verify-tenant-isolation.ts`) is a manual script — not
+part of `jest`/CI — that seeds two organizations against a real Postgres
+and asserts RLS actually isolates them, including that a query with no
+tenant context returns zero rows and that cross-tenant `findUnique` is
+blocked. Re-run it after touching RLS policies, `withTenant`, or the
+docker-compose Postgres init script.
 
 ## Soft delete
 
@@ -126,9 +148,26 @@ have it from the Prisma DMMF at startup (no hardcoded model list), then:
   default. A caller that explicitly sets `deletedAt` in its own `where`
   overrides this (e.g. `{ deletedAt: { not: null } }` to list only
   deleted rows).
-- Rewrites `delete` / `deleteMany` into `update` / `updateMany` that
-  stamp `deletedAt` — no real `DELETE` is ever issued against these
-  models through Prisma.
+- **Throws** on `delete` / `deleteMany` rather than running them. To
+  soft-delete a row, call `.update({ where, data: { deletedAt: new
+Date() } })` directly on whatever client/transaction you already have.
+
+That second point used to be "transparently rewrites `delete` into
+`update`" — an earlier version of this extension actually did that, by
+calling `.update()` through the client reference closed over in
+`Prisma.defineExtension((client) => ...)`. That looked fine under
+lint/typecheck/build and even worked in isolation, but it was a real
+bug: that closed-over `client` is fixed to the top-level client at
+extension-composition time, not to whichever transaction the surrounding
+`.delete()` call was actually made through. Call `.delete()` from inside
+`withTenant` (i.e. on an RLS-protected table) and the "rewritten" update
+ran on a _different_, non-transactional connection with no
+`app.current_organization_id` set — RLS silently rejected it, and Prisma
+reported "no record found," which reads like a data bug, not the
+tenant-isolation bug it actually was. Only running this against a real
+Postgres with RLS actually enforced surfaced it (see "Row-level security"
+above) — so now `.delete()` fails loudly and immediately instead, with an
+error that says exactly what to call instead.
 
 `findUnique` / `findUniqueOrThrow` are deliberately **not** filtered —
 they're most often used for FK/relation lookups where the caller has a

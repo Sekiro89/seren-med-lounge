@@ -16,21 +16,8 @@ const softDeleteModelNames = new Set(
     .map((model) => model.name),
 );
 
-interface SoftDeletableDelegate {
-  update(args: { where: unknown; data: { deletedAt: Date } }): Promise<unknown>;
-  updateMany(args: { where: unknown; data: { deletedAt: Date } }): Promise<unknown>;
-}
-
-function getSoftDeletableDelegate(client: unknown, modelName: string): SoftDeletableDelegate {
-  const propertyName = modelName.charAt(0).toLowerCase() + modelName.slice(1);
-  const delegate = (client as Record<string, SoftDeletableDelegate>)[propertyName];
-  if (!delegate) {
-    // Only reachable if a model is added to softDeleteModelNames whose
-    // client property name doesn't match this camelCase conversion —
-    // i.e. a bug here, not a runtime/data condition.
-    throw new Error(`No Prisma client delegate found for model "${modelName}".`);
-  }
-  return delegate;
+function toClientPropertyName(modelName: string): string {
+  return modelName.charAt(0).toLowerCase() + modelName.slice(1);
 }
 
 /**
@@ -41,8 +28,9 @@ function getSoftDeletableDelegate(client: unknown, modelName: string): SoftDelet
  *   default (`deletedAt: null`). A caller that explicitly sets
  *   `deletedAt` in its own `where` overrides this — e.g. pass
  *   `{ deletedAt: { not: null } }` to list only deleted rows.
- * - `delete` / `deleteMany` are rewritten into `update` / `updateMany`
- *   that stamp `deletedAt`, never issuing a real `DELETE`.
+ * - `delete` / `deleteMany` throw instead of running — see the comment
+ *   above their handlers below for why this is a hard guard rather than
+ *   a transparent rewrite into `update`.
  *
  * `findUnique` / `findUniqueOrThrow` are deliberately NOT filtered — they
  * are most often used for FK/relation lookups where the caller has a
@@ -76,23 +64,54 @@ export function softDeleteExtension() {
             }
             return query(args);
           },
+          /**
+           * NOT rewritten into an `update`. An earlier version of this
+           * extension tried exactly that — calling
+           * `client[model].update(...)` using the `client` closed over
+           * from `Prisma.defineExtension((client) => ...)` — and it was
+           * a real, live bug: that `client` reference is fixed to the
+           * top-level client at extension-composition time, not to
+           * whatever transaction the surrounding `delete()` call was
+           * actually made through. Call `.delete()` from inside
+           * `PrismaService.withTenant(...)` (i.e. on RLS-protected
+           * tables) and the "rewritten" update ran on a *different*,
+           * non-transactional connection with no
+           * `app.current_organization_id` set — RLS then silently
+           * rejected it and Prisma reported "no record found," which is
+           * a confusing failure mode for something that is actually a
+           * tenant-isolation bug. Caught by running this against a real
+           * Postgres with RLS actually enforced (see
+           * docs/architecture/security.md#row-level-security) — it
+           * would NOT have been caught by typecheck/build/lint alone.
+           *
+           * So: fail loudly and immediately instead. Soft-deleting a row
+           * is `<model>.update({ where, data: { deletedAt: new Date() } })`,
+           * called directly on whatever client/transaction the caller
+           * already has — which stays correctly scoped because it's the
+           * same `update` operation Prisma always routes correctly,
+           * with no client-reference indirection involved.
+           */
           async delete({ model, args, query }) {
-            if (!softDeleteModelNames.has(model)) {
-              return query(args);
+            if (softDeleteModelNames.has(model)) {
+              throw new Error(
+                `${model}.delete() is disabled for soft-deletable models. Call ` +
+                  `${toClientPropertyName(model)}.update({ where, data: { deletedAt: new Date() } }) ` +
+                  'instead, on the same client/transaction you already have — see ' +
+                  "soft-delete.extension.ts for why this isn't done automatically.",
+              );
             }
-            return getSoftDeletableDelegate(client, model).update({
-              where: args.where,
-              data: { deletedAt: new Date() },
-            });
+            return query(args);
           },
           async deleteMany({ model, args, query }) {
-            if (!softDeleteModelNames.has(model)) {
-              return query(args);
+            if (softDeleteModelNames.has(model)) {
+              throw new Error(
+                `${model}.deleteMany() is disabled for soft-deletable models. Call ` +
+                  `${toClientPropertyName(model)}.updateMany({ where, data: { deletedAt: new Date() } }) ` +
+                  'instead, on the same client/transaction you already have — see ' +
+                  "soft-delete.extension.ts for why this isn't done automatically.",
+              );
             }
-            return getSoftDeletableDelegate(client, model).updateMany({
-              where: args.where,
-              data: { deletedAt: new Date() },
-            });
+            return query(args);
           },
         },
       },

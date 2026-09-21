@@ -16,18 +16,24 @@
 // SOFT DELETE CONVENTION: any model holding data that must be retained
 // (i.e. almost everything except AuditLog, which is an immutable log and
 // must never be deleted at all) gets a `deletedAt DateTime?` field. Adding
-// that field is the *entire* convention — PrismaService's query extension
+// that field is most of the convention — PrismaService's query extension
 // (src/prisma/soft-delete.extension.ts) detects it automatically at
 // runtime via the DMMF and excludes soft-deleted rows from
-// find/findFirst/count and rewrites delete/deleteMany into a timestamp
-// update. No per-model wiring needed beyond adding the field. See
+// find/findFirst/count by default. `.delete()`/`.deleteMany()` on these
+// models throw rather than running — call `.update({ data: { deletedAt:
+// new Date() } })` directly instead. (An earlier version tried to
+// transparently rewrite delete->update; it silently broke tenant
+// isolation inside transactions — see the comment above the delete
+// handler in soft-delete.extension.ts for why.) See
 // docs/architecture/security.md#soft-delete.
 //
 // TENANT ISOLATION: Clinic/User/Patient (every table with organizationId)
 // have Postgres Row-Level Security policies applied in the migration SQL
 // (Prisma's schema language cannot express RLS) — see
 // prisma/migrations/20260921000000_init/migration.sql and
-// docs/architecture/security.md#row-level-security.
+// docs/architecture/security.md#row-level-security. RLS only works
+// because the app connects as a non-superuser role — see
+// infrastructure/docker/postgres-init/01-app-role.sql.
 
 generator client {
   provider = "prisma-client-js"
@@ -35,7 +41,15 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime queries (the query engine) use `url` — this MUST be a
+  // non-superuser role (see infrastructure/docker/postgres-init/01-app-role.sql).
+  // Postgres superusers always bypass Row-Level Security, so if the app
+  // connects as a superuser, the RLS tenant-isolation policies on
+  // clinics/users/patients silently do nothing. `prisma migrate`
+  // commands use `directUrl` instead — that one runs as the privileged
+  // role, since schema changes and RLS/policy management need it.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 enum StaffRole {

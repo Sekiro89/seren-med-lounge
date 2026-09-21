@@ -93,16 +93,43 @@ pnpm install
 # build shared packages once before running the apps
 pnpm --filter "./packages/*" build
 
-cp .env.example .env      # fill in real values for anything you're testing
-pnpm docker:up             # PostgreSQL (5432) + Redis (6379)
+# Prisma/NestJS read .env from apps/api/ (not the repo root)
+cp .env.example apps/api/.env      # fill in real values for anything you're testing
+pnpm docker:up                      # PostgreSQL (5432) + Redis (6379)
 
 pnpm --filter api run prisma:generate
-pnpm --filter api run prisma:migrate   # creates the initial tables
+pnpm --filter api exec prisma migrate deploy   # creates the initial tables + RLS policies
 
 pnpm dev:api                # http://localhost:4000  (Swagger at /docs)
 pnpm dev:patient             # http://localhost:3000
 pnpm dev:staff                # http://localhost:3001
 ```
+
+**If port 5432 is already taken** (a native/Homebrew Postgres is a common
+culprit — check with `lsof -nP -iTCP:5432 -sTCP:LISTEN`), set
+`POSTGRES_HOST_PORT` before bringing containers up and match it in both
+`DATABASE_URL`/`DIRECT_DATABASE_URL`:
+
+```bash
+POSTGRES_HOST_PORT=5433 pnpm docker:up
+```
+
+**Why two database URLs**: `DATABASE_URL` (what the app runs as) must be
+the non-superuser `serenemed_app` role created by
+`infrastructure/docker/postgres-init/01-app-role.sql` on first container
+start — Postgres superusers always bypass Row-Level Security, so
+connecting the app as the superuser `serenemed` role would make the
+tenant-isolation policies silently do nothing. `DIRECT_DATABASE_URL`
+(the `serenemed` superuser) is used only by `prisma migrate`. See
+[`docs/architecture/security.md#row-level-security`](docs/architecture/security.md#row-level-security)
+— this was a real bug in an earlier version of this setup, caught by
+actually running it, not by lint/typecheck/build.
+
+After migrating, `pnpm --filter api run verify:tenant-isolation` is a
+manual script (not part of `pnpm test`) that seeds two organizations
+against the real database and asserts Row-Level Security and the
+soft-delete convention actually behave as documented — worth running
+after touching either.
 
 ## Development commands
 

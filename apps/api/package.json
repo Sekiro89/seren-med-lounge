@@ -18,7 +18,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "verify:tenant-isolation": "ts-node -O '{\"module\":\"commonjs\"}' scripts/verify-tenant-isolation.ts"
   },
   "dependencies": {
     "@serenemed/types": "workspace:*",
@@ -67,7 +68,7 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.ts$": "ts-jest"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

@@ -10,9 +10,10 @@ services:
       POSTGRES_PASSWORD: serenemed
       POSTGRES_DB: serenemed
     ports:
-      - '5432:5432'
+      - '${POSTGRES_HOST_PORT:-5432}:5432'
     volumes:
       - serenemed-postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U serenemed -d serenemed']
       interval: 5s
@@ -24,7 +25,7 @@ services:
     container_name: serenemed-redis
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - '${REDIS_HOST_PORT:-6379}:6379'
     volumes:
       - serenemed-redis-data:/data
     healthcheck:
