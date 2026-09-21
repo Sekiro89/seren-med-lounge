@@ -191,12 +191,14 @@ unlimited password-guessing against `POST /auth/login`. Fixed with
 5, ttl: 60_000 } })` — 5 attempts/minute per IP. Verified live against a
   clean server: attempts 1–5 returned `401` (wrong password), attempt 6
   returned `429`.
-- Storage is in-memory (the `@nestjs/throttler` default) — correct for
-  one instance, **not** shared across multiple. Scaling the API out
-  horizontally needs a Redis-backed `ThrottlerStorage` (`RedisService`
-  already exists and could back it) before the limit means anything
-  real across instances; not wired up, since there's only ever been one
-  instance running.
+- Storage is Redis-backed (`@nest-lab/throttler-storage-redis`, sharing
+  `RedisService`'s existing connection rather than opening a second one
+  — `ThrottlerModule.forRootAsync` in `app.module.ts`), so the limit is
+  shared across every instance talking to the same Redis, not
+  per-instance like the original in-memory default. Verified live: hit
+  a route, then confirmed real `{...}:hits` keys actually landed in
+  Redis via `redis-cli keys`, not just that the request itself
+  succeeded.
 - Disabled under `NODE_ENV=test` (`skipIf` in the module config, matching
   the value Jest sets automatically) — the e2e suite logs in more times
   than the real 5/min limit allows, and failing those tests on a

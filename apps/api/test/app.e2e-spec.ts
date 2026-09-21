@@ -19,6 +19,13 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer()).get('/health').expect(200).expect({ status: 'ok' });
   });
 
+  it('/health/ready (GET) — real DB + Redis reachable', () => {
+    return request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect({ status: 'ok', db: 'ok', redis: 'ok' });
+  });
+
   afterEach(async () => {
     await app.close();
   });

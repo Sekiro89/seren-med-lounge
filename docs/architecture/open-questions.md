@@ -69,13 +69,15 @@ patient data" anti-pattern the architecture explicitly avoids.
 
 `@nestjs/throttler` is wired: 100 req/min/IP app-wide, 5 req/min/IP on
 `POST /auth/login`, verified live (5 allowed, 6th `429`) — see
-`docs/architecture/security.md#rate-limiting`. Two things this doesn't
+`docs/architecture/security.md#rate-limiting`. One thing this doesn't
 solve, tracked rather than silently assumed away:
 
-- **Storage is in-memory**, correct for one instance only. Multiple API
-  instances each enforce their own separate 100/min and 5/min — a
-  distributed limit needs a shared (Redis-backed) `ThrottlerStorage`,
-  not built since there's only one instance to test against.
+- **Storage is now Redis-backed** (`@nest-lab/throttler-storage-redis`,
+  sharing `RedisService`'s existing connection — `app.module.ts`), so
+  the limit is actually shared across every instance talking to the
+  same Redis, not per-instance like the original in-memory default.
+  Verified live: hit a route, confirmed real `{...}:hits` keys land in
+  Redis via `redis-cli keys`, not just that the request succeeded.
 - **Tracked by source IP**, which assumes no reverse proxy/load balancer
   sits in front rewriting or hiding the real client IP. Fine for the
   current single-instance setup; whoever introduces a proxy needs to

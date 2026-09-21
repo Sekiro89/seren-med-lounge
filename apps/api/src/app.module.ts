@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { parseApiEnv } from '@serenemed/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
+import { RedisService } from './redis/redis.service';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -60,10 +62,11 @@ import { ReportsModule } from './reports/reports.module';
     RedisModule,
     // General default for every route; /auth/login overrides this with a
     // much stricter limit via @Throttle() — see auth.controller.ts and
-    // docs/architecture/security.md#rate-limiting. In-memory storage
-    // (the default): correct for one instance, NOT shared across
-    // multiple — see the doc for the Redis-backed storage this needs
-    // before scaling out.
+    // docs/architecture/security.md#rate-limiting. Storage is Redis-backed
+    // (below), shared via RedisService's existing connection rather than
+    // opening a second one — so the limit is shared across every
+    // instance of this app talking to the same Redis, not per-instance
+    // like the in-memory default would be.
     //
     // skipIf disables throttling only under Jest (NODE_ENV=test is set
     // automatically by Jest, not something this app sets itself) — the
@@ -71,9 +74,13 @@ import { ReportsModule } from './reports/reports.module';
     // otherwise trip the 5/min login limit and fail tests for a reason
     // that has nothing to do with what they're checking. The real limit
     // is unchanged for every other environment.
-    ThrottlerModule.forRoot({
-      throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
-      skipIf: () => process.env.NODE_ENV === 'test',
+    ThrottlerModule.forRootAsync({
+      inject: [RedisService],
+      useFactory: (redisService: RedisService) => ({
+        throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+        skipIf: () => process.env.NODE_ENV === 'test',
+        storage: new ThrottlerStorageRedisService(redisService.client),
+      }),
     }),
 
     // --- identity & access ---

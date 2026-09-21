@@ -124,6 +124,41 @@ messaging, AI, Zoho) belongs to integrations that aren't built yet
 (see `docs/architecture/integrations.md`) — nothing reads them today, so
 there's nothing to configure for them yet.
 
+## First admin / production bootstrap
+
+`scripts/seed-dev.ts` is explicitly dev-only (hardcoded org/credentials,
+`upsert`-based so it's safe to re-run). `scripts/bootstrap-production.ts`
+is the equivalent for a real deploy: takes org id/name and admin
+email/name/password from required env vars (no defaults, no hardcoded
+credentials), hashes the password with the same bcrypt cost
+`UsersService.create()` uses (12 — this script is a one-time stand-in
+for that path, not a second idea of what "correctly hashed" means), and
+hard-refuses to run if any `Organization` already exists — it creates
+exactly one first admin in an empty database, once, not a general
+org-creation tool.
+
+```bash
+BOOTSTRAP_ORG_ID=acme-clinic \
+BOOTSTRAP_ORG_NAME="Acme Clinic" \
+BOOTSTRAP_ADMIN_EMAIL=admin@acme-clinic.example \
+BOOTSTRAP_ADMIN_PASSWORD='<a real generated password>' \
+BOOTSTRAP_ADMIN_NAME="Acme Admin" \
+DIRECT_DATABASE_URL=<production superuser URL> \
+  pnpm --filter api exec ts-node -O '{"module":"commonjs"}' scripts/bootstrap-production.ts
+```
+
+Verified live end to end against a genuinely empty throwaway Postgres:
+ran once (created the org + admin), ran a second time (refused, exit
+code 1, nothing created), then actually logged in as the bootstrapped
+admin through the real running API and got back a valid JWT — not just
+"a row exists in the database," but the exact same bcrypt hash the
+login path expects.
+
+What this deliberately doesn't decide: whether an operator invokes this
+by hand, as a CI/CD one-off step, or from some future first-run setup
+UI — that's a product decision the script doesn't need an answer to
+either way.
+
 ## Not done yet
 
 - **No hosting target chosen.** The Dockerfile is host-agnostic (works
@@ -135,8 +170,26 @@ there's nothing to configure for them yet.
 - **No frontend Dockerfiles.** `apps/patient-web`/`apps/staff-web`
   aren't containerized yet — same `pnpm deploy`-based pattern should
   apply once/if they're needed for the same launch.
-- Everything under "Real gaps" in the go-live audit this doc's history
-  came from (graceful shutdown, structured logging, error tracking, a
-  real readiness check, gating `/docs` in production, distributed rate
-  limiting, first-admin provisioning) — tracked separately, not
-  addressed by containerizing the app.
+- **No error tracking (Sentry or equivalent).** Deliberately not wired:
+  there's no real account/DSN to verify delivery against, and stubbing
+  in SDK calls that have never actually been confirmed to deliver an
+  event anywhere would be exactly the "fake integration that looks
+  production-ready" anti-pattern this project avoids elsewhere (see
+  `docs/architecture/open-questions.md` #3 on the same reasoning for
+  OTP). When there's a real DSN: `@sentry/node`, initialized only if
+  `SENTRY_DSN` is set (same optional-until-configured shape as the S3/
+  payments/messaging env vars already in `.env.example`), is a small,
+  well-understood addition at that point — not attempted blind now.
+- **Distributed rate limiting, structured logging, graceful shutdown, a
+  real readiness check, and gating `/docs` in production** were all
+  fixed in the same pass as this doc — see `app.module.ts` (Redis-backed
+  `ThrottlerStorageRedisService`, sharing `RedisService`'s connection),
+  `main.ts` (`enableShutdownHooks()`, the `NODE_ENV==='production'`
+  guards around Swagger and the logger), `common/json-logger.service.ts`,
+  and `GET /health/ready` (`app.service.ts` — checks real Postgres +
+  Redis reachability, not just "the process is up"). All verified live:
+  the Redis-backed throttler's keys were confirmed actually landing in
+  Redis (`docker exec ... redis-cli keys`), `/docs` confirmed 200 in dev
+  and 404 with `NODE_ENV=production`, the JSON logger's output confirmed
+  to be 100% valid JSON lines end to end, and `/health/ready` confirmed
+  live against real Postgres + Redis.
