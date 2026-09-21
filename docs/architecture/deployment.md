@@ -282,18 +282,55 @@ whatever host gets chosen later. Uses the repo's own `GITHUB_TOKEN`
 repo's default workflow permission is read-only) — no separate registry
 account or secret needed.
 
+## Frontend images
+
+`apps/patient-web/Dockerfile` and `apps/staff-web/Dockerfile` — same
+`node:20-alpine` + pnpm-workspace-aware build pattern as the API, but
+using Next.js's `output: 'standalone'` (set in each app's
+`next.config.ts`, along with `outputFileTracingRoot` pointed at the
+monorepo root — otherwise Next's file tracing only looks inside the
+app's own folder and misses the `@serenemed/*` workspace packages it
+needs) instead of `pnpm deploy`, since that's Next's own purpose-built
+equivalent for producing a minimal, self-contained server bundle.
+
+```bash
+docker build -f apps/patient-web/Dockerfile \
+  --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
+  -t serenemed-patient-web .
+# staff-web is identical, just swap the Dockerfile path/image tag
+```
+
+`NEXT_PUBLIC_API_URL` has to be a **build** arg, not a runtime env var —
+Next.js inlines `NEXT_PUBLIC_*` values into the client bundle during
+`next build`, so it needs to be known before that step runs, not when
+the container later starts. Verified live: booted both images, hit real
+routes (200 on `/`, `/login`, `/dashboard`), and confirmed
+`NEXT_PUBLIC_API_URL`'s actual value is present inside the built client
+JS (`grep` on `.next/static/chunks/*.js` inside the running container)
+— not just that the build succeeded.
+
+The traced `standalone` output nests under `apps/<name>/` within
+`.next/standalone/` in this monorepo (confirmed by inspecting the real
+build output) rather than sitting at its root like a single-package
+Next.js project would produce — both Dockerfiles' `COPY` paths and
+`WORKDIR` account for that. `public/` and `.next/static/` aren't
+included in `standalone` by Next's own design (meant to be served by a
+CDN instead) — copied in by hand since there's no CDN in front of
+either app yet.
+
+Not done for these two: publishing to GHCR (the API's `publish-image`
+CI job isn't mirrored for the frontends — same pattern would apply if
+wanted, not assumed here).
+
 ## Not done yet
 
-- **No hosting target chosen.** The Dockerfile is host-agnostic (works
-  on Fly/Railway/Render/ECS/k8s/a plain VPS running `docker run`) —
-  deliberately deferred rather than building against a guess.
-- **No actual deploy step.** Publishing the image (above) isn't the
-  same as running it anywhere — once a host is picked, that host still
-  needs to be told to pull and run `ghcr.io/<owner>/serenemed-api:latest`
-  (or a specific SHA tag).
-- **No frontend Dockerfiles.** `apps/patient-web`/`apps/staff-web`
-  aren't containerized or published yet — same pattern should apply
-  once/if they're needed for the same launch.
+- **No hosting target chosen.** All three Dockerfiles are host-agnostic
+  (work on Fly/Railway/Render/ECS/k8s/a plain VPS running `docker run`)
+  — deliberately deferred rather than building against a guess.
+- **No actual deploy step.** Publishing the API image to GHCR (above)
+  isn't the same as running it anywhere — once a host is picked, that
+  host still needs to be told to pull and run
+  `ghcr.io/<owner>/serenemed-api:latest` (or a specific SHA tag).
 
 ## Already closed (was "Not done yet")
 

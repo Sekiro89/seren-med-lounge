@@ -212,12 +212,15 @@ for this workflow.
 
 ## Deployment
 
-`apps/api` builds into a production container:
-`docker build -f apps/api/Dockerfile -t serenemed-api .` (run from the
-repo root). See [`docs/architecture/deployment.md`](docs/architecture/deployment.md)
-for what's actually been verified (booted from that exact image against
-a live Postgres + Redis, logged in, RLS confirmed still enforced) versus
-what's intentionally not decided yet (hosting target, CD pipeline).
+All three apps build into production containers — `docker build -f
+apps/api/Dockerfile -t serenemed-api .` (run from the repo root; same
+pattern for `apps/patient-web` and `apps/staff-web`, which additionally
+need `--build-arg NEXT_PUBLIC_API_URL=...`). CI also auto-publishes the
+API image to `ghcr.io/<owner>/serenemed-api` on every push to `main`.
+See [`docs/architecture/deployment.md`](docs/architecture/deployment.md)
+for what's actually been verified (each image booted for real against
+live Postgres + Redis / real HTTP routes) versus what's intentionally
+not decided yet (hosting target, CD/deploy step).
 
 ## Environment
 
