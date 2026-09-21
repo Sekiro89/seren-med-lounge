@@ -38,13 +38,13 @@ enum StaffRole {
 /// Tenancy root. A deployment can host multiple organizations later;
 /// today there is exactly one, but every table hangs off this from day one.
 model Organization {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
   clinics   Clinic[]
   users     User[]
   patients  Patient[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@map("organizations")
 }
@@ -73,7 +73,7 @@ model User {
   organization   Organization @relation(fields: [organizationId], references: [id])
   clinicId       String?
   clinic         Clinic?      @relation(fields: [clinicId], references: [id])
-  email          String       @unique
+  email          String
   passwordHash   String
   fullName       String
   role           StaffRole
@@ -81,7 +81,12 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // Scoped to the organization, not global — the same person can hold
+  // separate staff accounts at two different organizations under one
+  // email. See docs/architecture/open-questions.md.
+  @@unique([organizationId, email])
   @@index([organizationId])
+  @@index([clinicId])
   @@map("users")
 }
 
@@ -105,6 +110,7 @@ model Patient {
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
+  @@index([clinicId])
   @@index([phone])
   @@map("patients")
 }

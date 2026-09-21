@@ -7,12 +7,18 @@ shell and the Unified Patient Record root, nothing more:
 
 ```
 Organization ──< Clinic
-Organization ──< User (staff identity — email/password, StaffRole)
+Organization ──< User (staff identity — email scoped to org, StaffRole)
 Organization ──< Patient (patient identity — root of the Unified Patient Record)
 Clinic ──< User
 Clinic ──< Patient
 AuditLog (generic cross-cutting log; not tied to a specific entity by FK)
 ```
+
+`User.email` is unique per `(organizationId, email)`, not globally — the
+same person can hold separate staff accounts at two organizations under
+one email, which matters once multi-org is real. `clinicId` is indexed
+on both `User` and `Patient` for clinic-scoped lookups (e.g. "patients
+at this clinic"), not just `organizationId`.
 
 `User` (staff) and `Patient` are separate tables on purpose — see
 `docs/architecture/domain-modules.md`. Nothing else is duplicated: every
