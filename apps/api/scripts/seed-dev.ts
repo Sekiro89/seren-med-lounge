@@ -1,10 +1,12 @@
 /**
- * Dev-only bootstrap seed — creates one Organization and one
- * ADMINISTRATOR user with a known password, so there's someone to log in
- * as. Uses DIRECT_DATABASE_URL (the superuser/owner role) deliberately:
- * this is the one legitimate chicken-and-egg case for RLS — before any
- * user exists, there's no tenant context to create the first one with,
- * and `POST /users` requires being authenticated as an admin already.
+ * Dev-only bootstrap seed — creates one Organization, one ADMINISTRATOR
+ * user, and one Patient, each with a known password, so there's someone
+ * to log in as on both /auth/login and /auth/patient/login. Uses
+ * DIRECT_DATABASE_URL (the superuser/owner role) deliberately: this is
+ * the one legitimate chicken-and-egg case for RLS — before any user
+ * exists, there's no tenant context to create the first one with, and
+ * `POST /users` requires being authenticated as an admin already
+ * (patients have no equivalent self-registration endpoint at all yet).
  *
  * NOT a production bootstrap flow. A real one (CLI command, first-run
  * wizard, infra-provisioned) is a product decision, not made here — see
@@ -30,6 +32,7 @@ async function main() {
   });
 
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 12);
+
   const admin = await prisma.user.upsert({
     where: { organizationId_email: { organizationId: org.id, email: 'admin@dev.local' } },
     create: {
@@ -42,10 +45,25 @@ async function main() {
     update: { passwordHash },
   });
 
+  const patient = await prisma.patient.upsert({
+    where: { organizationId_email: { organizationId: org.id, email: 'patient@dev.local' } },
+    create: {
+      organizationId: org.id,
+      email: 'patient@dev.local',
+      passwordHash,
+      firstName: 'Dev',
+      lastName: 'Patient',
+      dateOfBirth: new Date('1990-01-01'),
+      phone: '9999999999',
+    },
+    update: { passwordHash },
+  });
+
   console.log('Seeded:');
-  console.log(`  organizationId: ${org.id}`);
-  console.log(`  email:          ${admin.email}`);
-  console.log(`  password:       ${DEV_PASSWORD}`);
+  console.log(`  organizationId:   ${org.id}`);
+  console.log(`  staff email:      ${admin.email}  (POST /auth/login)`);
+  console.log(`  patient email:    ${patient.email}  (POST /auth/patient/login)`);
+  console.log(`  password (both):  ${DEV_PASSWORD}`);
 
   await prisma.$disconnect();
 }

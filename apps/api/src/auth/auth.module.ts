@@ -3,12 +3,19 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, type JwtModuleOptions } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PatientAuthService } from './patient-auth.service';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { UsersModule } from '../users/users.module';
+import { PatientsModule } from '../patients/patients.module';
 
 @Module({
   imports: [
     UsersModule,
+    // One-directional: auth needs PatientsService for patient login
+    // lookups. PatientsModule does NOT import AuthModule back — it has
+    // no JWT dependency of its own, only PrismaService (global). Keeping
+    // it one-directional avoids a circular module dependency.
+    PatientsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -25,11 +32,11 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TokenBlacklistService],
+  providers: [AuthService, PatientAuthService, TokenBlacklistService],
   // Re-exports JwtModule/TokenBlacklistService so JwtAuthGuard — a plain
   // provider in AppModule, not something that imports AuthModule itself —
   // can inject them. AppModule importing AuthModule is what makes this
   // reachable.
-  exports: [AuthService, JwtModule, TokenBlacklistService],
+  exports: [AuthService, PatientAuthService, JwtModule, TokenBlacklistService],
 })
 export class AuthModule {}

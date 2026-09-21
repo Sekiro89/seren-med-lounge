@@ -24,13 +24,30 @@ sign-off — e.g. can Reception see any clinical data at all, even
 read-only, for scheduling context? **Assumption made:** conservative,
 role-scoped access; expand only as each workspace's real screens need it.
 
-## 3. Patient authentication method
+## 3. Patient authentication method — email/password built, phone/OTP still open
 
-`Patient.passwordHash` in `prisma/schema.prisma` assumes email/password
-auth, but many Indian clinic patients may prefer phone + OTP. **Assumption
-made:** schema allows either (phone is required, email/password are
-optional) so OTP-based auth can be added without a schema change, but the
-actual auth flow is not implemented.
+`POST /auth/patient/login` (email/password, mirroring staff auth) is now
+real and verified — see `docs/architecture/security.md#patient-authentication`.
+Phone + OTP, which many Indian clinic patients may prefer over
+email/password, is still not built: `Patient.passwordHash` stays
+nullable specifically so it can be added later without a schema change,
+but no messaging integration is wired to send a real OTP
+(`integrations/messaging`'s `StubMessagingProvider` only logs — see
+`docs/architecture/integrations.md`), and building a fake OTP flow on
+top of it would be exactly the "generate fake integrations and pretend
+they're production-ready" anti-pattern this project avoids elsewhere.
+**Assumption made:** shipped the concretely-buildable half (email/
+password, matching the existing staff pattern) now; left OTP for when a
+real SMS/WhatsApp provider is contracted, per `integrations.md`.
+
+Also still open: **patient self-registration**. There's no signup
+endpoint — every patient account today is created by a dev seed script
+(`apps/api/scripts/seed-dev.ts`), the same bootstrap-only pattern as the
+first staff admin. A real "patient creates their own account" flow
+(with what verification? email confirmation? staff-assisted at
+registration desk, matching the OPD registration workflow in
+`docs/workflows/clinic-journey.md`?) wasn't asked for here and would be
+guessing at product intent to build now.
 
 ## 4. Multi-clinic / multi-organization scope for v1
 

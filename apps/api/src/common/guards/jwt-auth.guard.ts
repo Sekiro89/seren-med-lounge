@@ -53,13 +53,27 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token has been revoked.');
     }
 
-    const user: AuthenticatedUser = {
-      userId: payload.sub,
-      organizationId: payload.organizationId,
-      role: payload.role,
-      jti: payload.jti,
-      expiresAt: payload.exp,
-    };
+    // Built per-branch (not one spread) so TypeScript keeps `role`
+    // narrowed to the actorType it actually belongs to — see the
+    // discriminated-union comment on AuthenticatedUser.
+    const user: AuthenticatedUser =
+      payload.actorType === 'USER'
+        ? {
+            actorType: 'USER',
+            userId: payload.sub,
+            organizationId: payload.organizationId,
+            role: payload.role,
+            jti: payload.jti,
+            expiresAt: payload.exp,
+          }
+        : {
+            actorType: 'PATIENT',
+            userId: payload.sub,
+            organizationId: payload.organizationId,
+            role: payload.role,
+            jti: payload.jti,
+            expiresAt: payload.exp,
+          };
     (request as Request & { user: AuthenticatedUser }).user = user;
 
     return true;

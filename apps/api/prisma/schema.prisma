@@ -158,6 +158,12 @@ model Patient {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
+  // so many patients with no email yet is fine — this only rejects two
+  // patients in the same org both claiming the same actual email.
+  // Mirrors User's (organizationId, email) constraint — see its comment
+  // for why scoped to org, not global.
+  @@unique([organizationId, email])
   @@index([organizationId, deletedAt])
   @@index([clinicId])
   @@index([phone])

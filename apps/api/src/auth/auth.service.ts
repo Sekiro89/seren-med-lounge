@@ -44,6 +44,7 @@ export class AuthService {
       sub: user.id,
       organizationId: user.organizationId,
       role: user.role,
+      actorType: 'USER',
       jti: randomUUID(),
     };
 

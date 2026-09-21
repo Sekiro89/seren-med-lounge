@@ -9,16 +9,19 @@ shell and the Unified Patient Record root, nothing more:
 Organization ──< Clinic
 Organization ──< User (staff identity — email scoped to org, StaffRole)
 Organization ──< Patient (patient identity — root of the Unified Patient Record)
+Organization ──< AuditLog
 Clinic ──< User
 Clinic ──< Patient
-AuditLog (generic cross-cutting log; not tied to a specific entity by FK)
 ```
 
-`User.email` is unique per `(organizationId, email)`, not globally — the
-same person can hold separate staff accounts at two organizations under
-one email, which matters once multi-org is real. `clinicId` is indexed
-on both `User` and `Patient` for clinic-scoped lookups (e.g. "patients
-at this clinic"), not just `organizationId`.
+`User.email` and `Patient.email` are each unique per `(organizationId,
+email)`, not globally — the same person can hold separate staff accounts
+(or, distinctly, a separate patient record) at two organizations under
+one email, which matters once multi-org is real. `Patient.email`'s
+constraint is nullable-safe (Postgres doesn't treat `NULL`s as equal),
+since not every patient has an email on file. `clinicId` is indexed on
+both `User` and `Patient` for clinic-scoped lookups (e.g. "patients at
+this clinic"), not just `organizationId`.
 
 `User` (staff) and `Patient` are separate tables on purpose — see
 `docs/architecture/domain-modules.md`. Nothing else is duplicated: every
@@ -26,12 +29,12 @@ future table below attaches to `Patient.id`, never to a copy of patient
 fields.
 
 `Organization`, `Clinic`, `User`, and `Patient` all carry `deletedAt` and
-go through the soft-delete convention (nothing is hard-deleted); `Clinic`,
-`User`, and `Patient` also have a Postgres RLS policy enforcing tenant
-isolation at the database. `AuditLog` has neither — see
-`docs/architecture/security.md#soft-delete` and
-`#row-level-security`, and `open-questions.md#8` / `#9` for what's
-still a gap in each.
+go through the soft-delete convention (nothing is hard-deleted).
+`Clinic`, `User`, `Patient`, and `AuditLog` all have a Postgres RLS
+policy enforcing tenant isolation at the database — `AuditLog` is the
+exception to the soft-delete convention (it has no `deletedAt`; an audit
+trail must never be deletable, soft or otherwise) but not to RLS — see
+`docs/architecture/security.md#soft-delete` and `#row-level-security`.
 
 ## Proposed full ERD (not yet implemented — added table-by-table per module)
 

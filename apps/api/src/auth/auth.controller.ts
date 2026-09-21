@@ -5,11 +5,15 @@ import { loginSchema, type LoginInput } from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
+import { PatientAuthService } from './patient-auth.service';
 import type { AuthenticatedUser } from './jwt-payload.interface';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly patientAuthService: PatientAuthService,
+  ) {}
 
   // Much stricter than the app-wide default (100/min) — this is a
   // public, unauthenticated endpoint that checks a password, i.e.
@@ -37,5 +41,26 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(@Req() request: Request & { user: AuthenticatedUser }) {
     await this.authService.logout(request.user.jti, new Date(request.user.expiresAt * 1000));
+  }
+
+  /**
+   * Same shape as staff login (organizationId + email + password —
+   * loginSchema's comment explains why organizationId is required) but
+   * against the Patient table via PatientAuthService, never User. Same
+   * rate limit rationale as /auth/login — also a public,
+   * password-checking endpoint.
+   */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Public()
+  @Post('patient/login')
+  @UsePipes(new ZodValidationPipe(loginSchema))
+  patientLogin(@Body() body: LoginInput) {
+    return this.patientAuthService.login(body);
+  }
+
+  @Post('patient/logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async patientLogout(@Req() request: Request & { user: AuthenticatedUser }) {
+    await this.patientAuthService.logout(request.user.jti, new Date(request.user.expiresAt * 1000));
   }
 }

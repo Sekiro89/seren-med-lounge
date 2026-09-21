@@ -139,12 +139,12 @@ Postgres up):
 Worth running both after touching auth, `PrismaService`, or the RLS
 policies.
 
-**Logging in**: there's no signup flow yet — `POST /users` requires an
-already-authenticated admin. To get a first user:
+**Logging in (staff)**: there's no signup flow yet — `POST /users`
+requires an already-authenticated admin. To get a first user:
 
 ```bash
 pnpm --filter api exec ts-node -O '{"module":"commonjs"}' scripts/seed-dev.ts
-# prints an organizationId, email, and password
+# prints a staff email+password AND a patient email+password (same org, same password)
 
 curl -X POST http://localhost:4000/auth/login \
   -H 'Content-Type: application/json' \
@@ -154,9 +154,25 @@ curl -X POST http://localhost:4000/auth/login \
 curl http://localhost:4000/users -H "Authorization: Bearer <accessToken>"
 ```
 
+**Logging in (patient)**: same shape, different endpoint and table —
+`patient-web`'s `/login` page (`apps/patient-web/app/login`) is a real,
+working form against this:
+
+```bash
+curl -X POST http://localhost:4000/auth/patient/login \
+  -H 'Content-Type: application/json' \
+  -d '{"organizationId":"seed-org","email":"patient@dev.local","password":"dev-password-123"}'
+# → { accessToken, patient }
+
+curl http://localhost:4000/patients/me -H "Authorization: Bearer <accessToken>"
+```
+
 `scripts/seed-dev.ts` is dev-only — see its header comment. Every route
-except `/health` and `/auth/login` requires that `Authorization` header;
-see [`docs/architecture/security.md#authentication--staff-access-tokens-only`](docs/architecture/security.md#authentication--staff-access-tokens-only).
+except `/health`, `/auth/login`, and `/auth/patient/login` requires an
+`Authorization` header; see
+[`docs/architecture/security.md#authentication--staff-access-tokens-only`](docs/architecture/security.md#authentication--staff-access-tokens-only)
+and
+[`#patient-authentication`](docs/architecture/security.md#patient-authentication).
 
 ## Development commands
 

@@ -11,6 +11,13 @@ import type { AuthenticatedUser } from '../../auth/jwt-payload.interface';
  * it always runs first. This guard only decides the RBAC question, it
  * does not authenticate.
  *
+ * `@RequirePermissions(...)` is a staff-RBAC concept — `ROLE_PERMISSIONS`
+ * (`@serenemed/permissions`) only has entries for `StaffRole`, never
+ * `PatientRole`. A patient actor hitting a permission-gated route is
+ * rejected outright, before even calling `roleHasPermission` — patients
+ * are authorized differently (own-record checks in the controller, e.g.
+ * `PatientsController.me()`), not through this guard at all.
+ *
  * This is the backend's own check; it exists so that authorization never
  * depends on what the frontend chose to render. See
  * docs/architecture/security.md.
@@ -30,9 +37,13 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>();
-    const userRole = request.user?.role;
+    const user = request.user;
 
-    if (!userRole || !required.every((permission) => roleHasPermission(userRole, permission))) {
+    if (!user || user.actorType !== 'USER') {
+      throw new ForbiddenException('Insufficient permissions for this operation.');
+    }
+
+    if (!required.every((permission) => roleHasPermission(user.role, permission))) {
       throw new ForbiddenException('Insufficient permissions for this operation.');
     }
 

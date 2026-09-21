@@ -1,4 +1,5 @@
 import { ApiClient } from '@serenemed/api-client';
+import { getPatientToken } from './auth';
 
 /**
  * Single shared API client instance for patient-web. Server Components and
@@ -8,8 +9,5 @@ import { ApiClient } from '@serenemed/api-client';
  */
 export const apiClient = new ApiClient({
   baseUrl: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000',
-  getAuthToken: () => {
-    if (typeof window === 'undefined') return null;
-    return window.localStorage.getItem('serenemed_patient_token');
-  },
+  getAuthToken: getPatientToken,
 });

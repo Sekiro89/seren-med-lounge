@@ -57,24 +57,87 @@ under Row-level security). What exists:
   question #1; see `docs/architecture/open-questions.md`.
 - Patient auth and staff auth are separate credential stores (`Patient`
   vs. `User` in `prisma/schema.prisma`) — a patient is never granted a
-  staff role by sharing a table. Only staff login exists so far; patient
-  auth is unimplemented (method itself is still open — see
-  `open-questions.md#3`).
+  staff role by sharing a table. Both now exist — see "Patient
+  authentication" below for how they differ.
 
 **Requires `organizationId` in the login request** — a documented
 assumption (`loginSchema`'s comment in `@serenemed/validation`), not a
 resolved UX: `User.email` is unique per `(organizationId, email)`, so
 something has to say which org before a lookup can happen, and there's
 no product decision yet on how a real UI resolves that (subdomain, org
-picker, email-domain lookup).
+picker, email-domain lookup). The patient login page (`apps/patient-web/app/login`)
+surfaces this honestly as a plain "Clinic ID" text field rather than
+hiding the gap behind a nicer-looking UI.
 
 **Not implemented**: refresh tokens (`JWT_REFRESH_TTL` is reserved for
 this — access tokens only today, so a client must re-login every
-`JWT_ACCESS_TTL`), and any user-facing signup/invite flow (`POST /users`
+`JWT_ACCESS_TTL`), and any staff signup/invite flow (`POST /users`
 exists but requires an already-authenticated `user:manage` caller — see
 `apps/api/scripts/seed-dev.ts` for how the _first_ user in a fresh
 database gets created, which is a dev-only bootstrap script, not a
 production flow).
+
+## Patient authentication
+
+`POST /auth/patient/login` + `GET /patients/me` + `POST /auth/patient/logout`
+(`apps/api/src/auth/patient-auth.service.ts`, `apps/api/src/patients`) —
+same login shape as staff (`organizationId` + `email` + `password`,
+same rate limit, same bcrypt/JWT/revocation mechanics), but a genuinely
+different authorization model, not just a different table:
+
+- **One shared JWT shape, not two token formats.** `JwtPayload`/
+  `AuthenticatedUser` (`apps/api/src/auth/jwt-payload.interface.ts`) are
+  discriminated unions on `actorType: 'USER' | 'PATIENT'` — narrowing on
+  it gives TypeScript the real role type (`StaffRole` vs `PatientRole`),
+  which is what lets `PermissionsGuard` call `roleHasPermission(user.role,
+...)` without a cast once `actorType !== 'USER'` is ruled out.
+- **`PermissionsGuard` rejects any patient actor outright** on a
+  `@RequirePermissions(...)` route, before even calling
+  `roleHasPermission` — `ROLE_PERMISSIONS` (`@serenemed/permissions`)
+  only has entries for `StaffRole`; there's no "patient permission" to
+  check. Verified live (and in `test/patient-auth.e2e-spec.ts`): a
+  patient token on `GET /users` gets `403`.
+- **A patient isn't authorized by RBAC at all — by record ownership.**
+  `GET /patients/me` isn't `@RequirePermissions`-gated; it checks
+  `request.user.actorType === 'PATIENT'` directly in the controller and
+  always looks up the JWT's own `sub`, never a client-supplied ID — so
+  there's no parameter to manipulate into requesting a different
+  patient's record (no IDOR surface by construction, not by validation).
+  Verified live: a staff token gets `403` on this route too — RBAC
+  permissions and patient ownership are two separate, non-overlapping
+  checks, and neither actor type can use the other's authorization path.
+- **`PatientAuthService` lives in the `auth` module, not `patients`.**
+  It needs `JwtService`/`TokenBlacklistService`, which `auth` owns;
+  putting it in `patients` instead would make `patients` depend on
+  `auth` for JWT infrastructure while `auth` depends on `patients` for
+  the controller route — a circular module dependency avoided by keeping
+  the direction one-way (`auth` imports `patients` for `PatientsService`,
+  not the reverse).
+- `Patient.email` now has the same `@@unique([organizationId, email])`
+  constraint as `User.email` (nullable-safe — Postgres doesn't treat
+  `NULL`s as equal, so many patients with no email yet is fine), added
+  in `prisma/migrations/20260921080000_patient_email_unique`.
+
+**Not implemented**: patient self-registration/signup (there's no way
+for a new patient to create their own account — `seed-dev.ts` creates
+one dev patient, same bootstrap-only caveat as the staff admin), phone/OTP
+login (`Patient.passwordHash` is nullable specifically so this can be
+added without a schema change — see `open-questions.md#3` — but no
+messaging integration is wired to send a real OTP, and building a fake
+one would violate the "no fake integrations" rule this project holds
+elsewhere).
+
+**Verified**: live against a running server (login, `/me`, both
+directions of the actor-type boundary, logout) with real HTTP requests,
+including the actual CORS preflight + POST pattern a browser would send
+from `patient-web`'s origin — not just curl without an `Origin` header.
+Also covered by `test/patient-auth.e2e-spec.ts` (6 tests). **Not**
+verified in an actual browser — no browser/UI-automation tool was
+available in the session that built this; `pnpm dev:patient` +
+`pnpm dev:api` and trying the form by hand is the recommended next
+check before trusting the click-through experience itself (form
+validation UX, error message rendering, etc.) — typecheck/build passing
+confirms the code is correct, not that it feels right to use.
 
 ## Token revocation
 

@@ -7,11 +7,16 @@ today:
 - **Full pattern** (`*.controller.ts` + `*.service.ts` + `*.module.ts` +
   `dto/`) — used where establishing the convention mattered now:
   `auth`, `users`, `patients`, `appointments`, `encounters`,
-  `clinical-notes`, `notifications`, `audit`. `auth`/`users` are further
-  along than the rest — real persistence, real JWT issuance, verified
-  against a live server — and are the reference implementation for how a
-  tenant-scoped module should look: see rule 6 below and
-  `docs/architecture/security.md#row-level-security`.
+  `clinical-notes`, `notifications`, `audit`. `auth`/`users`/`patients`
+  are further along than the rest — real persistence, real JWT issuance
+  for both staff and patients, verified against a live server, plus a
+  real (if minimal) `patient-web` login UI — and are the reference
+  implementation for how a tenant-scoped module should look: see rule 6
+  below and `docs/architecture/security.md#row-level-security`.
+  `patients` specifically is the reference for a module with two actor
+  types needing different authorization (RBAC for staff routes,
+  own-record checks for patient routes) — see
+  `docs/architecture/security.md#patient-authentication`.
 - **Lean shell** (`*.module.ts` only, `@Module({})`) — every other module
   below. Controllers/services/DTOs are added when that module's first
   real workflow is implemented, per the instruction not to generate files
