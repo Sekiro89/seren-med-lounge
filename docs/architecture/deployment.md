@@ -198,6 +198,32 @@ captured exception is actually delivered to a Sentry project.
 `captureException` is a documented safe no-op without `Sentry.init()`
 having run — that guarantee is Sentry's, not something re-tested here.
 
+## Dependency vulnerabilities
+
+CI runs `pnpm audit --prod --audit-level high` on every push (the
+`checks` job) — fails on high/critical findings, ignores low/moderate
+noise so the check stays a real signal instead of constant churn.
+
+When it fails: check whether the vulnerable package is something this
+app actually chose (upgrade it directly) or a transitive dependency of
+something else (the common case) — `pnpm why <package> --filter api`
+shows the path. For a transitive one, pin the patched version via
+`pnpm.overrides` in the root `package.json` rather than trying to
+upgrade whatever pulled it in (which may not have released a fix yet,
+or may not be upgradable without other breakage).
+
+The three currently pinned there (`tar`, `multer`, `deepmerge-ts`) came
+in via `bcrypt`'s native-binary installer, `@nestjs/platform-express`'s
+bundled multipart parser, and Prisma's config loader, respectively — 17
+advisories (1 critical, 12 high) fixed this way, none from a package
+this app depends on directly. The `tar` fix was a major version bump
+(6→7) for a dependency of `bcrypt`'s install tooling — the one with real
+risk of quietly breaking something (a native module's build step) —
+verified by actually re-running `bcrypt.hash`/`.compare`, the full
+test/e2e suite, and rebuilding the production Docker image with
+`--no-cache` to force a genuinely fresh install inside Alpine, not by
+assuming a version bump was safe because `pnpm install` didn't error.
+
 ## Not done yet
 
 - **No hosting target chosen.** The Dockerfile is host-agnostic (works

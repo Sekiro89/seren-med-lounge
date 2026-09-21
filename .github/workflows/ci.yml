@@ -33,6 +33,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit production dependencies
+        # high/critical only — a constant stream of new low/moderate
+        # transitive advisories would make this flaky noise rather than
+        # a real signal. Pin fixes for real findings via pnpm.overrides
+        # in the root package.json rather than upgrading a direct
+        # dependency that isn't actually the vulnerable package — see
+        # docs/architecture/deployment.md#dependency-vulnerabilities.
+        run: pnpm audit --prod --audit-level high
+
       - name: Generate Prisma client
         # apps/api's build/typecheck import @prisma/client's generated
         # types, which don't exist until this has run once.
