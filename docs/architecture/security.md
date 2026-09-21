@@ -26,6 +26,13 @@
 - **Deletes are soft by default.** See "Soft delete" below — clinical and
   business data is retained, not destroyed, unless a model is explicitly
   excluded from that convention (currently only `AuditLog`).
+- **Every route is throttled, and login is throttled harder.** See "Rate
+  limiting" below — `POST /auth/login` is the one public endpoint that
+  checks a password, and 5/min/IP is deliberately tighter than the
+  100/min app-wide default.
+- **A stolen token doesn't have to stay valid until it expires.** See
+  "Token revocation" below — logout actually revokes the presented
+  token, not just a client-side "forget the token and hope."
 
 ## Authentication — staff, access tokens only
 
@@ -68,6 +75,115 @@ exists but requires an already-authenticated `user:manage` caller — see
 `apps/api/scripts/seed-dev.ts` for how the _first_ user in a fresh
 database gets created, which is a dev-only bootstrap script, not a
 production flow).
+
+## Token revocation
+
+A stolen or leaked JWT was previously valid until it naturally expired
+(15 minutes by default) with no way to invalidate it sooner. Fixed with
+a Redis-backed blacklist:
+
+- Every token gets a unique `jti` claim at signing time (`AuthService.login`,
+  `crypto.randomUUID()`).
+- `POST /auth/logout` (authenticated — needs `JwtAuthGuard` to have
+  already verified the token and populated `request.user.jti`/`expiresAt`)
+  writes `auth:revoked-jti:<jti>` to Redis via `TokenBlacklistService`
+  (`apps/api/src/auth/token-blacklist.service.ts`), with a TTL equal to
+  the token's own remaining lifetime — verified: a token revoked ~6
+  seconds after a 15-minute login showed a Redis TTL of 894s. Entries
+  expire on their own; nothing accumulates forever.
+- `JwtAuthGuard` checks the blacklist (only after signature/expiry
+  verification already passed — no point spending a Redis round-trip on
+  a token that's invalid anyway) and rejects with `401 Token has been
+revoked.` if present.
+
+`TokenBlacklistService` is intentionally separate from `AuthService` —
+`JwtAuthGuard` needs it on every request and shouldn't drag in
+`AuthService`'s full dependency graph (`UsersService`, `bcrypt`, login
+logic) just to check a Redis key.
+
+**Scope, verified live**: logging out one token doesn't affect a
+different token for the same user (two independent logins, revoke one,
+the other still works) — real concurrent-session behavior, not assumed.
+Logging back in after a logout issues a fresh, valid token — revocation
+isn't a lockout.
+
+**Not implemented**: "log out everywhere" (revoke all of a user's active
+tokens at once — would need tracking issued `jti`s per user, not just
+revoked ones) and revocation on password change (a changed password
+should probably invalidate existing sessions; doesn't yet, since there's
+no password-change endpoint at all yet).
+
+## Rate limiting
+
+Every route had zero throttling — open question #6 from the start of
+this project, and the single most concrete gap: nothing stopped
+unlimited password-guessing against `POST /auth/login`. Fixed with
+`@nestjs/throttler`:
+
+- App-wide default: 100 requests/minute per IP (`ThrottlerModule.forRoot`
+  in `app.module.ts`), enforced by a global `ThrottlerGuard` — registered
+  _before_ `JwtAuthGuard` so abusive traffic is rejected before spending
+  any work on JWT verification or a Redis blacklist lookup.
+- `POST /auth/login` overrides this with `@Throttle({ default: { limit:
+5, ttl: 60_000 } })` — 5 attempts/minute per IP. Verified live against a
+  clean server: attempts 1–5 returned `401` (wrong password), attempt 6
+  returned `429`.
+- Storage is in-memory (the `@nestjs/throttler` default) — correct for
+  one instance, **not** shared across multiple. Scaling the API out
+  horizontally needs a Redis-backed `ThrottlerStorage` (`RedisService`
+  already exists and could back it) before the limit means anything
+  real across instances; not wired up, since there's only ever been one
+  instance running.
+- Disabled under `NODE_ENV=test` (`skipIf` in the module config, matching
+  the value Jest sets automatically) — the e2e suite logs in more times
+  than the real 5/min limit allows, and failing those tests on a
+  rate-limit hit would test the throttle's existence, not what the tests
+  are actually about. The real limit is unchanged everywhere else.
+
+**Tracked by source IP.** Behind a reverse proxy/load balancer that
+doesn't forward/trust `X-Forwarded-For` correctly, every request could
+appear to come from the proxy's own IP, making the limit either
+uselessly shared across all real clients or (if trusted blindly)
+spoofable by a client setting that header itself. Not an issue on a
+single instance with no proxy in front, which is the current setup;
+flagged for whenever a proxy is introduced.
+
+## CORS
+
+`apps/api/src/main.ts` never called `app.enableCors()` — browsers would
+have blocked `patient-web`/`staff-web` (different ports, so different
+origins) from calling the API at all. Fixed:
+
+- `app.enableCors({ origin: <CORS_ORIGINS, split on comma>, credentials:
+true, allowedHeaders: ['Content-Type', 'Authorization'] })`, applied
+  before routes are registered.
+- `CORS_ORIGINS` env var (`.env.example`), defaulting to the two local
+  frontend dev ports (`http://localhost:3000,http://localhost:3001`) —
+  **must** be set to the real deployed frontend origin(s) in any other
+  environment, or the frontends can't call the API from a browser at
+  all (this is CORS blocking it client-side, not a server error — the
+  API logs would show nothing wrong).
+- Verified live: a request with `Origin: http://localhost:3000` gets
+  `Access-Control-Allow-Origin: http://localhost:3000` back; a request
+  with `Origin: http://evil.com` gets no such header (browsers refuse to
+  expose the response to that origin's JS).
+
+## Security headers
+
+No `Helmet` (or equivalent) — no CSP, no HSTS, no `X-Frame-Options` on
+any response. Fixed: `app.use(helmet(...))` in `main.ts`, applied first,
+before CORS and routes. Verified live — `curl -D -` on `/health` shows
+`Content-Security-Policy`, `Strict-Transport-Security`,
+`X-Content-Type-Options: nosniff`, and `X-Frame-Options: SAMEORIGIN`
+present on every response.
+
+**CSP had to be relaxed for Swagger UI specifically** — its bundled page
+uses inline `<script>`/`<style>`, which Helmet's default CSP blocks.
+`script-src`/`style-src` were widened to include `'unsafe-inline'`
+(everything else keeps Helmet's default directives) rather than
+disabling CSP app-wide for one page's sake. Verified `/docs` still
+returns `200` and renders the expected Swagger UI HTML with this in
+place.
 
 ## Clinical record immutability
 

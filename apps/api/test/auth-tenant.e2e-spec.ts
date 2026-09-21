@@ -10,7 +10,15 @@ import { AppModule } from '../src/app.module';
  * manual curl session (see the "Verifying this" note this replaces in
  * docs/architecture/security.md and open-questions.md#10). Covers the
  * full path: login -> JWT -> JwtAuthGuard -> PermissionsGuard ->
- * TenantContextService -> withTenant -> RLS.
+ * TenantContextService -> withTenant -> RLS, plus token revocation
+ * (POST /auth/logout — see docs/architecture/security.md#token-revocation).
+ *
+ * Rate limiting (docs/architecture/security.md#rate-limiting) is
+ * deliberately NOT exercised here — ThrottlerModule's skipIf disables it
+ * under NODE_ENV=test (Jest sets this automatically) specifically
+ * because this suite logs in more times than the real 5/min login limit
+ * allows. It was verified manually against a live server instead; see
+ * that doc section for the numbers.
  *
  * Seeds directly via a superuser Prisma connection (DIRECT_DATABASE_URL)
  * — the same "admin bypasses RLS" pattern as scripts/seed-dev.ts and
@@ -204,6 +212,45 @@ describe('Auth + tenant isolation (e2e)', () => {
         .expect(200);
       const emails = listRes.body.map((u: { email: string }) => u.email);
       expect(emails).not.toContain(createRes.body.email);
+    });
+  });
+
+  describe('POST /auth/logout', () => {
+    it('revokes the presented token — works before, 401 after', async () => {
+      const { body } = await login(orgA.id, 'admin@org-a.example.com', adminAPassword);
+
+      await request(app.getHttpServer())
+        .get('/users')
+        .set('Authorization', `Bearer ${body.accessToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Authorization', `Bearer ${body.accessToken}`)
+        .expect(204);
+
+      const res = await request(app.getHttpServer())
+        .get('/users')
+        .set('Authorization', `Bearer ${body.accessToken}`)
+        .expect(401);
+      expect(res.body.message).toMatch(/revoked/i);
+    });
+
+    it('does not affect a different, still-valid token for the same user', async () => {
+      const first = await login(orgA.id, 'admin@org-a.example.com', adminAPassword);
+      const second = await login(orgA.id, 'admin@org-a.example.com', adminAPassword);
+
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Authorization', `Bearer ${first.body.accessToken}`)
+        .expect(204);
+
+      // Different jti (issued from a separate login) — logging out one
+      // session must not revoke the other.
+      await request(app.getHttpServer())
+        .get('/users')
+        .set('Authorization', `Bearer ${second.body.accessToken}`)
+        .expect(200);
     });
   });
 });

@@ -34,6 +34,9 @@ export const apiEnvSchema = z.object({
   LAB_API_URL: z.string().optional(),
   INSURANCE_API_URL: z.string().optional(),
   API_PORT: z.coerce.number().default(4000),
+  // Comma-separated allowed origins for CORS — see main.ts. Defaults to
+  // the two local frontend dev ports if unset.
+  CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3001'),
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

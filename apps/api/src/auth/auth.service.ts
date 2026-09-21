@@ -1,8 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import type { LoginInput } from '@serenemed/validation';
 import { UsersService } from '../users/users.service';
+import { TokenBlacklistService } from './token-blacklist.service';
 import type { JwtPayload } from './jwt-payload.interface';
 
 /**
@@ -18,6 +20,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly tokenBlacklist: TokenBlacklistService,
   ) {}
 
   async login(credentials: LoginInput) {
@@ -41,6 +44,7 @@ export class AuthService {
       sub: user.id,
       organizationId: user.organizationId,
       role: user.role,
+      jti: randomUUID(),
     };
 
     return {
@@ -53,5 +57,10 @@ export class AuthService {
         organizationId: user.organizationId,
       },
     };
+  }
+
+  /** See docs/architecture/security.md#token-revocation. */
+  async logout(jti: string, expiresAt: Date): Promise<void> {
+    await this.tokenBlacklist.revoke(jti, expiresAt);
   }
 }

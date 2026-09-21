@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, type JwtModuleOptions } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { TokenBlacklistService } from './token-blacklist.service';
 import { UsersModule } from '../users/users.module';
 
 @Module({
@@ -24,10 +25,11 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
-  // Re-exports JwtModule so JwtAuthGuard — a plain provider in AppModule,
-  // not something that imports AuthModule itself — can inject JwtService.
-  // AppModule importing AuthModule is what makes this reachable.
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, TokenBlacklistService],
+  // Re-exports JwtModule/TokenBlacklistService so JwtAuthGuard — a plain
+  // provider in AppModule, not something that imports AuthModule itself —
+  // can inject them. AppModule importing AuthModule is what makes this
+  // reachable.
+  exports: [AuthService, JwtModule, TokenBlacklistService],
 })
 export class AuthModule {}

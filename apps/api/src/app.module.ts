@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { parseApiEnv } from '@serenemed/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
+import { RedisModule } from './redis/redis.module';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -55,6 +57,24 @@ import { ReportsModule } from './reports/reports.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: parseApiEnv }),
     PrismaModule,
+    RedisModule,
+    // General default for every route; /auth/login overrides this with a
+    // much stricter limit via @Throttle() — see auth.controller.ts and
+    // docs/architecture/security.md#rate-limiting. In-memory storage
+    // (the default): correct for one instance, NOT shared across
+    // multiple — see the doc for the Redis-backed storage this needs
+    // before scaling out.
+    //
+    // skipIf disables throttling only under Jest (NODE_ENV=test is set
+    // automatically by Jest, not something this app sets itself) — the
+    // e2e suite logs in ~8 times across its test cases, which would
+    // otherwise trip the 5/min login limit and fail tests for a reason
+    // that has nothing to do with what they're checking. The real limit
+    // is unchanged for every other environment.
+    ThrottlerModule.forRoot({
+      throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
 
     // --- identity & access ---
     AuthModule,
@@ -120,11 +140,15 @@ import { ReportsModule } from './reports/reports.module';
   providers: [
     AppService,
     // Order matters: NestJS runs multiple APP_GUARD providers in
-    // registration order. JwtAuthGuard must run first — it's what
-    // populates request.user — so PermissionsGuard has something to
-    // read. Every route requires a valid Bearer token by default;
-    // @Public() (see common/decorators/public.decorator.ts) is the
-    // explicit opt-out, used today only by /health and /auth/login.
+    // registration order.
+    // 1. ThrottlerGuard first — reject abusive traffic before spending
+    //    any work on auth (JWT verification, Redis blacklist lookup).
+    // 2. JwtAuthGuard — populates request.user. Every route requires a
+    //    valid Bearer token by default; @Public() (see
+    //    common/decorators/public.decorator.ts) is the explicit opt-out,
+    //    used today only by /health and /auth/login.
+    // 3. PermissionsGuard — reads request.user for RBAC.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],

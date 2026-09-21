@@ -48,13 +48,22 @@ made:** not decided yet; flagged in `docs/architecture/domain-modules.md`
 rather than guessed, since getting this wrong risks the "duplicate
 patient data" anti-pattern the architecture explicitly avoids.
 
-## 6. Rate limiting strategy
+## 6. Rate limiting strategy — RESOLVED (with real caveats)
 
-Section 21 (Security) calls for rate limiting; no specific limits or
-scope (per-IP? per-account? per-endpoint class?) were given.
-**Assumption made:** deferred entirely — not configured yet. Recommend
-`@nestjs/throttler` with per-route overrides when auth lands, since
-sensible limits depend on knowing which endpoints are public.
+`@nestjs/throttler` is wired: 100 req/min/IP app-wide, 5 req/min/IP on
+`POST /auth/login`, verified live (5 allowed, 6th `429`) — see
+`docs/architecture/security.md#rate-limiting`. Two things this doesn't
+solve, tracked rather than silently assumed away:
+
+- **Storage is in-memory**, correct for one instance only. Multiple API
+  instances each enforce their own separate 100/min and 5/min — a
+  distributed limit needs a shared (Redis-backed) `ThrottlerStorage`,
+  not built since there's only one instance to test against.
+- **Tracked by source IP**, which assumes no reverse proxy/load balancer
+  sits in front rewriting or hiding the real client IP. Fine for the
+  current single-instance setup; whoever introduces a proxy needs to
+  wire `X-Forwarded-For` trust correctly or every client behind it
+  shares one bucket.
 
 ## 7. Object storage provider
 
@@ -128,3 +137,26 @@ neither of which exist yet. **Assumption made:** documented the
 mechanism and its real behavior so the decision is informed when it's
 needed, rather than picking a threshold now with no traffic data to
 justify it.
+
+## 12. Token revocation scope: single-session only
+
+`POST /auth/logout` (`docs/architecture/security.md#token-revocation`)
+revokes exactly the token presented on that request — verified live
+that a second, independent login for the same user is unaffected by
+logging out the first. Two related capabilities don't exist:
+
+- **"Log out everywhere"** — revoking every active token for a user
+  (e.g. from an admin action, or a "sign out all devices" button) would
+  need tracking issued `jti`s per user, not just revoked ones. The
+  current design only ever writes to the blacklist, never reads "what's
+  currently valid for this user."
+- **Revocation on password change.** Changing a password doesn't
+  invalidate existing sessions — arguably it should, but there's no
+  password-change endpoint at all yet, so there was nothing to wire this
+  into.
+
+**Assumption made:** built the mechanism (per-token revocation) that was
+concretely askable and verifiable now; left the two broader capabilities
+above undesigned rather than guessing at a shape (per-user token
+tracking? a `tokenValidAfter` timestamp on `User`? something else)
+without a concrete use case driving the choice.
