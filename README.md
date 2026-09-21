@@ -210,6 +210,15 @@ used in CI (JWT secret, DB credentials) are the same non-secret
 local-dev values already in `.env.example`; no GitHub Secrets are needed
 for this workflow.
 
+## Deployment
+
+`apps/api` builds into a production container:
+`docker build -f apps/api/Dockerfile -t serenemed-api .` (run from the
+repo root). See [`docs/architecture/deployment.md`](docs/architecture/deployment.md)
+for what's actually been verified (booted from that exact image against
+a live Postgres + Redis, logged in, RLS confirmed still enforced) versus
+what's intentionally not decided yet (hosting target, CD pipeline).
+
 ## Environment
 
 See [`.env.example`](.env.example) for every variable the system will
