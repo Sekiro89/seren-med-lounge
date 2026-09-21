@@ -76,13 +76,17 @@ solve, tracked rather than silently assumed away:
   sharing `RedisService`'s existing connection — `app.module.ts`), so
   the limit is actually shared across every instance talking to the
   same Redis, not per-instance like the original in-memory default.
-  Verified live: hit a route, confirmed real `{...}:hits` keys land in
-  Redis via `redis-cli keys`, not just that the request succeeded.
+  Verified live two ways: hit a route, confirmed real `{...}:hits` keys
+  land in Redis via `redis-cli keys` — and, further, actually ran **two
+  separate API containers** against one shared Redis and split login
+  attempts across both; the 5/min limit tripped on the combined count,
+  not 5-per-container (10 total) like the old in-memory default would
+  have allowed — see
+  `docs/architecture/deployment.md#horizontal-scaling--verified-with-real-multiple-instances`.
 - **Tracked by source IP**, which assumes no reverse proxy/load balancer
-  sits in front rewriting or hiding the real client IP. Fine for the
-  current single-instance setup; whoever introduces a proxy needs to
-  wire `X-Forwarded-For` trust correctly or every client behind it
-  shares one bucket.
+  sits in front rewriting or hiding the real client IP. Still genuinely
+  open — whoever introduces a proxy needs to wire `X-Forwarded-For`
+  trust correctly or every client behind it shares one bucket.
 
 ## 7. Object storage provider
 
@@ -178,7 +182,13 @@ justify it.
 `POST /auth/logout` (`docs/architecture/security.md#token-revocation`)
 revokes exactly the token presented on that request — verified live
 that a second, independent login for the same user is unaffected by
-logging out the first. Two related capabilities don't exist:
+logging out the first, and, further, that the revocation is genuinely
+cross-instance: logged in via one running API container, logged out via
+that same container, and confirmed a second, independent container
+(sharing only Redis, never receiving the logout request itself) also
+rejected the token — see
+`docs/architecture/deployment.md#horizontal-scaling--verified-with-real-multiple-instances`.
+Two related capabilities don't exist:
 
 - **"Log out everywhere"** — revoking every active token for a user
   (e.g. from an admin action, or a "sign out all devices" button) would

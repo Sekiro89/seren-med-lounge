@@ -224,6 +224,34 @@ test/e2e suite, and rebuilding the production Docker image with
 `--no-cache` to force a genuinely fresh install inside Alpine, not by
 assuming a version bump was safe because `pnpm install` didn't error.
 
+## Horizontal scaling — verified with real multiple instances
+
+Everything above was tested against one running instance at a time.
+This app's original motivation for going Redis-backed (the rate
+limiter, `docs/architecture/security.md#rate-limiting`; JWT revocation,
+`docs/architecture/security.md#token-revocation`) was specifically to
+survive running more than one — so that claim was tested for real:
+built the production image, ran **two separate containers** of it
+against one shared Postgres + Redis (not one instance twice — two
+independent `docker run`s, each with its own container, both pointed at
+the same backing services), and:
+
+- Logged in via instance A, confirmed the token worked on instance B
+  too (same token, no instance-specific state). Logged out via instance
+  A. Instance B — which never received that logout request — then
+  independently rejected the same token. That's only possible if both
+  instances are checking the same revocation store, not two separate
+  in-memory blacklists.
+- Sent login attempts split across both instances (alternating which
+  one received each request). The shared 5/min limit tripped correctly
+  based on the _combined_ count across both containers, not per
+  instance — the in-memory default this replaced would have allowed 5
+  on instance A _and_ 5 more on instance B before either individually
+  noticed.
+
+This is the concrete answer to "does this actually work with more than
+one instance," not an inference from "the code uses Redis so it should."
+
 ## Not done yet
 
 - **No hosting target chosen.** The Dockerfile is host-agnostic (works
