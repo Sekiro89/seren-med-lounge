@@ -41,5 +41,12 @@
     "*.{json,md,yml,yaml}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "tar": "^7.5.22",
+      "multer": "^2.4.0",
+      "deepmerge-ts": "^8.0.2"
+    }
   }
 }
