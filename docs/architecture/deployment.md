@@ -124,6 +124,22 @@ messaging, AI, Zoho) belongs to integrations that aren't built yet
 (see `docs/architecture/integrations.md`) — nothing reads them today, so
 there's nothing to configure for them yet.
 
+**Enforced, not just documented**: `packages/config/src/env.ts`'s
+`apiEnvSchema` refuses to boot at all if `NODE_ENV=production` and
+`JWT_SECRET` is still the exact placeholder text above, or if
+`DATABASE_URL`/`DIRECT_DATABASE_URL` still contain the local-dev
+`serenemed_app:serenemed_app` / `serenemed:serenemed` credentials
+(`infrastructure/docker/postgres-init/01-app-role.sql`,
+`docker-compose.yml`). A schema that only checked "is `JWT_SECRET`
+longer than 16 characters" would have happily accepted the placeholder
+— it's 34 characters — and let the app go live with a secret that's
+sitting in this repo's git history. Verified live: production mode with
+the placeholder/dev values present correctly refuses to start (Zod
+lists all three issues at once); production mode with real-looking
+values boots past validation normally; development mode with the exact
+same placeholder/dev values is correctly unaffected, since local dev is
+expected to use them.
+
 ## First admin / production bootstrap
 
 `scripts/seed-dev.ts` is explicitly dev-only (hardcoded org/credentials,
