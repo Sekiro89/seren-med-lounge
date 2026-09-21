@@ -189,6 +189,27 @@ pnpm docker:down     # stop them
 Per-app equivalents: `pnpm --filter api run <script>`,
 `pnpm --filter patient-web run <script>`, `pnpm --filter staff-web run <script>`.
 
+## CI
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push
+and pull request to `main`, as two parallel jobs:
+
+- **`checks`** — format check, lint, typecheck, build, unit tests. No
+  database.
+- **`db-tests`** — spins up a real `postgres:16-alpine` service
+  container, applies `infrastructure/docker/postgres-init/01-app-role.sql`
+  by hand (GitHub Actions service containers don't get docker-compose's
+  `docker-entrypoint.initdb.d` mount), runs `prisma migrate deploy`, then
+  `verify:tenant-isolation` and the full `test:e2e` suite against it —
+  the same two checks called out above under "Local setup", just
+  automated instead of a manual step you have to remember to run.
+
+Not required to merge yet — branch protection isn't turned on for
+`main`, so a red run doesn't currently block anything. All env values
+used in CI (JWT secret, DB credentials) are the same non-secret
+local-dev values already in `.env.example`; no GitHub Secrets are needed
+for this workflow.
+
 ## Environment
 
 See [`.env.example`](.env.example) for every variable the system will

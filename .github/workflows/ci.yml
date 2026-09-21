@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  # Same non-secret local-dev values as .env.example / docker-compose.yml —
+  # nothing here is a real credential, so these live in the workflow file
+  # rather than GitHub Secrets.
+  JWT_SECRET: ci-only-not-a-real-secret
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 7d
+  CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+  NEXT_PUBLIC_API_URL: http://localhost:4000
+
+jobs:
+  checks:
+    name: Lint, typecheck, build, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        # apps/api's build/typecheck import @prisma/client's generated
+        # types, which don't exist until this has run once.
+        run: pnpm --filter api run prisma:generate
+
+      - name: Format check
+        run: pnpm run format:check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Unit tests
+        run: pnpm run test
+
+  db-tests:
+    name: RLS coverage, tenant isolation, e2e (live Postgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: serenemed
+          POSTGRES_PASSWORD: serenemed
+          POSTGRES_DB: serenemed
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U serenemed -d serenemed"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # DATABASE_URL: the non-superuser serenemed_app role created by the
+      # init-role step below. DIRECT_DATABASE_URL: the superuser role,
+      # used only by `prisma migrate` — see
+      # docs/architecture/security.md#row-level-security for why the app
+      # must never run as the superuser (it would bypass RLS entirely).
+      DATABASE_URL: postgresql://serenemed_app:serenemed_app@localhost:5432/serenemed?schema=public&connection_limit=10&pool_timeout=10
+      DIRECT_DATABASE_URL: postgresql://serenemed:serenemed@localhost:5432/serenemed?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter api run prisma:generate
+
+      - name: Create the non-superuser app role
+        # docker-compose gets this for free via postgres-init/'s
+        # docker-entrypoint-initdb.d mount; a bare GitHub Actions service
+        # container has no such hook, so run the exact same script by
+        # hand once Postgres is up. Same source file, no duplicated SQL.
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+          PGPASSWORD=serenemed psql -h localhost -U serenemed -d serenemed \
+            -f infrastructure/docker/postgres-init/01-app-role.sql
+
+      - name: Run migrations (creates tables + RLS policies)
+        run: pnpm --filter api exec prisma migrate deploy
+
+      - name: Verify RLS coverage + soft-delete convention
+        run: pnpm --filter api run verify:tenant-isolation
+
+      - name: e2e tests
+        run: pnpm --filter api run test:e2e
