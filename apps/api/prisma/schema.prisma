@@ -12,6 +12,22 @@
 //
 // Keep StaffRole in sync by hand with packages/types/src/roles.ts
 // (Prisma cannot import a TS enum) until/unless we generate one from the other.
+//
+// SOFT DELETE CONVENTION: any model holding data that must be retained
+// (i.e. almost everything except AuditLog, which is an immutable log and
+// must never be deleted at all) gets a `deletedAt DateTime?` field. Adding
+// that field is the *entire* convention — PrismaService's query extension
+// (src/prisma/soft-delete.extension.ts) detects it automatically at
+// runtime via the DMMF and excludes soft-deleted rows from
+// find/findFirst/count and rewrites delete/deleteMany into a timestamp
+// update. No per-model wiring needed beyond adding the field. See
+// docs/architecture/security.md#soft-delete.
+//
+// TENANT ISOLATION: Clinic/User/Patient (every table with organizationId)
+// have Postgres Row-Level Security policies applied in the migration SQL
+// (Prisma's schema language cannot express RLS) — see
+// prisma/migrations/20260921000000_init/migration.sql and
+// docs/architecture/security.md#row-level-security.
 
 generator client {
   provider = "prisma-client-js"
@@ -43,9 +59,11 @@ model Organization {
   clinics   Clinic[]
   users     User[]
   patients  Patient[]
+  deletedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  @@index([deletedAt])
   @@map("organizations")
 }
 
@@ -57,10 +75,11 @@ model Clinic {
   name           String
   users          User[]
   patients       Patient[]
+  deletedAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  @@index([organizationId])
+  @@index([organizationId, deletedAt])
   @@map("clinics")
 }
 
@@ -78,14 +97,21 @@ model User {
   fullName       String
   role           StaffRole
   isActive       Boolean      @default(true)
+  deletedAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
   // email. See docs/architecture/open-questions.md.
+  //
+  // NOTE: this constraint does not account for deletedAt — re-inviting a
+  // soft-deleted former staff member under the same email will hit this
+  // unique constraint rather than silently reusing the row. That's
+  // deliberate for now (forces an explicit "restore" action instead of a
+  // surprise reactivation); see docs/architecture/security.md#soft-delete.
   @@unique([organizationId, email])
-  @@index([organizationId])
+  @@index([organizationId, deletedAt])
   @@index([clinicId])
   @@map("users")
 }
@@ -106,10 +132,11 @@ model Patient {
   phone          String
   email          String?
   passwordHash   String?
+  deletedAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  @@index([organizationId])
+  @@index([organizationId, deletedAt])
   @@index([clinicId])
   @@index([phone])
   @@map("patients")

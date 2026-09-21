@@ -66,3 +66,25 @@ MinIO, DigitalOcean Spaces, etc.) but no specific provider was named.
 **Assumption made:** kept generic via `S3_ENDPOINT`/`S3_FORCE_PATH_STYLE`
 so a self-hosted MinIO in dev and a managed provider in prod both work
 without code changes.
+
+## 8. RLS tenant context isn't wired to a real request yet
+
+`PrismaService.withTenant()` and the RLS policies on `clinics`/`users`/
+`patients` exist and are ready to use (see
+`docs/architecture/security.md#row-level-security`), but nothing calls
+`withTenant` yet — there's no `req.user.organizationId` to call it with
+until `auth` is implemented. **Assumption made:** shipped the DB-level
+policy and the transaction helper now (the part that doesn't depend on
+auth), left the guard/interceptor that wires `withTenant` into every
+request for when `auth` lands, rather than building it against a
+`req.user` shape that doesn't exist yet and might not match what auth
+actually produces.
+
+## 9. AuditLog has no organizationId
+
+Every other table added a `deletedAt` field and (where relevant) an RLS
+policy in this pass; `AuditLog` got neither, because it has no
+`organizationId` column to scope by in the first place — and adding one
+is a schema decision (should an audit log entry always belong to exactly
+one org, even for cross-org admin actions?) that wasn't asked for here.
+**Assumption made:** left as a known gap rather than guessed at.

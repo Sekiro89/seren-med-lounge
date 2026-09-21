@@ -25,6 +25,14 @@ at this clinic"), not just `organizationId`.
 future table below attaches to `Patient.id`, never to a copy of patient
 fields.
 
+`Organization`, `Clinic`, `User`, and `Patient` all carry `deletedAt` and
+go through the soft-delete convention (nothing is hard-deleted); `Clinic`,
+`User`, and `Patient` also have a Postgres RLS policy enforcing tenant
+isolation at the database. `AuditLog` has neither — see
+`docs/architecture/security.md#soft-delete` and
+`#row-level-security`, and `open-questions.md#8` / `#9` for what's
+still a gap in each.
+
 ## Proposed full ERD (not yet implemented — added table-by-table per module)
 
 ```
