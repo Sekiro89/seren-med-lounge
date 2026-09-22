@@ -105,6 +105,8 @@ model Organization {
   clinicalNoteVersions ClinicalNoteVersion[]
   diagnoses            Diagnosis[]
   diagnosisVersions    DiagnosisVersion[]
+  prescriptions        Prescription[]
+  prescriptionItems    PrescriptionItem[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -144,6 +146,7 @@ model User {
   isActive          Boolean               @default(true)
   authoredNotes     ClinicalNoteVersion[]
   authoredDiagnoses DiagnosisVersion[]
+  prescriptions     Prescription[]
   deletedAt         DateTime?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
@@ -184,6 +187,7 @@ model Patient {
   vitals         Vital[]
   clinicalNotes  ClinicalNote[]
   diagnoses      Diagnosis[]
+  prescriptions  Prescription[]
   deletedAt      DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -272,6 +276,16 @@ enum ClinicalRecordSource {
   AI_ASSISTED
 }
 
+/// Deliberately simpler than ClinicalRecordStatus — a prescription is
+/// issued directly by an authorized prescriber (no draft/review cycle;
+/// see the doc comment on the Prescription model below for why), then
+/// only ever cancelled, never edited. No FINALIZED/AMENDED here: a
+/// correction cancels this prescription and issues a new one.
+enum PrescriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
 /// Entry point of the clinic journey (see docs/workflows/clinic-journey.md).
 /// Checking in an appointment creates its Encounter — one multi-table
 /// transaction, see AppointmentsService.checkIn().
@@ -317,6 +331,7 @@ model Encounter {
   vitals         Vital[]
   clinicalNotes  ClinicalNote[]
   diagnoses      Diagnosis[]
+  prescriptions  Prescription[]
   status         EncounterStatus @default(OPEN)
   startedAt      DateTime        @default(now())
   endedAt        DateTime?
@@ -460,4 +475,58 @@ model DiagnosisVersion {
   @@unique([diagnosisId, versionNumber])
   @@index([organizationId])
   @@map("diagnosis_versions")
+}
+
+/// Unlike ClinicalNote/Diagnosis, deliberately NOT a draft/sign-off/amend
+/// pointer — the permission matrix only has one `prescription:write`
+/// slug (no separate sign-off), because issuing a prescription is a
+/// single authorized action, not a multi-step review. This row itself
+/// stays mutable (status ACTIVE -> CANCELLED — a lifecycle transition,
+/// same as Appointment.status/Encounter.status elsewhere in this
+/// schema), but the actual prescribed content lives in PrescriptionItem,
+/// which is immutable once written. Correcting a prescription means
+/// cancelling this one and issuing a new one — never editing an item.
+model Prescription {
+  id             String             @id @default(cuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient            @relation(fields: [patientId], references: [id])
+  encounterId    String
+  encounter      Encounter          @relation(fields: [encounterId], references: [id])
+  items          PrescriptionItem[]
+  status         PrescriptionStatus @default(ACTIVE)
+  authorId       String
+  author         User               @relation(fields: [authorId], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("prescriptions")
+}
+
+/// One prescribed medication line. Append-only, never updated or
+/// deleted once written (REVOKE UPDATE/DELETE in this migration's SQL,
+/// same treatment as ClinicalNoteVersion/DiagnosisVersion) — this is the
+/// actual clinical content the immutability requirement targets.
+/// organizationId is denormalized from prescription (required for RLS).
+model PrescriptionItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  prescriptionId String
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+  medicationName String
+  dosage         String
+  frequency      String
+  durationDays   Int?
+  instructions   String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([prescriptionId])
+  @@map("prescription_items")
 }

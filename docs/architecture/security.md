@@ -253,10 +253,10 @@ place.
 ## Clinical record immutability
 
 Finalized clinical records (clinical notes and diagnoses today;
-prescriptions, procedure notes, and reports are proposed but not yet
-modeled — see `docs/database/erd.md`) are **never updated in place**.
-Implemented for `ClinicalNote` as part of the clinic-journey-spine slice,
-and for `Diagnosis` as the second real instance of the same pattern
+procedure notes and reports are proposed but not yet modeled — see
+`docs/database/erd.md`) are **never updated in place**. Implemented for
+`ClinicalNote` as part of the clinic-journey-spine slice, and for
+`Diagnosis` as the second real instance of the same pattern
 (`DiagnosesService` — same `createDraft`/`signOff`/`amend` shape as
 `ClinicalNotesService`, same DB-level `REVOKE UPDATE, DELETE` on
 `diagnosis_versions`). Everything below describes `ClinicalNote`
@@ -312,6 +312,28 @@ actively revoked (append-only by database grant).
   edit or from an AI-assisted draft being revised — the versioning rule
   is the same either way. (The AI-assisted path itself is not yet built —
   see the next section.)
+
+### Prescription — immutable content, mutable status (not full versioning)
+
+`Prescription`/`PrescriptionItem` (`PrescriptionsService`) is a
+deliberate exception to the draft/sign-off/amend shape above, not an
+oversight. The permission matrix only ever reserved a single
+`prescription:write` slug — no sign-off counterpart — because issuing a
+prescription is one authorized action by a prescriber who's already
+allowed to prescribe, not a multi-step review like a clinical note.
+
+- `Prescription.status` (`ACTIVE`/`CANCELLED`) is an ordinary mutable
+  column, the same shape as `Appointment.status`/`Encounter.status` — a
+  lifecycle transition, not a content edit.
+- `PrescriptionItem` — the actual medication/dosage/frequency — is
+  immutable the same way `ClinicalNoteVersion`/`DiagnosisVersion` are:
+  `REVOKE UPDATE, DELETE ON "prescription_items" FROM serenemed_app;`
+  (`prisma/migrations/20260922010000_prescriptions/migration.sql`).
+  Verified live the same way: a raw `UPDATE` against `prescription_items`
+  fails with Postgres error 42501.
+- A correction cancels the prescription (`POST
+/prescriptions/:id/cancel`) and issues a new one — nothing ever edits
+  an existing item's dosage or medication.
 
 ## AI consultation assistant — safety boundary
 

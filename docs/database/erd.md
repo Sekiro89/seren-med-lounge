@@ -21,6 +21,18 @@ slugs `diagnosis:write-draft`/`diagnosis:sign-off` mirror
 JUNIOR_DOCTOR-drafts/SENIOR_DOCTOR-signs-off split — see
 `packages/permissions/src/matrix.ts`).
 
+`Prescription`/`PrescriptionItem` is the third table, and deliberately
+does **not** follow the draft/sign-off/amend pattern — the permission
+matrix only ever had a single `prescription:write` slug reserved (no
+sign-off counterpart), because issuing a prescription is one authorized
+action, not a reviewed draft. `Prescription` itself stays a mutable
+lifecycle row (`status` ACTIVE → CANCELLED, the same shape as
+`Appointment.status`/`Encounter.status`), while `PrescriptionItem` — the
+actual medication/dosage/frequency content — is immutable once written,
+same `REVOKE UPDATE, DELETE` treatment as `ClinicalNoteVersion`/
+`DiagnosisVersion`. A correction cancels the prescription and issues a
+new one; nothing edits an existing item.
+
 ```
 Organization ──< Clinic
 Organization ──< User (staff identity — email scoped to org, StaffRole)
@@ -31,7 +43,8 @@ Clinic ──< Patient
 
 Patient ──< Appointment ──< Encounter ─┬─< Vital
                                         ├─< ClinicalNote ──< ClinicalNoteVersion
-                                        └─< Diagnosis ──< DiagnosisVersion
+                                        ├─< Diagnosis ──< DiagnosisVersion
+                                        └─< Prescription ──< PrescriptionItem
 ```
 
 `Appointment.status` moves REQUESTED/CONFIRMED → CHECKED_IN via
@@ -66,11 +79,12 @@ future table below attaches to `Patient.id`, never to a copy of patient
 fields.
 
 `Organization`, `Clinic`, `User`, `Patient`, `Appointment`, `Encounter`,
-`Vital`, `ClinicalNote`, and `Diagnosis` all carry `deletedAt` and go
-through the soft-delete convention (nothing is hard-deleted). All of
-those plus `AuditLog`, `ClinicalNoteVersion`, and `DiagnosisVersion` have
-a Postgres RLS policy enforcing tenant isolation at the database.
-`AuditLog`, `ClinicalNoteVersion`, and `DiagnosisVersion` are all
+`Vital`, `ClinicalNote`, `Diagnosis`, and `Prescription` all carry
+`deletedAt` and go through the soft-delete convention (nothing is
+hard-deleted). All of those plus `AuditLog`, `ClinicalNoteVersion`,
+`DiagnosisVersion`, and `PrescriptionItem` have a Postgres RLS policy
+enforcing tenant isolation at the database. `AuditLog`,
+`ClinicalNoteVersion`, `DiagnosisVersion`, and `PrescriptionItem` are all
 exceptions to the soft-delete convention (none has a `deletedAt`) but not
 to RLS — an audit trail and a finalized clinical record must never be
 deletable, soft or otherwise — see
@@ -92,7 +106,6 @@ Patient ─┬─ PatientDocument
          │                └─ Encounter ─┬─ Vital                        (implemented — see above)
          │                              ├─ MedicalHistory
          │                              ├─ ClinicalNote ── ClinicalNoteVersion  (implemented — see above)
-         │                              ├─ Prescription ── PrescriptionItem
          │                              ├─ LabOrder ─┬─ LabOrderItem
          │                              │            └─ LabResult
          │                              ├─ Referral
@@ -107,9 +120,9 @@ Patient ─┬─ PatientDocument
          └─ CarePlan ── FollowUp
 ```
 
-`Appointment`, `Encounter`, and now `Diagnosis` are also implemented (see
-above) — `QueueEntry`, `Registration`, `MedicalHistory`,
-`Prescription`/`PrescriptionItem`, `LabOrder`/`LabOrderItem`/`LabResult`,
+`Appointment`, `Encounter`, `Diagnosis`, and now `Prescription`/
+`PrescriptionItem` are also implemented (see above) — `QueueEntry`,
+`Registration`, `MedicalHistory`, `LabOrder`/`LabOrderItem`/`LabResult`,
 `Referral`, and `Procedure`/`Surgery` remain proposed.
 
 Cross-cutting, not attached to a single patient:
@@ -125,11 +138,15 @@ AuditLog                                    (already implemented — generic)
 - **Patient is the single root.** Appointment, Encounter, and everything
   clinical/billing/pharmacy/follow-up hangs off `patientId`. No module
   gets its own copy of name/DOB/contact fields.
-- **Clinical record versioning (implemented).** `ClinicalNote` holds the
-  current pointer; `ClinicalNoteVersion` holds full history, one row per
-  state transition, DB-enforced append-only. Diagnoses, prescriptions,
-  and procedure notes (not yet modeled) are expected to follow the same
-  draft → reviewed → finalized → amended shape — see
+- **Clinical record versioning (implemented for ClinicalNote and
+  Diagnosis).** `ClinicalNote`/`Diagnosis` each hold a current pointer;
+  their respective Version tables hold full history, one row per state
+  transition, DB-enforced append-only. Procedure notes (not yet modeled)
+  are expected to follow the same draft → reviewed → finalized → amended
+  shape when built. **Prescription deliberately does not** — it has no
+  sign-off step (only a single `prescription:write` permission exists),
+  so it's a mutable status pointer (ACTIVE/CANCELLED) plus immutable
+  `PrescriptionItem` rows, not a full version history — see
   `docs/architecture/security.md#clinical-record-immutability`.
 - **Lead vs. Patient.** `Lead` exists only pre-conversion. Converting a
   lead creates exactly one `Patient` and links back to the originating

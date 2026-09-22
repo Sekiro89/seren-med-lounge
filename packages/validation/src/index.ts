@@ -5,3 +5,4 @@ export * from './appointment';
 export * from './vital';
 export * from './clinical-note';
 export * from './diagnosis';
+export * from './prescription';

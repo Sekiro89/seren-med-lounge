@@ -51,6 +51,8 @@ describe('Clinic journey spine (e2e)', () => {
     await admin.clinicalNote.deleteMany({ where: orgFilter });
     await admin.diagnosisVersion.deleteMany({ where: orgFilter });
     await admin.diagnosis.deleteMany({ where: orgFilter });
+    await admin.prescriptionItem.deleteMany({ where: orgFilter });
+    await admin.prescription.deleteMany({ where: orgFilter });
     await admin.vital.deleteMany({ where: orgFilter });
     await admin.encounter.deleteMany({ where: orgFilter });
     await admin.appointment.deleteMany({ where: orgFilter });
@@ -358,6 +360,65 @@ describe('Clinic journey spine (e2e)', () => {
     });
   });
 
+  describe('prescriptions (issue -> cancel, no draft/sign-off)', () => {
+    it('issues a prescription with items in one step, then can cancel it — items are never editable', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const encounterId = await createCheckedInEncounter(token);
+
+      const createRes = await request(app.getHttpServer())
+        .post('/prescriptions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          encounterId,
+          items: [
+            { medicationName: 'Amoxicillin', dosage: '500mg', frequency: 'Twice daily' },
+            { medicationName: 'Paracetamol', dosage: '650mg', frequency: 'As needed' },
+          ],
+        })
+        .expect(201);
+      expect(createRes.body.status).toBe('ACTIVE');
+      expect(createRes.body.items).toHaveLength(2);
+      const prescriptionId = createRes.body.id as string;
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/prescriptions/${prescriptionId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(getRes.body.items.map((i: { medicationName: string }) => i.medicationName)).toEqual([
+        'Amoxicillin',
+        'Paracetamol',
+      ]);
+
+      const cancelRes = await request(app.getHttpServer())
+        .post(`/prescriptions/${prescriptionId}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+      expect(cancelRes.body.status).toBe('CANCELLED');
+      // Cancelling is a status transition on the prescription only — the
+      // items themselves are untouched, still the exact content issued.
+      expect(cancelRes.body.items.map((i: { medicationName: string }) => i.medicationName)).toEqual(
+        ['Amoxicillin', 'Paracetamol'],
+      );
+
+      // Refuses to cancel twice.
+      await request(app.getHttpServer())
+        .post(`/prescriptions/${prescriptionId}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(409);
+    });
+
+    it('refuses to create a prescription with zero items', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const encounterId = await createCheckedInEncounter(token);
+
+      await request(app.getHttpServer())
+        .post('/prescriptions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, items: [] })
+        .expect(400);
+    });
+  });
+
   describe('tenant isolation on the 5 new tables', () => {
     it("org B cannot read org A's appointments, encounters, or clinical notes", async () => {
       const tokenA = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
@@ -386,6 +447,14 @@ describe('Clinic journey spine (e2e)', () => {
         .set('Authorization', `Bearer ${tokenA}`)
         .send({ encounterId: checkIn.body.id, description: 'Org A only.' })
         .expect(201);
+      const prescriptionRes = await request(app.getHttpServer())
+        .post('/prescriptions')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          encounterId: checkIn.body.id,
+          items: [{ medicationName: 'Org A only.', dosage: '1', frequency: '1' }],
+        })
+        .expect(201);
 
       const listRes = await request(app.getHttpServer())
         .get('/appointments')
@@ -405,6 +474,11 @@ describe('Clinic journey spine (e2e)', () => {
 
       await request(app.getHttpServer())
         .get(`/diagnoses/${diagnosisRes.body.id}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .get(`/prescriptions/${prescriptionRes.body.id}`)
         .set('Authorization', `Bearer ${tokenB}`)
         .expect(404);
     });
@@ -503,6 +577,21 @@ describe('Clinic journey spine (e2e)', () => {
         .send({ description: 'Audit trail check, corrected.' })
         .expect(201);
 
+      const prescriptionRes = await request(app.getHttpServer())
+        .post('/prescriptions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          encounterId,
+          items: [{ medicationName: 'Audit trail check.', dosage: '1', frequency: '1' }],
+        })
+        .expect(201);
+      const prescriptionId = prescriptionRes.body.id as string;
+
+      await request(app.getHttpServer())
+        .post(`/prescriptions/${prescriptionId}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
       const auditRes = await request(app.getHttpServer())
         .get('/audit')
         .set('Authorization', `Bearer ${token}`)
@@ -561,6 +650,18 @@ describe('Clinic journey spine (e2e)', () => {
             action: 'diagnosis.amend',
             entityType: 'Diagnosis',
             entityId: diagnosisId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'prescription.create',
+            entityType: 'Prescription',
+            entityId: prescriptionId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'prescription.cancel',
+            entityType: 'Prescription',
+            entityId: prescriptionId,
             actorId: adminAId,
           }),
         ]),
