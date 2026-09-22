@@ -20,6 +20,8 @@ export type Permission =
   | 'vitals:write'
   | 'clinical-note:write-draft'
   | 'clinical-note:sign-off'
+  | 'diagnosis:write-draft'
+  | 'diagnosis:sign-off'
   | 'prescription:write'
   | 'lab-order:write'
   | 'lab-result:write'

@@ -49,6 +49,8 @@ describe('Clinic journey spine (e2e)', () => {
     await admin.auditLog.deleteMany({ where: orgFilter });
     await admin.clinicalNoteVersion.deleteMany({ where: orgFilter });
     await admin.clinicalNote.deleteMany({ where: orgFilter });
+    await admin.diagnosisVersion.deleteMany({ where: orgFilter });
+    await admin.diagnosis.deleteMany({ where: orgFilter });
     await admin.vital.deleteMany({ where: orgFilter });
     await admin.encounter.deleteMany({ where: orgFilter });
     await admin.appointment.deleteMany({ where: orgFilter });
@@ -272,6 +274,90 @@ describe('Clinic journey spine (e2e)', () => {
     });
   });
 
+  describe('diagnosis versioning (draft -> sign-off -> amend)', () => {
+    it('every state transition inserts a new version row — none are ever updated in place', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const encounterId = await createCheckedInEncounter(token);
+
+      const draftRes = await request(app.getHttpServer())
+        .post('/diagnoses')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, icdCode: 'J06.9', description: 'Acute upper respiratory infection' })
+        .expect(201);
+      expect(draftRes.body.status).toBe('DRAFT');
+      const diagnosisId = draftRes.body.id as string;
+
+      const signOffRes = await request(app.getHttpServer())
+        .post(`/diagnoses/${diagnosisId}/sign-off`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+      expect(signOffRes.body.status).toBe('FINALIZED');
+      expect(signOffRes.body.versionNumber).toBe(2);
+
+      // Refuses to sign off twice — use amend for a correction instead.
+      await request(app.getHttpServer())
+        .post(`/diagnoses/${diagnosisId}/sign-off`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(409);
+
+      const amendRes = await request(app.getHttpServer())
+        .post(`/diagnoses/${diagnosisId}/amend`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ description: 'Acute bronchitis (corrected)' })
+        .expect(201);
+      expect(amendRes.body.status).toBe('AMENDED');
+      expect(amendRes.body.versionNumber).toBe(3);
+
+      const historyRes = await request(app.getHttpServer())
+        .get(`/diagnoses/${diagnosisId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(historyRes.body.versions).toHaveLength(3);
+      expect(historyRes.body.versions.map((v: { status: string }) => v.status)).toEqual([
+        'DRAFT',
+        'FINALIZED',
+        'AMENDED',
+      ]);
+      // The original draft content must still be readable, untouched, in
+      // version 1 — proving amend() never rewrote history.
+      expect(historyRes.body.versions[0].description).toBe('Acute upper respiratory infection');
+    });
+
+    it('refuses to amend a diagnosis that has never been finalized', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const encounterId = await createCheckedInEncounter(token);
+
+      const draftRes = await request(app.getHttpServer())
+        .post('/diagnoses')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, description: 'Still a draft.' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/diagnoses/${draftRes.body.id}/amend`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ description: 'Trying to amend an unfinalized diagnosis.' })
+        .expect(409);
+    });
+
+    it('a JUNIOR_DOCTOR can write drafts but not sign off — SENIOR_DOCTOR/ADMINISTRATOR only', async () => {
+      const adminToken = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const juniorToken = await login(orgA.id, 'junior@journey-a.example.com', juniorAPassword);
+      const encounterId = await createCheckedInEncounter(adminToken);
+
+      const draftRes = await request(app.getHttpServer())
+        .post('/diagnoses')
+        .set('Authorization', `Bearer ${juniorToken}`)
+        .send({ encounterId, description: 'Junior doctor diagnosis.' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/diagnoses/${draftRes.body.id}/sign-off`)
+        .set('Authorization', `Bearer ${juniorToken}`)
+        .expect(403);
+    });
+  });
+
   describe('tenant isolation on the 5 new tables', () => {
     it("org B cannot read org A's appointments, encounters, or clinical notes", async () => {
       const tokenA = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
@@ -295,6 +381,11 @@ describe('Clinic journey spine (e2e)', () => {
         .set('Authorization', `Bearer ${tokenA}`)
         .send({ encounterId: checkIn.body.id, subjective: 'Org A only.' })
         .expect(201);
+      const diagnosisRes = await request(app.getHttpServer())
+        .post('/diagnoses')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ encounterId: checkIn.body.id, description: 'Org A only.' })
+        .expect(201);
 
       const listRes = await request(app.getHttpServer())
         .get('/appointments')
@@ -309,6 +400,11 @@ describe('Clinic journey spine (e2e)', () => {
 
       await request(app.getHttpServer())
         .get(`/clinical-notes/${noteRes.body.id}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .get(`/diagnoses/${diagnosisRes.body.id}`)
         .set('Authorization', `Bearer ${tokenB}`)
         .expect(404);
     });
@@ -389,6 +485,24 @@ describe('Clinic journey spine (e2e)', () => {
         .send({ subjective: 'Audit trail check, corrected.' })
         .expect(201);
 
+      const diagnosisDraftRes = await request(app.getHttpServer())
+        .post('/diagnoses')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, description: 'Audit trail check.' })
+        .expect(201);
+      const diagnosisId = diagnosisDraftRes.body.id as string;
+
+      await request(app.getHttpServer())
+        .post(`/diagnoses/${diagnosisId}/sign-off`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/diagnoses/${diagnosisId}/amend`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ description: 'Audit trail check, corrected.' })
+        .expect(201);
+
       const auditRes = await request(app.getHttpServer())
         .get('/audit')
         .set('Authorization', `Bearer ${token}`)
@@ -429,6 +543,24 @@ describe('Clinic journey spine (e2e)', () => {
             action: 'clinical_note.amend',
             entityType: 'ClinicalNote',
             entityId: noteId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'diagnosis.create_draft',
+            entityType: 'Diagnosis',
+            entityId: diagnosisId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'diagnosis.sign_off',
+            entityType: 'Diagnosis',
+            entityId: diagnosisId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'diagnosis.amend',
+            entityType: 'Diagnosis',
+            entityId: diagnosisId,
             actorId: adminAId,
           }),
         ]),

@@ -252,10 +252,15 @@ place.
 
 ## Clinical record immutability
 
-Finalized clinical records (clinical notes today; diagnoses,
+Finalized clinical records (clinical notes and diagnoses today;
 prescriptions, procedure notes, and reports are proposed but not yet
 modeled — see `docs/database/erd.md`) are **never updated in place**.
-Implemented for `ClinicalNote` as part of the clinic-journey-spine slice.
+Implemented for `ClinicalNote` as part of the clinic-journey-spine slice,
+and for `Diagnosis` as the second real instance of the same pattern
+(`DiagnosesService` — same `createDraft`/`signOff`/`amend` shape as
+`ClinicalNotesService`, same DB-level `REVOKE UPDATE, DELETE` on
+`diagnosis_versions`). Everything below describes `ClinicalNote`
+specifically, but applies identically to `Diagnosis`/`DiagnosisVersion`.
 The lifecycle is:
 
 ```

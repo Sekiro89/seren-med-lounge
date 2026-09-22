@@ -103,6 +103,8 @@ model Organization {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   clinicalNoteVersions ClinicalNoteVersion[]
+  diagnoses            Diagnosis[]
+  diagnosisVersions    DiagnosisVersion[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -130,20 +132,21 @@ model Clinic {
 /// separate deliberately: staff auth/roles and patient auth/consent are
 /// different concerns and must never be merged into one "users" table.
 model User {
-  id             String                @id @default(cuid())
-  organizationId String
-  organization   Organization          @relation(fields: [organizationId], references: [id])
-  clinicId       String?
-  clinic         Clinic?               @relation(fields: [clinicId], references: [id])
-  email          String
-  passwordHash   String
-  fullName       String
-  role           StaffRole
-  isActive       Boolean               @default(true)
-  authoredNotes  ClinicalNoteVersion[]
-  deletedAt      DateTime?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  id                String                @id @default(cuid())
+  organizationId    String
+  organization      Organization          @relation(fields: [organizationId], references: [id])
+  clinicId          String?
+  clinic            Clinic?               @relation(fields: [clinicId], references: [id])
+  email             String
+  passwordHash      String
+  fullName          String
+  role              StaffRole
+  isActive          Boolean               @default(true)
+  authoredNotes     ClinicalNoteVersion[]
+  authoredDiagnoses DiagnosisVersion[]
+  deletedAt         DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -180,6 +183,7 @@ model Patient {
   encounters     Encounter[]
   vitals         Vital[]
   clinicalNotes  ClinicalNote[]
+  diagnoses      Diagnosis[]
   deletedAt      DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -312,6 +316,7 @@ model Encounter {
   appointment    Appointment     @relation(fields: [appointmentId], references: [id])
   vitals         Vital[]
   clinicalNotes  ClinicalNote[]
+  diagnoses      Diagnosis[]
   status         EncounterStatus @default(OPEN)
   startedAt      DateTime        @default(now())
   endedAt        DateTime?
@@ -405,4 +410,54 @@ model ClinicalNoteVersion {
   @@unique([clinicalNoteId, versionNumber])
   @@index([organizationId])
   @@map("clinical_note_versions")
+}
+
+/// Mutable "thread" pointer for a diagnosis — same shape as ClinicalNote
+/// above (see the CLINICAL RECORD VERSIONING note): current status and
+/// which version is latest, not the diagnosis content itself. See
+/// DiagnosisVersion and docs/architecture/security.md#clinical-record-immutability,
+/// which already names diagnoses as expected to follow this pattern.
+model Diagnosis {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  organization         Organization         @relation(fields: [organizationId], references: [id])
+  patientId            String
+  patient              Patient              @relation(fields: [patientId], references: [id])
+  encounterId          String
+  encounter            Encounter            @relation(fields: [encounterId], references: [id])
+  versions             DiagnosisVersion[]
+  status               ClinicalRecordStatus @default(DRAFT)
+  currentVersionNumber Int                  @default(0)
+  deletedAt            DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("diagnoses")
+}
+
+/// The actual diagnosis content — append-only, never updated or deleted
+/// once written, exactly like ClinicalNoteVersion (same REVOKE UPDATE/
+/// DELETE treatment in this migration's SQL). organizationId is
+/// denormalized from diagnosis (required for RLS — the policy checks
+/// this table's own column, not a joined one).
+model DiagnosisVersion {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  diagnosisId    String
+  diagnosis      Diagnosis            @relation(fields: [diagnosisId], references: [id])
+  versionNumber  Int
+  status         ClinicalRecordStatus
+  icdCode        String?
+  description    String
+  authorId       String
+  author         User                 @relation(fields: [authorId], references: [id])
+  createdAt      DateTime             @default(now())
+
+  @@unique([diagnosisId, versionNumber])
+  @@index([organizationId])
+  @@map("diagnosis_versions")
 }
