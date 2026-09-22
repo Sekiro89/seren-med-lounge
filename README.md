@@ -18,10 +18,10 @@ A modular-monolith backend serving two frontends:
    booking, video consultation, payments, records, reports,
    prescriptions, messages, follow-ups, consent, notifications. Consumes
    the backend API; never duplicates clinical data locally.
-2. **Staff workspaces** (`apps/staff-web`) — one application, ten
+2. **Staff workspaces** (`apps/staff-web`) — one application, eleven
    role-scoped workspaces (Administrator, Reception, Nurse, Junior
-   Doctor, Senior Doctor, Surgery Coordinator, Pharmacy, Billing,
-   Insurance, Marketing), not ten separate apps.
+   Doctor, Senior Doctor, Surgery Coordinator, Lab Technician, Pharmacy,
+   Billing, Insurance, Marketing), not eleven separate apps.
 3. **Unified Patient Record** — not an app. The central domain/data
    spine (`apps/api`) that every workflow — CRM/marketing, the clinic
    journey, clinical records, billing, pharmacy, follow-up — attaches to

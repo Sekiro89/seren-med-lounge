@@ -41,8 +41,11 @@ more piece: `LabResult` is a separate immutable table referencing
 proposed section below) — a result belongs to one specific ordered
 test, and an order can have several. `lab-order:write` (ordering) and
 `lab-result:write` (recording a result) are two separate permissions —
-today only `ADMINISTRATOR` has the latter, a real gap (there's no
-lab-technician `StaffRole` yet), not a guessed-at role.
+the latter was `ADMINISTRATOR`-only until the `LAB_TECHNICIAN`
+`StaffRole` was added (`prisma/migrations/20260922040000_lab_technician_role`),
+closing the gap rather than guessing a role into `ADMINISTRATOR`'s
+permission earlier. `LAB_TECHNICIAN` deliberately doesn't get
+`lab-order:write` — ordering stays a doctor's decision.
 
 `PatientDocument`/`PatientConsent` are the fifth and sixth tables, the
 two missing items on the Unified Patient Record's own tab list (Profile,

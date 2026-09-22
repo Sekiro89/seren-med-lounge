@@ -427,14 +427,17 @@ whole (an order can contain several tests).
   Verified live: a raw `UPDATE` against either table fails with Postgres
   error 42501.
 - **Ordering a test and reporting its result are two separate
-  permissions** — `lab-order:write` (`JUNIOR_DOCTOR`/`SENIOR_DOCTOR`/
-  `ADMINISTRATOR`) and `lab-result:write` (`ADMINISTRATOR` only today).
-  This isn't an oversight: there's no lab-technician `StaffRole` in the
-  schema yet, so nobody but `ADMINISTRATOR` can record a result until
-  one exists — a real, documented gap rather than granting the
-  permission to a role that doesn't represent who'd actually hold it.
+  permissions — RESOLVED.** `lab-order:write`
+  (`JUNIOR_DOCTOR`/`SENIOR_DOCTOR`/`ADMINISTRATOR`) and
+  `lab-result:write` (`ADMINISTRATOR` and, since
+  `prisma/migrations/20260922040000_lab_technician_role`, the new
+  `LAB_TECHNICIAN` `StaffRole` — `packages/permissions/src/matrix.ts`).
+  `LAB_TECHNICIAN` deliberately does **not** get `lab-order:write` —
+  ordering stays a doctor's decision, this desk only records results.
   Verified live (`clinic-journey.e2e-spec.ts`): a `JUNIOR_DOCTOR` token
-  can create a lab order but gets `403` recording a result on it.
+  can create a lab order but gets `403` recording a result on it; a
+  `LAB_TECHNICIAN` token gets the reverse — `403` ordering, `201`
+  recording a result on an order a doctor already placed.
 - A wrong result is corrected by recording a new `LabResult` against the
   same `LabOrderItem`, never editing the original — the latest by
   `createdAt` is the current reading. No "supersedes" pointer was added

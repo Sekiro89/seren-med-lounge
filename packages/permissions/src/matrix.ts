@@ -82,6 +82,12 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     'surgery:manage',
     'procedure:manage',
   ],
+  // Closes the gap flagged in docs/architecture/security.md's LabOrder
+  // section: lab-result:write previously had only ADMINISTRATOR behind
+  // it because this role didn't exist. Deliberately NOT granted
+  // lab-order:write — ordering a test is a doctor's decision, not this
+  // desk's; see LabsController's doc comment on the permission split.
+  [StaffRole.LAB_TECHNICIAN]: ['patient:read', 'patient-record:read-clinical', 'lab-result:write'],
   [StaffRole.PHARMACY]: ['patient:read', 'pharmacy:dispense', 'inventory:manage'],
   [StaffRole.BILLING]: ['patient:read', 'invoice:manage', 'payment:manage', 'refund:issue'],
   [StaffRole.INSURANCE]: ['patient:read', 'insurance:manage'],

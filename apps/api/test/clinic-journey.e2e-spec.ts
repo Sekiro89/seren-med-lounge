@@ -32,6 +32,7 @@ describe('Clinic journey spine (e2e)', () => {
   const orgB = { id: 'e2e-journey-org-b', name: 'E2E Journey Org B' };
   const adminAPassword = 'admin-a-password';
   const juniorAPassword = 'junior-a-password';
+  const labTechAPassword = 'lab-tech-a-password';
   const adminBPassword = 'admin-b-password';
 
   let patientAId: string;
@@ -84,6 +85,15 @@ describe('Clinic journey spine (e2e)', () => {
         passwordHash: await bcrypt.hash(juniorAPassword, 4),
         fullName: 'Junior Doctor A',
         role: StaffRole.JUNIOR_DOCTOR,
+      },
+    });
+    await admin.user.create({
+      data: {
+        organizationId: orgA.id,
+        email: 'labtech@journey-a.example.com',
+        passwordHash: await bcrypt.hash(labTechAPassword, 4),
+        fullName: 'Lab Technician A',
+        role: StaffRole.LAB_TECHNICIAN,
       },
     });
     await admin.user.create({
@@ -484,6 +494,36 @@ describe('Clinic journey spine (e2e)', () => {
         .set('Authorization', `Bearer ${juniorToken}`)
         .send({ resultValue: '5.4' })
         .expect(403);
+    });
+
+    it('a LAB_TECHNICIAN can record results but not order tests — the reverse split, and the gap this role was added to close', async () => {
+      const adminToken = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const labTechToken = await login(orgA.id, 'labtech@journey-a.example.com', labTechAPassword);
+      const encounterId = await createCheckedInEncounter(adminToken);
+
+      // Ordering stays a doctor's decision — LAB_TECHNICIAN doesn't get
+      // lab-order:write.
+      await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${labTechToken}`)
+        .send({ encounterId, items: [{ testName: 'CBC' }] })
+        .expect(403);
+
+      const orderRes = await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ encounterId, items: [{ testName: 'CBC' }] })
+        .expect(201);
+      const itemId = orderRes.body.items[0].id as string;
+
+      // Before this role existed, only ADMINISTRATOR could do this —
+      // this is the concrete fix, not just a schema addition.
+      const resultRes = await request(app.getHttpServer())
+        .post(`/lab-orders/items/${itemId}/results`)
+        .set('Authorization', `Bearer ${labTechToken}`)
+        .send({ resultValue: '5.4' })
+        .expect(201);
+      expect(resultRes.body.resultValue).toBe('5.4');
     });
 
     it('refuses to create a lab order with zero items', async () => {
