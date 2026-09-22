@@ -153,6 +153,36 @@ describe('Clinic journey spine (e2e)', () => {
     return checkIn.body.id as string;
   }
 
+  describe('staff patient registration and listing', () => {
+    it('registers a patient and it appears in the org-scoped list, patient-facing only, no password set', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+
+      const registerRes = await request(app.getHttpServer())
+        .post('/patients')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          firstName: 'Registered',
+          lastName: 'ByStaff',
+          dateOfBirth: '1995-05-05',
+          phone: '9888888888',
+        })
+        .expect(201);
+      expect(registerRes.body.firstName).toBe('Registered');
+      // No password field ever comes back — passwordHash isn't selected
+      // by the create's default return shape, and no password was set
+      // by this flow in the first place (see PatientsService.register).
+      expect(registerRes.body.passwordHash).toBeUndefined();
+
+      const listRes = await request(app.getHttpServer())
+        .get('/patients')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect((listRes.body as { id: string }[]).some((p) => p.id === registerRes.body.id)).toBe(
+        true,
+      );
+    });
+  });
+
   describe('appointment -> check-in multi-table transaction', () => {
     it('check-in atomically transitions the appointment and creates an Encounter', async () => {
       const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
@@ -180,6 +210,22 @@ describe('Clinic journey spine (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
       expect(encounterRes.body.id).toBe(checkInRes.body.id);
+      // Extended for the staff-web doctor workspace — the consultation
+      // view needs diagnoses/prescriptions/labOrders alongside
+      // vitals/clinicalNotes, not just the original two.
+      expect(encounterRes.body.diagnoses).toEqual([]);
+      expect(encounterRes.body.prescriptions).toEqual([]);
+      expect(encounterRes.body.labOrders).toEqual([]);
+
+      const listRes = await request(app.getHttpServer())
+        .get('/appointments')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const listed = (
+        listRes.body as { id: string; patient: { firstName: string }; encounter: { id: string } }[]
+      ).find((a) => a.id === createRes.body.id)!;
+      expect(listed.patient.firstName).toBe('Journey');
+      expect(listed.encounter.id).toBe(checkInRes.body.id);
     });
 
     it('refuses to check in an already-checked-in appointment with 409', async () => {

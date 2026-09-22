@@ -26,9 +26,21 @@ export class AppointmentsService {
     );
   }
 
+  /**
+   * Includes the patient's name and (if one already exists) the
+   * encounter's id — added when the staff-web dashboard needed to show
+   * who each appointment is for and link straight to an already-checked-
+   * in encounter, without a separate round trip per row.
+   */
   async listForOrganization(organizationId: string) {
     return this.prisma.withTenant(organizationId, (tx) =>
-      tx.appointment.findMany({ orderBy: { scheduledAt: 'desc' } }),
+      tx.appointment.findMany({
+        orderBy: { scheduledAt: 'desc' },
+        include: {
+          patient: { select: { id: true, firstName: true, lastName: true } },
+          encounter: { select: { id: true } },
+        },
+      }),
     );
   }
 

@@ -3,12 +3,16 @@
 **Digital Clinic Operating System.** A pnpm monorepo housing three
 interfaces built around one shared clinical/business spine.
 
-> **Status:** architecture initialization complete. Domain module
-> boundaries, the database shell, the integration abstraction layer, and
-> the role/permission architecture exist and build/lint/test cleanly.
-> Business workflows are not implemented yet — see
+> **Status:** the clinical spine (Appointment → Encounter → Vitals →
+> Diagnosis → Prescription → Lab order) is real end to end — backend API,
+> RLS-covered database, and now a working `staff-web` doctor workspace UI
+> (`/login` → `/dashboard` → `/encounters/[id]`) driving it live, not just
+> curl. Verified in a real browser: register a patient, book and check in
+> an appointment, then record vitals, diagnose, sign off, prescribe, and
+> order labs, with every action persisting server-side. Most of the rest
+> of the domain module map is still a boundary placeholder — see
 > [`docs/architecture/domain-modules.md`](docs/architecture/domain-modules.md)
-> for what's a real module vs. a boundary placeholder.
+> for what's real vs. scaffolded.
 
 ## What SereneMed is
 
@@ -153,6 +157,15 @@ curl -X POST http://localhost:4000/auth/login \
 
 curl http://localhost:4000/users -H "Authorization: Bearer <accessToken>"
 ```
+
+`staff-web`'s `/login` page (`apps/staff-web/app/login`) is a real,
+working form against the same endpoint — sign in with the seeded
+`admin@dev.local` credentials above and it lands on `/dashboard`. From
+there: book an appointment (registering a new patient inline if needed),
+check it in, and the resulting `/encounters/[id]` workspace has real
+forms for vitals, diagnoses (draft → sign-off → amend), prescriptions,
+and lab orders (order → result), each gated by the signed-in user's role
+via `@serenemed/permissions`'s `can()`.
 
 **Logging in (patient)**: same shape, different endpoint and table —
 `patient-web`'s `/login` page (`apps/patient-web/app/login`) is a real,
