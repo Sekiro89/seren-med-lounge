@@ -33,6 +33,17 @@ same `REVOKE UPDATE, DELETE` treatment as `ClinicalNoteVersion`/
 `DiagnosisVersion`. A correction cancels the prescription and issues a
 new one; nothing edits an existing item.
 
+`LabOrder`/`LabOrderItem`/`LabResult` is the fourth and final table of
+this chunk, same `Prescription`-style shape (`LabOrder.status`
+ORDERED/CANCELLED is mutable; `LabOrderItem` — the ordered test — is
+immutable), plus one more piece: `LabResult` is a separate immutable
+table referencing `LabOrderItem`, not `LabOrder` directly (unlike the
+loose sketch in the proposed section below) — a result belongs to one
+specific ordered test, and an order can have several. `lab-order:write`
+(ordering) and `lab-result:write` (recording a result) are two separate
+permissions — today only `ADMINISTRATOR` has the latter, a real gap
+(there's no lab-technician `StaffRole` yet), not a guessed-at role.
+
 ```
 Organization ──< Clinic
 Organization ──< User (staff identity — email scoped to org, StaffRole)
@@ -44,7 +55,8 @@ Clinic ──< Patient
 Patient ──< Appointment ──< Encounter ─┬─< Vital
                                         ├─< ClinicalNote ──< ClinicalNoteVersion
                                         ├─< Diagnosis ──< DiagnosisVersion
-                                        └─< Prescription ──< PrescriptionItem
+                                        ├─< Prescription ──< PrescriptionItem
+                                        └─< LabOrder ──< LabOrderItem ──< LabResult
 ```
 
 `Appointment.status` moves REQUESTED/CONFIRMED → CHECKED_IN via
@@ -79,16 +91,17 @@ future table below attaches to `Patient.id`, never to a copy of patient
 fields.
 
 `Organization`, `Clinic`, `User`, `Patient`, `Appointment`, `Encounter`,
-`Vital`, `ClinicalNote`, `Diagnosis`, and `Prescription` all carry
-`deletedAt` and go through the soft-delete convention (nothing is
+`Vital`, `ClinicalNote`, `Diagnosis`, `Prescription`, and `LabOrder` all
+carry `deletedAt` and go through the soft-delete convention (nothing is
 hard-deleted). All of those plus `AuditLog`, `ClinicalNoteVersion`,
-`DiagnosisVersion`, and `PrescriptionItem` have a Postgres RLS policy
-enforcing tenant isolation at the database. `AuditLog`,
-`ClinicalNoteVersion`, `DiagnosisVersion`, and `PrescriptionItem` are all
-exceptions to the soft-delete convention (none has a `deletedAt`) but not
-to RLS — an audit trail and a finalized clinical record must never be
-deletable, soft or otherwise — see
-`docs/architecture/security.md#soft-delete` and `#row-level-security`.
+`DiagnosisVersion`, `PrescriptionItem`, `LabOrderItem`, and `LabResult`
+have a Postgres RLS policy enforcing tenant isolation at the database.
+`AuditLog`, `ClinicalNoteVersion`, `DiagnosisVersion`,
+`PrescriptionItem`, `LabOrderItem`, and `LabResult` are all exceptions to
+the soft-delete convention (none has a `deletedAt`) but not to RLS — an
+audit trail and a finalized clinical record must never be deletable,
+soft or otherwise — see `docs/architecture/security.md#soft-delete` and
+`#row-level-security`.
 
 ## Proposed full ERD (not yet implemented — added table-by-table per module)
 
@@ -106,8 +119,6 @@ Patient ─┬─ PatientDocument
          │                └─ Encounter ─┬─ Vital                        (implemented — see above)
          │                              ├─ MedicalHistory
          │                              ├─ ClinicalNote ── ClinicalNoteVersion  (implemented — see above)
-         │                              ├─ LabOrder ─┬─ LabOrderItem
-         │                              │            └─ LabResult
          │                              ├─ Referral
          │                              └─ Procedure ── Surgery
          │
@@ -120,10 +131,11 @@ Patient ─┬─ PatientDocument
          └─ CarePlan ── FollowUp
 ```
 
-`Appointment`, `Encounter`, `Diagnosis`, and now `Prescription`/
-`PrescriptionItem` are also implemented (see above) — `QueueEntry`,
-`Registration`, `MedicalHistory`, `LabOrder`/`LabOrderItem`/`LabResult`,
-`Referral`, and `Procedure`/`Surgery` remain proposed.
+`Appointment`, `Encounter`, `Diagnosis`, `Prescription`/`PrescriptionItem`,
+and now `LabOrder`/`LabOrderItem`/`LabResult` are also implemented (see
+above) — `QueueEntry`, `Registration`, `MedicalHistory`, `Referral`, and
+`Procedure`/`Surgery` remain proposed. That's every child of `Encounter`
+in the sketch below except those four.
 
 Cross-cutting, not attached to a single patient:
 

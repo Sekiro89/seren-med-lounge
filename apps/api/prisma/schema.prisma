@@ -107,6 +107,9 @@ model Organization {
   diagnosisVersions    DiagnosisVersion[]
   prescriptions        Prescription[]
   prescriptionItems    PrescriptionItem[]
+  labOrders            LabOrder[]
+  labOrderItems        LabOrderItem[]
+  labResults           LabResult[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -147,6 +150,8 @@ model User {
   authoredNotes     ClinicalNoteVersion[]
   authoredDiagnoses DiagnosisVersion[]
   prescriptions     Prescription[]
+  labOrders         LabOrder[]
+  labResultsEntered LabResult[]
   deletedAt         DateTime?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
@@ -188,6 +193,7 @@ model Patient {
   clinicalNotes  ClinicalNote[]
   diagnoses      Diagnosis[]
   prescriptions  Prescription[]
+  labOrders      LabOrder[]
   deletedAt      DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -286,6 +292,17 @@ enum PrescriptionStatus {
   CANCELLED
 }
 
+/// Same two-state shape as PrescriptionStatus, same reasoning: ordering
+/// tests is one authorized action, not a reviewed draft. No COMPLETED
+/// state — "when is an order complete" (all items resulted? partial
+/// results allowed?) isn't a concretely askable question yet without
+/// guessing at lab workflow product intent, so it's left undecided
+/// rather than modeled on a guess.
+enum LabOrderStatus {
+  ORDERED
+  CANCELLED
+}
+
 /// Entry point of the clinic journey (see docs/workflows/clinic-journey.md).
 /// Checking in an appointment creates its Encounter — one multi-table
 /// transaction, see AppointmentsService.checkIn().
@@ -332,6 +349,7 @@ model Encounter {
   clinicalNotes  ClinicalNote[]
   diagnoses      Diagnosis[]
   prescriptions  Prescription[]
+  labOrders      LabOrder[]
   status         EncounterStatus @default(OPEN)
   startedAt      DateTime        @default(now())
   endedAt        DateTime?
@@ -529,4 +547,83 @@ model PrescriptionItem {
   @@index([organizationId])
   @@index([prescriptionId])
   @@map("prescription_items")
+}
+
+/// Same shape as Prescription — see its doc comment for the reasoning
+/// (mutable lifecycle pointer + immutable content children). Ordering
+/// tests is a single authorized action (lab-order:write), not a
+/// reviewed draft.
+model LabOrder {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient        @relation(fields: [patientId], references: [id])
+  encounterId    String
+  encounter      Encounter      @relation(fields: [encounterId], references: [id])
+  items          LabOrderItem[]
+  status         LabOrderStatus @default(ORDERED)
+  authorId       String
+  author         User           @relation(fields: [authorId], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([encounterId])
+  @@index([patientId])
+  @@map("lab_orders")
+}
+
+/// One ordered test (e.g. "CBC", "Lipid Panel"). Append-only, never
+/// updated or deleted once written (REVOKE UPDATE/DELETE in this
+/// migration's SQL, same treatment as PrescriptionItem) — the ordered
+/// test itself is fixed; cancelling and reordering is the correction
+/// path, not editing this row. organizationId is denormalized from
+/// labOrder (required for RLS).
+model LabOrderItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  labOrderId     String
+  labOrder       LabOrder     @relation(fields: [labOrderId], references: [id])
+  testName       String
+  instructions   String?
+  results        LabResult[]
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([labOrderId])
+  @@map("lab_order_items")
+}
+
+/// A reported result for one ordered test. Append-only, never updated or
+/// deleted once written (REVOKE UPDATE/DELETE, same treatment as every
+/// other immutable clinical-content table in this schema) — a wrong or
+/// updated result is entered as a NEW row against the same
+/// LabOrderItem, never an edit of the original; the latest by
+/// `createdAt` is the current one. Deliberately references
+/// LabOrderItem, not LabOrder directly, unlike the loose ASCII sketch in
+/// docs/database/erd.md's proposed section — a result belongs to one
+/// specific ordered test, and an order can have several tests, so
+/// attaching it to LabOrder directly would leave "which test is this
+/// the result for" unanswered. `resultValue` is a plain string (not
+/// numeric-only) because lab results are often qualitative
+/// ("Positive"/"Negative"/"Reactive"), not always a number.
+model LabResult {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  labOrderItemId String
+  labOrderItem   LabOrderItem @relation(fields: [labOrderItemId], references: [id])
+  resultValue    String
+  unit           String?
+  referenceRange String?
+  enteredById    String
+  enteredBy      User         @relation(fields: [enteredById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([labOrderItemId])
+  @@map("lab_results")
 }

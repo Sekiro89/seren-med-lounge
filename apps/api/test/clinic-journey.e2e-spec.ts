@@ -53,6 +53,9 @@ describe('Clinic journey spine (e2e)', () => {
     await admin.diagnosis.deleteMany({ where: orgFilter });
     await admin.prescriptionItem.deleteMany({ where: orgFilter });
     await admin.prescription.deleteMany({ where: orgFilter });
+    await admin.labResult.deleteMany({ where: orgFilter });
+    await admin.labOrderItem.deleteMany({ where: orgFilter });
+    await admin.labOrder.deleteMany({ where: orgFilter });
     await admin.vital.deleteMany({ where: orgFilter });
     await admin.encounter.deleteMany({ where: orgFilter });
     await admin.appointment.deleteMany({ where: orgFilter });
@@ -419,6 +422,80 @@ describe('Clinic journey spine (e2e)', () => {
     });
   });
 
+  describe('lab orders (order -> result, split lab-order:write / lab-result:write permissions)', () => {
+    it('orders tests, records a result per item, and can cancel the order — nothing is ever editable', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const encounterId = await createCheckedInEncounter(token);
+
+      const orderRes = await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, items: [{ testName: 'CBC' }, { testName: 'Lipid Panel' }] })
+        .expect(201);
+      expect(orderRes.body.status).toBe('ORDERED');
+      expect(orderRes.body.items).toHaveLength(2);
+      const labOrderId = orderRes.body.id as string;
+      const cbcItemId = orderRes.body.items.find((i: { testName: string }) => i.testName === 'CBC')
+        .id as string;
+
+      const resultRes = await request(app.getHttpServer())
+        .post(`/lab-orders/items/${cbcItemId}/results`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ resultValue: '5.4', unit: 'x10^9/L', referenceRange: '4.0-11.0' })
+        .expect(201);
+      expect(resultRes.body.resultValue).toBe('5.4');
+
+      const getRes = await request(app.getHttpServer())
+        .get(`/lab-orders/${labOrderId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const cbcItem = getRes.body.items.find((i: { testName: string }) => i.testName === 'CBC');
+      expect(cbcItem.results).toHaveLength(1);
+      expect(cbcItem.results[0].resultValue).toBe('5.4');
+
+      const cancelRes = await request(app.getHttpServer())
+        .post(`/lab-orders/${labOrderId}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+      expect(cancelRes.body.status).toBe('CANCELLED');
+
+      await request(app.getHttpServer())
+        .post(`/lab-orders/${labOrderId}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(409);
+    });
+
+    it('a JUNIOR_DOCTOR can order tests but not record results — lab-order:write and lab-result:write are separate permissions', async () => {
+      const adminToken = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const juniorToken = await login(orgA.id, 'junior@journey-a.example.com', juniorAPassword);
+      const encounterId = await createCheckedInEncounter(adminToken);
+
+      const orderRes = await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${juniorToken}`)
+        .send({ encounterId, items: [{ testName: 'CBC' }] })
+        .expect(201);
+      const itemId = orderRes.body.items[0].id as string;
+
+      await request(app.getHttpServer())
+        .post(`/lab-orders/items/${itemId}/results`)
+        .set('Authorization', `Bearer ${juniorToken}`)
+        .send({ resultValue: '5.4' })
+        .expect(403);
+    });
+
+    it('refuses to create a lab order with zero items', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const encounterId = await createCheckedInEncounter(token);
+
+      await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, items: [] })
+        .expect(400);
+    });
+  });
+
   describe('tenant isolation on the 5 new tables', () => {
     it("org B cannot read org A's appointments, encounters, or clinical notes", async () => {
       const tokenA = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
@@ -455,6 +532,11 @@ describe('Clinic journey spine (e2e)', () => {
           items: [{ medicationName: 'Org A only.', dosage: '1', frequency: '1' }],
         })
         .expect(201);
+      const labOrderRes = await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ encounterId: checkIn.body.id, items: [{ testName: 'Org A only.' }] })
+        .expect(201);
 
       const listRes = await request(app.getHttpServer())
         .get('/appointments')
@@ -479,6 +561,11 @@ describe('Clinic journey spine (e2e)', () => {
 
       await request(app.getHttpServer())
         .get(`/prescriptions/${prescriptionRes.body.id}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .get(`/lab-orders/${labOrderRes.body.id}`)
         .set('Authorization', `Bearer ${tokenB}`)
         .expect(404);
     });
@@ -592,6 +679,26 @@ describe('Clinic journey spine (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect(201);
 
+      const labOrderRes = await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, items: [{ testName: 'Audit trail check.' }] })
+        .expect(201);
+      const labOrderId = labOrderRes.body.id as string;
+      const labOrderItemId = labOrderRes.body.items[0].id as string;
+
+      const labResultRes = await request(app.getHttpServer())
+        .post(`/lab-orders/items/${labOrderItemId}/results`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ resultValue: 'Normal' })
+        .expect(201);
+      const labResultId = labResultRes.body.id as string;
+
+      await request(app.getHttpServer())
+        .post(`/lab-orders/${labOrderId}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
       const auditRes = await request(app.getHttpServer())
         .get('/audit')
         .set('Authorization', `Bearer ${token}`)
@@ -662,6 +769,24 @@ describe('Clinic journey spine (e2e)', () => {
             action: 'prescription.cancel',
             entityType: 'Prescription',
             entityId: prescriptionId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'lab_order.create',
+            entityType: 'LabOrder',
+            entityId: labOrderId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'lab_result.record',
+            entityType: 'LabResult',
+            entityId: labResultId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'lab_order.cancel',
+            entityType: 'LabOrder',
+            entityId: labOrderId,
             actorId: adminAId,
           }),
         ]),

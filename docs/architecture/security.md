@@ -335,6 +335,35 @@ allowed to prescribe, not a multi-step review like a clinical note.
 /prescriptions/:id/cancel`) and issues a new one — nothing ever edits
   an existing item's dosage or medication.
 
+### LabOrder — same shape as Prescription, plus a split write permission
+
+`LabOrder`/`LabOrderItem`/`LabResult` (`LabsService`) follows
+`Prescription`'s exact pattern — `LabOrder.status`
+(`ORDERED`/`CANCELLED`) is mutable, `LabOrderItem` (the ordered test) is
+immutable — with one addition: `LabResult` is a second immutable table,
+recording a result against a specific `LabOrderItem`, not the order as a
+whole (an order can contain several tests).
+
+- Both `LabOrderItem` and `LabResult` have `UPDATE`/`DELETE` revoked from
+  `serenemed_app` (`prisma/migrations/20260922020000_labs/migration.sql`).
+  Verified live: a raw `UPDATE` against either table fails with Postgres
+  error 42501.
+- **Ordering a test and reporting its result are two separate
+  permissions** — `lab-order:write` (`JUNIOR_DOCTOR`/`SENIOR_DOCTOR`/
+  `ADMINISTRATOR`) and `lab-result:write` (`ADMINISTRATOR` only today).
+  This isn't an oversight: there's no lab-technician `StaffRole` in the
+  schema yet, so nobody but `ADMINISTRATOR` can record a result until
+  one exists — a real, documented gap rather than granting the
+  permission to a role that doesn't represent who'd actually hold it.
+  Verified live (`clinic-journey.e2e-spec.ts`): a `JUNIOR_DOCTOR` token
+  can create a lab order but gets `403` recording a result on it.
+- A wrong result is corrected by recording a new `LabResult` against the
+  same `LabOrderItem`, never editing the original — the latest by
+  `createdAt` is the current reading. No "supersedes" pointer was added
+  for this (unlike `ClinicalNote`/`Diagnosis`'s version-pointer tables) —
+  kept as simple as the concretely-askable requirement needed, not
+  designed further on a guess.
+
 ## AI consultation assistant — safety boundary
 
 See `docs/workflows/doctor-consultation.md` for the full flow. The

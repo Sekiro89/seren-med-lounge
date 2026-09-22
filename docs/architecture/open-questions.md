@@ -246,16 +246,16 @@ asks Postgres's own catalogs (`pg_class`, `pg_policies`) which tables in
 them has RLS enabled, forced, and at least one policy, instead of the
 old hardcoded `patient`/`auditLog`-only checks. It needs no update when
 a new table is added; it discovers the table set itself — run live after
-adding `prescriptions`/`prescription_items`, it found and validated all
-13 real tenant-scoped tables without any change to the check itself.
-This now runs automatically in CI (`.github/workflows/ci.yml`'s
-`db-tests` job) on every push, not just as a manual step someone has to
-remember to run. Also still open: nothing _enforces_ that a future
-module follows the `TenantContextService` + `withTenant` pattern beyond
-code review and now four working examples to copy from
-(`users`/`patients`, `appointments`/`encounters`/`vitals`/
-`clinical-notes`, `diagnoses`, and `prescriptions`). Also still open: the
-enum-duplication problem
+adding `lab_orders`/`lab_order_items`/`lab_results`, it found and
+validated all 16 real tenant-scoped tables without any change to the
+check itself. This now runs automatically in CI
+(`.github/workflows/ci.yml`'s `db-tests` job) on every push, not just as
+a manual step someone has to remember to run. Also still open: nothing
+_enforces_ that a future module follows the `TenantContextService` +
+`withTenant` pattern beyond code review and now five working examples to
+copy from (`users`/`patients`, `appointments`/`encounters`/`vitals`/
+`clinical-notes`, `diagnoses`, `prescriptions`, and `labs`). Also still
+open: the enum-duplication problem
 (Prisma generates its own copy of every `@serenemed/types` enum) has no
 generic mapper yet — this slice's services consume Prisma's own enum
 types directly (`AppointmentStatus`, `EncounterStatus`,
