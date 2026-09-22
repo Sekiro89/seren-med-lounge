@@ -180,7 +180,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
+      <main className="flex flex-1 items-center justify-center bg-slate-50 px-6 py-16">
         <p className="text-sm text-slate-500">Loading…</p>
       </main>
     );
@@ -188,7 +188,7 @@ export default function DashboardPage() {
 
   if (loadError) {
     return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
+      <main className="flex flex-1 items-center justify-center bg-slate-50 px-6 py-16">
         <p className="text-sm text-red-600">{loadError}</p>
       </main>
     );
@@ -197,7 +197,7 @@ export default function DashboardPage() {
   const canWriteAppointments = can(user?.role, 'appointment:write');
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 bg-slate-50 px-6 py-10">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>

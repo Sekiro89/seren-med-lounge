@@ -1,8 +1,22 @@
 @import 'tailwindcss';
 
+/*
+ * Deliberately no `prefers-color-scheme: dark` variant (the Next.js
+ * scaffold default had one) — every component in this app (Button,
+ * Card, every form) is hardcoded to a fixed light Tailwind palette
+ * (slate-900 text, white/slate-50 backgrounds), not dark-mode-aware.
+ * The scaffold's media query used to flip `body`'s background to
+ * near-black while leaving those components' light-on-light colors
+ * unchanged, which made anything sitting directly on `body` (not
+ * inside a Card) invisible for anyone with an OS dark theme — dark
+ * text on a dark background. Pinning to light here is a real fix, not
+ * a partial one: doing this properly (a real dark theme) would mean
+ * `dark:` variants throughout, which hasn't been designed yet.
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -10,13 +24,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

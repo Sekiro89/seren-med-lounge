@@ -1,8 +1,16 @@
 @import 'tailwindcss';
 
+/*
+ * Deliberately no `prefers-color-scheme: dark` variant — see
+ * apps/staff-web/app/globals.css's comment for the full reasoning
+ * (same scaffold, same bug: every component here is hardcoded to a
+ * fixed light Tailwind palette, so flipping just `body`'s background
+ * dark left text invisible for anyone with an OS dark theme).
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -10,13 +18,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
