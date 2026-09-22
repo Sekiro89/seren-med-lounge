@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Post, Req } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { patientRegistrationSchema, type PatientRegistrationInput } from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -16,8 +16,8 @@ export class PatientsController {
 
   @Get()
   @RequirePermissions('patient:read')
-  list() {
-    return this.patientsService.listForOrganization(this.tenantContext.organizationId);
+  list(@Query('q') q?: string) {
+    return this.patientsService.listForOrganization(this.tenantContext.organizationId, q);
   }
 
   @Post()

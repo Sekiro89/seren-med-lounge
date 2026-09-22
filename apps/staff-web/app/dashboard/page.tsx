@@ -17,13 +17,7 @@ import { ApiError } from '@serenemed/api-client';
 import { apiClient } from '../../lib/api-client';
 import { clearStaffSession, getStaffToken, getStaffUser, type StaffUser } from '../../lib/auth';
 import { can } from '../../lib/permissions';
-
-interface PatientSummary {
-  id: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-}
+import { PatientPicker, type PatientSummary } from './patient-picker';
 
 interface AppointmentRow {
   id: string;
@@ -60,7 +54,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<StaffUser | null>(null);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
-  const [patients, setPatients] = useState<PatientSummary[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<PatientSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showRegisterPatient, setShowRegisterPatient] = useState(false);
@@ -69,14 +63,12 @@ export default function DashboardPage() {
 
   // Reused by the event handlers below (post-mutation refresh) — not
   // called directly from the mount effect, which does its own inline
-  // fetch instead (see the useEffect below for why).
+  // fetch instead (see the useEffect below for why). No longer fetches
+  // the patient list here — PatientPicker searches on demand instead of
+  // this page holding every patient in state.
   const loadData = useCallback(async () => {
-    const [appointmentsRes, patientsRes] = await Promise.all([
-      apiClient.get<AppointmentRow[]>('/appointments'),
-      apiClient.get<PatientSummary[]>('/patients'),
-    ]);
+    const appointmentsRes = await apiClient.get<AppointmentRow[]>('/appointments');
     setAppointments(appointmentsRes);
-    setPatients(patientsRes);
   }, []);
 
   // Deliberately not `loadData()` here — eslint's react-hooks/set-state-in-effect
@@ -84,22 +76,19 @@ export default function DashboardPage() {
   // from inside an effect, even through a promise chain. An inline
   // `.then()` on the fetch itself (matching
   // patient-web/app/dashboard/page.tsx's proven shape) is what the rule
-  // recognizes as a legitimate async data-fetch-on-mount, so the two
-  // GET calls are duplicated here rather than reusing loadData.
+  // recognizes as a legitimate async data-fetch-on-mount, so the GET
+  // call is duplicated here rather than reusing loadData.
   useEffect(() => {
     if (!getStaffToken()) {
       router.replace('/login');
       return;
     }
 
-    Promise.all([
-      apiClient.get<AppointmentRow[]>('/appointments'),
-      apiClient.get<PatientSummary[]>('/patients'),
-    ])
-      .then(([appointmentsRes, patientsRes]) => {
+    apiClient
+      .get<AppointmentRow[]>('/appointments')
+      .then((appointmentsRes) => {
         setUser(getStaffUser());
         setAppointments(appointmentsRes);
-        setPatients(patientsRes);
       })
       .catch((error: unknown) => {
         if (error instanceof ApiError && error.status === 401) {
@@ -136,8 +125,8 @@ export default function DashboardPage() {
     setFormError(null);
     try {
       const patient = await apiClient.post<PatientSummary>('/patients', data);
-      setPatients((prev) => [patient, ...prev]);
-      appointmentForm.setValue('patientId', patient.id);
+      setSelectedPatient(patient);
+      appointmentForm.setValue('patientId', patient.id, { shouldValidate: true });
       patientForm.reset();
       setShowRegisterPatient(false);
     } catch (error) {
@@ -153,6 +142,7 @@ export default function DashboardPage() {
         scheduledAt: new Date(data.scheduledAt).toISOString(),
       });
       appointmentForm.reset();
+      setSelectedPatient(null);
       await loadData();
     } catch (error) {
       setFormError(errorMessage(error, 'Could not create the appointment.'));
@@ -228,23 +218,16 @@ export default function DashboardPage() {
           >
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[10rem]">
-                <label className="mb-1 block text-xs font-medium text-slate-700">Patient</label>
-                <select
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  {...appointmentForm.register('patientId')}
-                >
-                  <option value="">Select a patient…</option>
-                  {patients.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.firstName} {patient.lastName} ({patient.phone})
-                    </option>
-                  ))}
-                </select>
-                {appointmentForm.formState.errors.patientId && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {appointmentForm.formState.errors.patientId.message}
-                  </p>
-                )}
+                <PatientPicker
+                  value={selectedPatient}
+                  onChange={(patient) => {
+                    setSelectedPatient(patient);
+                    appointmentForm.setValue('patientId', patient?.id ?? '', {
+                      shouldValidate: true,
+                    });
+                  }}
+                  error={appointmentForm.formState.errors.patientId?.message}
+                />
               </div>
               <Button
                 type="button"

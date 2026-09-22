@@ -181,6 +181,61 @@ describe('Clinic journey spine (e2e)', () => {
         true,
       );
     });
+
+    it('?q= searches by name/phone, case-insensitive, and excludes non-matches', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+
+      await request(app.getHttpServer())
+        .post('/patients')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          firstName: 'Searchable',
+          lastName: 'Zephyrine',
+          dateOfBirth: '1988-01-01',
+          phone: '9777000111',
+        })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/patients')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          firstName: 'Unrelated',
+          lastName: 'Nobody',
+          dateOfBirth: '1988-01-01',
+          phone: '9777000222',
+        })
+        .expect(201);
+
+      const byName = await request(app.getHttpServer())
+        .get('/patients')
+        .query({ q: 'zephyrine' }) // lowercase — proves case-insensitivity
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const namesFound = (byName.body as { firstName: string }[]).map((p) => p.firstName);
+      expect(namesFound).toContain('Searchable');
+      expect(namesFound).not.toContain('Unrelated');
+
+      const byPhone = await request(app.getHttpServer())
+        .get('/patients')
+        .query({ q: '9777000111' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect((byPhone.body as { firstName: string }[]).map((p) => p.firstName)).toEqual([
+        'Searchable',
+      ]);
+
+      // A typed "First Last" is the common case for a name search box —
+      // neither field alone contains the two-word string, so this only
+      // works because of the split-words fallback.
+      const byFullName = await request(app.getHttpServer())
+        .get('/patients')
+        .query({ q: 'searchable zephyrine' })
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect((byFullName.body as { firstName: string }[]).map((p) => p.firstName)).toEqual([
+        'Searchable',
+      ]);
+    });
   });
 
   describe('appointment -> check-in multi-table transaction', () => {
