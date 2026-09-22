@@ -71,6 +71,22 @@ export class PrescriptionsService {
     return prescription;
   }
 
+  /**
+   * Patient-facing — every prescription regardless of status (ACTIVE or
+   * CANCELLED), same reasoning as AppointmentsService.listForPatient: no
+   * "not ready to show" state exists here the way DRAFT does for
+   * diagnoses.
+   */
+  async listForPatient(organizationId: string, patientId: string) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.prescription.findMany({
+        where: { patientId },
+        include: { items: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
+  }
+
   async cancel(organizationId: string, actorId: string, prescriptionId: string) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const prescription = await tx.prescription.findUnique({ where: { id: prescriptionId } });

@@ -45,6 +45,20 @@ export class AppointmentsService {
   }
 
   /**
+   * Patient-facing — every status, oldest-to-cancelled all included
+   * (unlike diagnoses, there's no "not ready to show" state for an
+   * appointment the patient themselves booked or was booked for).
+   */
+  async listForPatient(organizationId: string, patientId: string) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.appointment.findMany({
+        where: { patientId },
+        orderBy: { scheduledAt: 'desc' },
+      }),
+    );
+  }
+
+  /**
    * The multi-table transaction proving the pattern: check-in updates
    * the Appointment's status AND creates its Encounter atomically — a
    * crash or error partway through leaves neither change applied, not

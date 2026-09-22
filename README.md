@@ -4,13 +4,16 @@
 interfaces built around one shared clinical/business spine.
 
 > **Status:** the clinical spine (Appointment → Encounter → Vitals →
-> Diagnosis → Prescription → Lab order) is real end to end — backend API,
-> RLS-covered database, and now a working `staff-web` doctor workspace UI
-> (`/login` → `/dashboard` → `/encounters/[id]`) driving it live, not just
-> curl. Verified in a real browser: register a patient, book and check in
-> an appointment, then record vitals, diagnose, sign off, prescribe, and
-> order labs, with every action persisting server-side. Most of the rest
-> of the domain module map is still a boundary placeholder — see
+> Diagnosis → Prescription → Lab order) is real end to end and now has UI
+> on both sides of it. `staff-web` (`/login` → `/dashboard` →
+> `/encounters/[id]`) writes it — register a patient, book and check in
+> an appointment, record vitals, diagnose, sign off, prescribe, order
+> labs. `patient-web` (`/login` → `/dashboard`, mobile-first) reads it
+> back — a patient's own appointments, finalized diagnoses (never an
+> unsigned draft), prescriptions, and lab results, via ownership-checked
+> `/patients/me/*` routes, not RBAC. Both verified live in a real
+> browser, not just curl. Most of the rest of the domain module map is
+> still a boundary placeholder — see
 > [`docs/architecture/domain-modules.md`](docs/architecture/domain-modules.md)
 > for what's real vs. scaffolded.
 
@@ -179,6 +182,15 @@ curl -X POST http://localhost:4000/auth/patient/login \
 
 curl http://localhost:4000/patients/me -H "Authorization: Bearer <accessToken>"
 ```
+
+From there, `/dashboard` (mobile-first — this is the surface patients
+actually open on a phone) shows the patient's own appointments,
+finalized diagnoses, prescriptions, and lab results via
+`GET /patients/me/appointments`, `/diagnoses`, `/prescriptions`,
+`/lab-orders` — the read half of whatever staff-web's encounter
+workspace wrote for them. A `DRAFT` diagnosis never appears here, only
+`FINALIZED`/`AMENDED` ones — see
+`DiagnosesService.listForPatient`'s doc comment.
 
 `scripts/seed-dev.ts` is dev-only — see its header comment. Every route
 except `/health`, `/auth/login`, and `/auth/patient/login` requires an

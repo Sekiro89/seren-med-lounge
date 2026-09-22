@@ -2,10 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card } from '@serenemed/ui';
+import { Button } from '@serenemed/ui';
 import { ApiError } from '@serenemed/api-client';
 import { apiClient } from '../../lib/api-client';
 import { clearPatientToken, getPatientToken } from '../../lib/auth';
+import {
+  AppointmentsSection,
+  DiagnosesSection,
+  LabOrdersSection,
+  PrescriptionsSection,
+} from './records';
+import type {
+  AppointmentSummary,
+  DiagnosisSummary,
+  LabOrderSummary,
+  PrescriptionSummary,
+} from './types';
 
 interface PatientProfile {
   id: string;
@@ -16,15 +28,27 @@ interface PatientProfile {
   dateOfBirth: string;
 }
 
+interface DashboardData {
+  profile: PatientProfile;
+  appointments: AppointmentSummary[];
+  diagnoses: DiagnosisSummary[];
+  prescriptions: PrescriptionSummary[];
+  labOrders: LabOrderSummary[];
+}
+
 /**
- * Proves the login is actually load-bearing (not just "a form that
- * posts somewhere") by fetching GET /patients/me with the stored token —
- * a route that only succeeds for an authenticated patient, scoped to
- * their own record (apps/api/src/patients/patients.controller.ts).
+ * The patient's own view of everything staff-web can create for them —
+ * appointments, diagnoses (finalized only — see
+ * DiagnosesService.listForPatient), prescriptions, lab results. Built
+ * mobile-first deliberately: this is the surface patients actually open
+ * on a phone, not a desk-bound staff dashboard, so the layout is a
+ * single narrow column of stacked cards throughout (no tables, no
+ * side-by-side panels that would need to reflow), tap targets sized for
+ * a thumb, and no assumption of a wide viewport anywhere in this file.
  */
 export default function PatientDashboardPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<PatientProfile | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,16 +57,23 @@ export default function PatientDashboardPage() {
       return;
     }
 
-    apiClient
-      .get<PatientProfile>('/patients/me')
-      .then(setProfile)
+    Promise.all([
+      apiClient.get<PatientProfile>('/patients/me'),
+      apiClient.get<AppointmentSummary[]>('/patients/me/appointments'),
+      apiClient.get<DiagnosisSummary[]>('/patients/me/diagnoses'),
+      apiClient.get<PrescriptionSummary[]>('/patients/me/prescriptions'),
+      apiClient.get<LabOrderSummary[]>('/patients/me/lab-orders'),
+    ])
+      .then(([profile, appointments, diagnoses, prescriptions, labOrders]) => {
+        setData({ profile, appointments, diagnoses, prescriptions, labOrders });
+      })
       .catch((error: unknown) => {
         if (error instanceof ApiError && error.status === 401) {
           clearPatientToken();
           router.replace('/login');
           return;
         }
-        setLoadError('Could not load your profile. Please try again.');
+        setLoadError('Could not load your records. Please try again.');
       });
   }, [router]);
 
@@ -57,42 +88,38 @@ export default function PatientDashboardPage() {
 
   if (loadError) {
     return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
+      <main className="flex flex-1 items-center justify-center bg-slate-50 px-4 py-16">
         <p className="text-sm text-red-600">{loadError}</p>
       </main>
     );
   }
 
-  if (!profile) {
+  if (!data) {
     return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
+      <main className="flex flex-1 items-center justify-center bg-slate-50 px-4 py-16">
         <p className="text-sm text-slate-500">Loading…</p>
       </main>
     );
   }
 
   return (
-    <main className="flex flex-1 flex-col items-center bg-slate-50 px-6 py-16">
-      <Card className="w-full max-w-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">Welcome, {profile.firstName}</h1>
-        <p className="mb-4 text-sm text-slate-600">
-          Patient interface — architecture scaffold. Appointments, records, and prescriptions are
-          added as their backend modules ship.
-        </p>
-        <dl className="mb-6 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-          <dt className="text-slate-500">Name</dt>
-          <dd className="text-slate-900">
-            {profile.firstName} {profile.lastName}
-          </dd>
-          <dt className="text-slate-500">Email</dt>
-          <dd className="text-slate-900">{profile.email ?? '—'}</dd>
-          <dt className="text-slate-500">Phone</dt>
-          <dd className="text-slate-900">{profile.phone}</dd>
-        </dl>
-        <Button variant="secondary" onClick={handleLogout} className="w-full">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 bg-slate-50 px-4 py-6">
+      <header className="flex items-center justify-between gap-3 pt-2">
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold text-slate-900">
+            Hi, {data.profile.firstName}
+          </h1>
+          <p className="text-xs text-slate-500">{data.profile.phone}</p>
+        </div>
+        <Button variant="secondary" onClick={handleLogout} className="shrink-0 px-3 py-2.5 text-sm">
           Sign out
         </Button>
-      </Card>
+      </header>
+
+      <AppointmentsSection appointments={data.appointments} />
+      <DiagnosesSection diagnoses={data.diagnoses} />
+      <PrescriptionsSection prescriptions={data.prescriptions} />
+      <LabOrdersSection labOrders={data.labOrders} />
     </main>
   );
 }

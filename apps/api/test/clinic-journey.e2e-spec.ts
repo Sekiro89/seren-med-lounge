@@ -1096,4 +1096,122 @@ describe('Clinic journey spine (e2e)', () => {
       expect(entries.some((e) => e.entityType === 'Appointment')).toBe(false);
     });
   });
+
+  describe('patient portal — GET /patients/me/*', () => {
+    it('a patient can see their own appointments/diagnoses/prescriptions/lab orders — and a DRAFT diagnosis is excluded, only the signed-off one shows', async () => {
+      const adminToken = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      const portalPassword = 'portal-patient-password';
+      const portalPatient = await admin.patient.create({
+        data: {
+          organizationId: orgA.id,
+          firstName: 'Portal',
+          lastName: 'Patient',
+          dateOfBirth: new Date('1990-01-01'),
+          phone: '9000000000',
+          email: 'portal-patient@journey-a.example.com',
+          passwordHash: await bcrypt.hash(portalPassword, 4),
+        },
+      });
+
+      const appt = await request(app.getHttpServer())
+        .post('/appointments')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          patientId: portalPatient.id,
+          entrySource: 'RECEPTION_WALK_IN',
+          scheduledAt: new Date().toISOString(),
+        })
+        .expect(201);
+      const checkIn = await request(app.getHttpServer())
+        .post(`/appointments/${appt.body.id}/check-in`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(201);
+      const encounterId = checkIn.body.id as string;
+
+      // A draft diagnosis — must NOT be visible to the patient.
+      const draftDiagnosis = await request(app.getHttpServer())
+        .post('/diagnoses')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ encounterId, description: 'Still being worked out.' })
+        .expect(201);
+
+      // A signed-off diagnosis — must be visible.
+      const finalizedDiagnosis = await request(app.getHttpServer())
+        .post('/diagnoses')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ encounterId, description: 'Confirmed condition.' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/diagnoses/${finalizedDiagnosis.body.id}/sign-off`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/prescriptions')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          encounterId,
+          items: [{ medicationName: 'Amoxicillin', dosage: '500mg', frequency: 'Twice daily' }],
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ encounterId, items: [{ testName: 'CBC' }] })
+        .expect(201);
+
+      const patientLoginRes = await request(app.getHttpServer())
+        .post('/auth/patient/login')
+        .send({
+          organizationId: orgA.id,
+          email: 'portal-patient@journey-a.example.com',
+          password: portalPassword,
+        })
+        .expect(201);
+      const patientToken = patientLoginRes.body.accessToken as string;
+
+      const myAppointments = await request(app.getHttpServer())
+        .get('/patients/me/appointments')
+        .set('Authorization', `Bearer ${patientToken}`)
+        .expect(200);
+      expect(myAppointments.body).toHaveLength(1);
+      expect(myAppointments.body[0].id).toBe(appt.body.id);
+
+      const myDiagnoses = await request(app.getHttpServer())
+        .get('/patients/me/diagnoses')
+        .set('Authorization', `Bearer ${patientToken}`)
+        .expect(200);
+      expect(myDiagnoses.body).toHaveLength(1);
+      expect(myDiagnoses.body[0].id).toBe(finalizedDiagnosis.body.id);
+      expect(myDiagnoses.body[0].versions[0].description).toBe('Confirmed condition.');
+      expect(
+        (myDiagnoses.body as { id: string }[]).some((d) => d.id === draftDiagnosis.body.id),
+      ).toBe(false);
+
+      const myPrescriptions = await request(app.getHttpServer())
+        .get('/patients/me/prescriptions')
+        .set('Authorization', `Bearer ${patientToken}`)
+        .expect(200);
+      expect(myPrescriptions.body).toHaveLength(1);
+      expect(myPrescriptions.body[0].items[0].medicationName).toBe('Amoxicillin');
+
+      const myLabOrders = await request(app.getHttpServer())
+        .get('/patients/me/lab-orders')
+        .set('Authorization', `Bearer ${patientToken}`)
+        .expect(200);
+      expect(myLabOrders.body).toHaveLength(1);
+      expect(myLabOrders.body[0].items[0].testName).toBe('CBC');
+    });
+
+    it('a staff token is rejected on all four /patients/me/* routes', async () => {
+      const adminToken = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+      for (const path of ['appointments', 'diagnoses', 'prescriptions', 'lab-orders']) {
+        await request(app.getHttpServer())
+          .get(`/patients/me/${path}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .expect(403);
+      }
+    });
+  });
 });

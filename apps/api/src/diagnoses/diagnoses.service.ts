@@ -78,6 +78,27 @@ export class DiagnosesService {
   }
 
   /**
+   * Patient-facing — deliberately excludes DRAFT diagnoses. An unsigned,
+   * in-progress clinical judgment isn't meant to be patient-visible (the
+   * same reasoning that makes AI-assisted drafts require a doctor's
+   * sign-off before they count as a real clinical record — see
+   * docs/architecture/security.md#ai-consultation-assistant--safety-boundary).
+   * Only FINALIZED/AMENDED diagnoses, latest version each.
+   */
+  async listForPatient(organizationId: string, patientId: string) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.diagnosis.findMany({
+        where: {
+          patientId,
+          status: { in: [ClinicalRecordStatus.FINALIZED, ClinicalRecordStatus.AMENDED] },
+        },
+        include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
+  }
+
+  /**
    * Finalizes the latest draft — a NEW version row with status
    * FINALIZED, not an update to the draft row. Refuses if the latest
    * version is already FINALIZED or AMENDED (amend() is for corrections

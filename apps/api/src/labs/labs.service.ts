@@ -69,6 +69,22 @@ export class LabsService {
     return labOrder;
   }
 
+  /**
+   * Patient-facing — every order and whatever results exist so far
+   * (a pending, not-yet-resulted item is shown as such, not hidden;
+   * unlike a draft diagnosis, "test ordered, awaiting result" is
+   * normal, expected transparency, not premature clinical judgment).
+   */
+  async listOrdersForPatient(organizationId: string, patientId: string) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.labOrder.findMany({
+        where: { patientId },
+        include: { items: { include: { results: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
+  }
+
   async cancelOrder(organizationId: string, actorId: string, labOrderId: string) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const labOrder = await tx.labOrder.findUnique({ where: { id: labOrderId } });
