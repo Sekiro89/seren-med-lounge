@@ -364,6 +364,35 @@ whole (an order can contain several tests).
   kept as simple as the concretely-askable requirement needed, not
   designed further on a guess.
 
+### PatientConsent — the strictest immutability in the schema
+
+`PatientConsent` (`PatientConsentService`) is fully append-only:
+`REVOKE UPDATE, DELETE ON "patient_consents" FROM serenemed_app;`
+(`prisma/migrations/20260922030000_patient_documents_and_consent/migration.sql`).
+Unlike `Prescription`/`LabOrder`, there isn't even a mutable status
+column here — every row is one `GRANTED`/`REVOKED` action at a point in
+time, and "is the patient currently consented for X" is answered by the
+latest row for `(patientId, consentType)`, computed on read
+(`PatientConsentService.getForPatient`'s `current` map), never stored as
+a separate pointer that could itself be edited. Verified live: a raw
+`UPDATE` against `patient_consents` fails with Postgres error 42501, and
+`clinic-journey.e2e-spec.ts` confirms a grant followed by a revoke
+leaves both rows readable in history — the grant is never overwritten,
+just superseded by a later row.
+
+`PatientDocument` sits next to it in the same migration but is the
+opposite case deliberately: ordinary soft-delete, not immutable — a
+document (e.g. a blurry ID photo from OPD registration) can legitimately
+need replacing, unlike a consent record or a clinical note. It also
+stores file **metadata only** (`storageKey`, assumed already placed in
+the `S3_*`-configured bucket by a future upload flow) — no object
+storage client was built here, since inventing one would repeat the
+"fake integration" mistake this project explicitly avoids elsewhere (see
+patient phone/OTP login in `open-questions.md#3`). Both are gated by the
+existing `patient:read`/`patient:write` permissions, not a new slug —
+captured at OPD registration, the same desk that already writes the
+`Patient` record itself.
+
 ## AI consultation assistant — safety boundary
 
 See `docs/workflows/doctor-consultation.md` for the full flow. The

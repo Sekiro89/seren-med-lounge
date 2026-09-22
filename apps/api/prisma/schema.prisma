@@ -110,6 +110,8 @@ model Organization {
   labOrders            LabOrder[]
   labOrderItems        LabOrderItem[]
   labResults           LabResult[]
+  patientDocuments     PatientDocument[]
+  patientConsents      PatientConsent[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -152,6 +154,8 @@ model User {
   prescriptions     Prescription[]
   labOrders         LabOrder[]
   labResultsEntered LabResult[]
+  documentsUploaded PatientDocument[]
+  consentsRecorded  PatientConsent[]
   deletedAt         DateTime?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
@@ -176,11 +180,11 @@ model User {
 /// attach to this same Patient row by patientId — never duplicated per
 /// module. See docs/database/erd.md.
 model Patient {
-  id             String         @id @default(cuid())
+  id             String            @id @default(cuid())
   organizationId String
-  organization   Organization   @relation(fields: [organizationId], references: [id])
+  organization   Organization      @relation(fields: [organizationId], references: [id])
   clinicId       String?
-  clinic         Clinic?        @relation(fields: [clinicId], references: [id])
+  clinic         Clinic?           @relation(fields: [clinicId], references: [id])
   firstName      String
   lastName       String
   dateOfBirth    DateTime
@@ -194,9 +198,11 @@ model Patient {
   diagnoses      Diagnosis[]
   prescriptions  Prescription[]
   labOrders      LabOrder[]
+  documents      PatientDocument[]
+  consents       PatientConsent[]
   deletedAt      DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -301,6 +307,34 @@ enum PrescriptionStatus {
 enum LabOrderStatus {
   ORDERED
   CANCELLED
+}
+
+/// Conservative starting set, traced directly to what the OPD
+/// registration workflow actually asks for — expand as real screens
+/// need more (see docs/architecture/open-questions.md#2's "expand only
+/// as each workspace's real screens need it" precedent).
+enum PatientDocumentType {
+  PHOTO
+  ID_PROOF
+  INSURANCE_CARD
+  PAN_CARD
+  OTHER
+}
+
+/// Same conservative-set reasoning as PatientDocumentType, traced to the
+/// proposal's DF-tagged bullets: OPD registration consent, the AI
+/// consult assistant's "consent recording," and reviews published "with
+/// consent."
+enum PatientConsentType {
+  TREATMENT
+  DATA_SHARING
+  AI_CONSULT_RECORDING
+  MARKETING_COMMUNICATION
+}
+
+enum PatientConsentAction {
+  GRANTED
+  REVOKED
 }
 
 /// Entry point of the clinic journey (see docs/workflows/clinic-journey.md).
@@ -626,4 +660,61 @@ model LabResult {
   @@index([organizationId])
   @@index([labOrderItemId])
   @@map("lab_results")
+}
+
+/// Document metadata only — no upload mechanism is built here. Real
+/// object storage (`.env.example`'s `S3_*` vars) has a documented
+/// destination but no client integration yet (open-questions.md#7 is
+/// still open on the provider). `storageKey` assumes a file was already
+/// placed in that bucket by a future upload flow; building a fake
+/// upload path now would repeat the "fake integration" mistake this
+/// project explicitly avoids elsewhere (see patient phone/OTP login).
+/// Ordinary soft-delete, not the immutable-content pattern — a document
+/// (e.g. a blurry ID photo) can legitimately need replacing, unlike a
+/// clinical record.
+model PatientDocument {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient             @relation(fields: [patientId], references: [id])
+  documentType   PatientDocumentType
+  storageKey     String
+  fileName       String
+  mimeType       String
+  uploadedById   String
+  uploadedBy     User                @relation(fields: [uploadedById], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([patientId])
+  @@map("patient_documents")
+}
+
+/// Append-only, never updated or deleted once written — REVOKE UPDATE,
+/// DELETE in this migration's SQL, same treatment as every other
+/// immutable-content table in this schema, and more important here than
+/// almost anywhere else: a consent record is exactly the kind of thing
+/// that must never be silently edited. "Is the patient currently
+/// consented for X" is answered by the latest row for
+/// (patientId, consentType), ordered by createdAt — there's no separate
+/// mutable pointer table (unlike ClinicalNote/Diagnosis), since a
+/// consent's only two states (GRANTED/REVOKED) don't need one.
+model PatientConsent {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient              @relation(fields: [patientId], references: [id])
+  consentType    PatientConsentType
+  action         PatientConsentAction
+  recordedById   String
+  recordedBy     User                 @relation(fields: [recordedById], references: [id])
+  createdAt      DateTime             @default(now())
+
+  @@index([organizationId])
+  @@index([patientId, consentType])
+  @@map("patient_consents")
 }

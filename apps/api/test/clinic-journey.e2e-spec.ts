@@ -56,6 +56,8 @@ describe('Clinic journey spine (e2e)', () => {
     await admin.labResult.deleteMany({ where: orgFilter });
     await admin.labOrderItem.deleteMany({ where: orgFilter });
     await admin.labOrder.deleteMany({ where: orgFilter });
+    await admin.patientConsent.deleteMany({ where: orgFilter });
+    await admin.patientDocument.deleteMany({ where: orgFilter });
     await admin.vital.deleteMany({ where: orgFilter });
     await admin.encounter.deleteMany({ where: orgFilter });
     await admin.appointment.deleteMany({ where: orgFilter });
@@ -496,6 +498,81 @@ describe('Clinic journey spine (e2e)', () => {
     });
   });
 
+  describe('patient documents (metadata only, ordinary soft-delete)', () => {
+    it('registers a document, lists it, then removes it (soft-delete, not a real delete)', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+
+      const registerRes = await request(app.getHttpServer())
+        .post('/patient-documents')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          patientId: patientAId,
+          documentType: 'ID_PROOF',
+          storageKey: 'orgs/e2e-journey-org-a/patients/x/id-proof.jpg',
+          fileName: 'id-proof.jpg',
+          mimeType: 'image/jpeg',
+        })
+        .expect(201);
+      expect(registerRes.body.documentType).toBe('ID_PROOF');
+      const documentId = registerRes.body.id as string;
+
+      const listRes = await request(app.getHttpServer())
+        .get(`/patient-documents/patient/${patientAId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(listRes.body.some((d: { id: string }) => d.id === documentId)).toBe(true);
+
+      await request(app.getHttpServer())
+        .post(`/patient-documents/${documentId}/remove`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      // Soft-deleted — excluded from the default list, same convention
+      // as every other soft-deletable model in this schema.
+      const listAfterRes = await request(app.getHttpServer())
+        .get(`/patient-documents/patient/${patientAId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(listAfterRes.body.some((d: { id: string }) => d.id === documentId)).toBe(false);
+    });
+  });
+
+  describe('patient consent (append-only, no update ever)', () => {
+    it('records a grant then a revoke, and derives the current state from the latest row', async () => {
+      const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
+
+      await request(app.getHttpServer())
+        .post('/patient-consent')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ patientId: patientAId, consentType: 'TREATMENT', action: 'GRANTED' })
+        .expect(201);
+
+      const afterGrant = await request(app.getHttpServer())
+        .get(`/patient-consent/patient/${patientAId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(afterGrant.body.current.TREATMENT).toBe('GRANTED');
+      expect(afterGrant.body.history).toHaveLength(1);
+
+      await request(app.getHttpServer())
+        .post('/patient-consent')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ patientId: patientAId, consentType: 'TREATMENT', action: 'REVOKED' })
+        .expect(201);
+
+      const afterRevoke = await request(app.getHttpServer())
+        .get(`/patient-consent/patient/${patientAId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(afterRevoke.body.current.TREATMENT).toBe('REVOKED');
+      // Both entries preserved — nothing was overwritten, the grant is
+      // still readable in history even though it's no longer current.
+      expect(afterRevoke.body.history).toHaveLength(2);
+      expect(afterRevoke.body.history[0].action).toBe('GRANTED');
+      expect(afterRevoke.body.history[1].action).toBe('REVOKED');
+    });
+  });
+
   describe('tenant isolation on the 5 new tables', () => {
     it("org B cannot read org A's appointments, encounters, or clinical notes", async () => {
       const tokenA = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
@@ -537,6 +614,22 @@ describe('Clinic journey spine (e2e)', () => {
         .set('Authorization', `Bearer ${tokenA}`)
         .send({ encounterId: checkIn.body.id, items: [{ testName: 'Org A only.' }] })
         .expect(201);
+      await request(app.getHttpServer())
+        .post('/patient-documents')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          patientId: patientAId,
+          documentType: 'OTHER',
+          storageKey: 'x',
+          fileName: 'x',
+          mimeType: 'text/plain',
+        })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/patient-consent')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ patientId: patientAId, consentType: 'DATA_SHARING', action: 'GRANTED' })
+        .expect(201);
 
       const listRes = await request(app.getHttpServer())
         .get('/appointments')
@@ -568,6 +661,21 @@ describe('Clinic journey spine (e2e)', () => {
         .get(`/lab-orders/${labOrderRes.body.id}`)
         .set('Authorization', `Bearer ${tokenB}`)
         .expect(404);
+
+      // patientAId belongs to org A — RLS filters these lists down to
+      // nothing for org B's tenant context, rather than a 404 (these are
+      // list endpoints, not single-resource lookups by ID).
+      const docsForB = await request(app.getHttpServer())
+        .get(`/patient-documents/patient/${patientAId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(200);
+      expect(docsForB.body).toEqual([]);
+
+      const consentForB = await request(app.getHttpServer())
+        .get(`/patient-consent/patient/${patientAId}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .expect(200);
+      expect(consentForB.body.history).toEqual([]);
     });
   });
 
@@ -699,6 +807,31 @@ describe('Clinic journey spine (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect(201);
 
+      const documentRes = await request(app.getHttpServer())
+        .post('/patient-documents')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          patientId: patientAId,
+          documentType: 'OTHER',
+          storageKey: 'audit-trail-check',
+          fileName: 'audit-trail-check.txt',
+          mimeType: 'text/plain',
+        })
+        .expect(201);
+      const documentId = documentRes.body.id as string;
+
+      await request(app.getHttpServer())
+        .post(`/patient-documents/${documentId}/remove`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(201);
+
+      const consentRes = await request(app.getHttpServer())
+        .post('/patient-consent')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ patientId: patientAId, consentType: 'TREATMENT', action: 'GRANTED' })
+        .expect(201);
+      const consentId = consentRes.body.id as string;
+
       const auditRes = await request(app.getHttpServer())
         .get('/audit')
         .set('Authorization', `Bearer ${token}`)
@@ -787,6 +920,24 @@ describe('Clinic journey spine (e2e)', () => {
             action: 'lab_order.cancel',
             entityType: 'LabOrder',
             entityId: labOrderId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'patient_document.register',
+            entityType: 'PatientDocument',
+            entityId: documentId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'patient_document.remove',
+            entityType: 'PatientDocument',
+            entityId: documentId,
+            actorId: adminAId,
+          }),
+          expect.objectContaining({
+            action: 'patient_consent.record',
+            entityType: 'PatientConsent',
+            entityId: consentId,
             actorId: adminAId,
           }),
         ]),

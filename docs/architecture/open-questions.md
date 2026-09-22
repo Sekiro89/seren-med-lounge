@@ -96,6 +96,16 @@ MinIO, DigitalOcean Spaces, etc.) but no specific provider was named.
 so a self-hosted MinIO in dev and a managed provider in prod both work
 without code changes.
 
+Still fully open, not resolved by `PatientDocument` (see
+`docs/database/erd.md`): that table stores a `storageKey` string and
+assumes a file already exists at it — no S3-compatible client was built
+to actually upload one. Building a fake upload path would repeat the
+"fake integration" mistake this project avoids elsewhere (patient
+phone/OTP login, above). Whoever picks the provider still needs to wire
+a real client and a `POST /patient-documents` caller that's actually
+uploaded a file first (likely a presigned-URL flow, not a direct proxy
+through the API).
+
 ## 8. RLS tenant context isn't wired to a real request yet — RESOLVED
 
 `JwtAuthGuard` → `TenantContextService` → `PrismaService.withTenant()` is
@@ -246,16 +256,17 @@ asks Postgres's own catalogs (`pg_class`, `pg_policies`) which tables in
 them has RLS enabled, forced, and at least one policy, instead of the
 old hardcoded `patient`/`auditLog`-only checks. It needs no update when
 a new table is added; it discovers the table set itself — run live after
-adding `lab_orders`/`lab_order_items`/`lab_results`, it found and
-validated all 16 real tenant-scoped tables without any change to the
-check itself. This now runs automatically in CI
-(`.github/workflows/ci.yml`'s `db-tests` job) on every push, not just as
-a manual step someone has to remember to run. Also still open: nothing
-_enforces_ that a future module follows the `TenantContextService` +
-`withTenant` pattern beyond code review and now five working examples to
-copy from (`users`/`patients`, `appointments`/`encounters`/`vitals`/
-`clinical-notes`, `diagnoses`, `prescriptions`, and `labs`). Also still
-open: the enum-duplication problem
+adding `patient_documents`/`patient_consents`, it found and validated
+all 18 real tenant-scoped tables without any change to the check itself.
+This now runs automatically in CI (`.github/workflows/ci.yml`'s
+`db-tests` job) on every push, not just as a manual step someone has to
+remember to run. Also still open: nothing _enforces_ that a future
+module follows the `TenantContextService` + `withTenant` pattern beyond
+code review and now six working examples to copy from
+(`users`/`patients`, `appointments`/`encounters`/`vitals`/
+`clinical-notes`, `diagnoses`, `prescriptions`, `labs`, and
+`patient-documents`/`patient-consent`). Also still open: the
+enum-duplication problem
 (Prisma generates its own copy of every `@serenemed/types` enum) has no
 generic mapper yet — this slice's services consume Prisma's own enum
 types directly (`AppointmentStatus`, `EncounterStatus`,

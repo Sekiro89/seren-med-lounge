@@ -7,3 +7,5 @@ export * from './clinical-note';
 export * from './diagnosis';
 export * from './prescription';
 export * from './lab-order';
+export * from './patient-document';
+export * from './patient-consent';

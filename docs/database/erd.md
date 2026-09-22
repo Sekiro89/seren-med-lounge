@@ -33,16 +33,31 @@ same `REVOKE UPDATE, DELETE` treatment as `ClinicalNoteVersion`/
 `DiagnosisVersion`. A correction cancels the prescription and issues a
 new one; nothing edits an existing item.
 
-`LabOrder`/`LabOrderItem`/`LabResult` is the fourth and final table of
-this chunk, same `Prescription`-style shape (`LabOrder.status`
-ORDERED/CANCELLED is mutable; `LabOrderItem` — the ordered test — is
-immutable), plus one more piece: `LabResult` is a separate immutable
-table referencing `LabOrderItem`, not `LabOrder` directly (unlike the
-loose sketch in the proposed section below) — a result belongs to one
-specific ordered test, and an order can have several. `lab-order:write`
-(ordering) and `lab-result:write` (recording a result) are two separate
-permissions — today only `ADMINISTRATOR` has the latter, a real gap
-(there's no lab-technician `StaffRole` yet), not a guessed-at role.
+`LabOrder`/`LabOrderItem`/`LabResult` is the fourth table of that chunk,
+same `Prescription`-style shape (`LabOrder.status` ORDERED/CANCELLED is
+mutable; `LabOrderItem` — the ordered test — is immutable), plus one
+more piece: `LabResult` is a separate immutable table referencing
+`LabOrderItem`, not `LabOrder` directly (unlike the loose sketch in the
+proposed section below) — a result belongs to one specific ordered
+test, and an order can have several. `lab-order:write` (ordering) and
+`lab-result:write` (recording a result) are two separate permissions —
+today only `ADMINISTRATOR` has the latter, a real gap (there's no
+lab-technician `StaffRole` yet), not a guessed-at role.
+
+`PatientDocument`/`PatientConsent` are the fifth and sixth tables, the
+two missing items on the Unified Patient Record's own tab list (Profile,
+Visits & vitals, Diagnoses & prescriptions were already covered). They
+attach directly to `Patient`, not `Encounter` — a document or a consent
+isn't scoped to one visit. `PatientDocument` records file _metadata_
+only (`storageKey` assumes a future upload flow already placed the file
+in object storage — see its doc comment for why no upload client was
+built) and is an ordinary soft-deletable table, since a document can
+legitimately need replacing. `PatientConsent` is the opposite: fully
+immutable and append-only (same `REVOKE UPDATE, DELETE` treatment as the
+clinical-content tables), because a consent record is exactly the kind
+of thing that must never be silently edited — "is the patient currently
+consented for X" is derived from the latest row per
+`(patientId, consentType)`, not stored as a separate mutable pointer.
 
 ```
 Organization ──< Clinic
@@ -57,6 +72,9 @@ Patient ──< Appointment ──< Encounter ─┬─< Vital
                                         ├─< Diagnosis ──< DiagnosisVersion
                                         ├─< Prescription ──< PrescriptionItem
                                         └─< LabOrder ──< LabOrderItem ──< LabResult
+
+Patient ──< PatientDocument
+Patient ──< PatientConsent
 ```
 
 `Appointment.status` moves REQUESTED/CONFIRMED → CHECKED_IN via
@@ -91,13 +109,14 @@ future table below attaches to `Patient.id`, never to a copy of patient
 fields.
 
 `Organization`, `Clinic`, `User`, `Patient`, `Appointment`, `Encounter`,
-`Vital`, `ClinicalNote`, `Diagnosis`, `Prescription`, and `LabOrder` all
-carry `deletedAt` and go through the soft-delete convention (nothing is
-hard-deleted). All of those plus `AuditLog`, `ClinicalNoteVersion`,
-`DiagnosisVersion`, `PrescriptionItem`, `LabOrderItem`, and `LabResult`
-have a Postgres RLS policy enforcing tenant isolation at the database.
-`AuditLog`, `ClinicalNoteVersion`, `DiagnosisVersion`,
-`PrescriptionItem`, `LabOrderItem`, and `LabResult` are all exceptions to
+`Vital`, `ClinicalNote`, `Diagnosis`, `Prescription`, `LabOrder`, and
+`PatientDocument` all carry `deletedAt` and go through the soft-delete
+convention (nothing is hard-deleted). All of those plus `AuditLog`,
+`ClinicalNoteVersion`, `DiagnosisVersion`, `PrescriptionItem`,
+`LabOrderItem`, `LabResult`, and `PatientConsent` have a Postgres RLS
+policy enforcing tenant isolation at the database. `AuditLog`,
+`ClinicalNoteVersion`, `DiagnosisVersion`, `PrescriptionItem`,
+`LabOrderItem`, `LabResult`, and `PatientConsent` are all exceptions to
 the soft-delete convention (none has a `deletedAt`) but not to RLS — an
 audit trail and a finalized clinical record must never be deletable,
 soft or otherwise — see `docs/architecture/security.md#soft-delete` and
@@ -109,10 +128,7 @@ soft or otherwise — see `docs/architecture/security.md#soft-delete` and
 Organization, Clinic, User, Role, Permission
         │
         ▼
-Patient ─┬─ PatientDocument
-         ├─ PatientConsent
-         │
-         ├─ Lead ── Campaign, LeadActivity          (pre-conversion; see marketing-funnel.md)
+Patient ─┬─ Lead ── Campaign, LeadActivity          (pre-conversion; see marketing-funnel.md)
          │
          ├─ Appointment ─┬─ QueueEntry
          │                ├─ Registration
@@ -132,10 +148,12 @@ Patient ─┬─ PatientDocument
 ```
 
 `Appointment`, `Encounter`, `Diagnosis`, `Prescription`/`PrescriptionItem`,
-and now `LabOrder`/`LabOrderItem`/`LabResult` are also implemented (see
-above) — `QueueEntry`, `Registration`, `MedicalHistory`, `Referral`, and
-`Procedure`/`Surgery` remain proposed. That's every child of `Encounter`
-in the sketch below except those four.
+`LabOrder`/`LabOrderItem`/`LabResult`, and now `PatientDocument`/
+`PatientConsent` are also implemented (see above) — `QueueEntry`,
+`Registration`, `MedicalHistory`, `Referral`, and `Procedure`/`Surgery`
+remain proposed under `Encounter`; `Lead`/`Campaign`/`LeadActivity`,
+`Invoice`/`Payment`/`InsuranceCase`, `Dispensing`, and `CarePlan`/
+`FollowUp` remain proposed as the other direct children of `Patient`.
 
 Cross-cutting, not attached to a single patient:
 
@@ -163,6 +181,11 @@ AuditLog                                    (already implemented — generic)
 - **Lead vs. Patient.** `Lead` exists only pre-conversion. Converting a
   lead creates exactly one `Patient` and links back to the originating
   `Lead` for attribution — it does not become a parallel patient record.
+- **Consent is append-only, documents are not.** `PatientConsent` gets
+  the same DB-level immutability as clinical content (a consent record
+  must never be silently edited); `PatientDocument` is ordinary
+  soft-delete, since a document can legitimately need replacing. Both
+  attach to `Patient` directly, not to a specific `Encounter`.
 - **Tenancy.** Every model carries `organizationId` (and `clinicId` where
   it makes sense) from the start, per `docs/architecture/open-questions.md#4`.
 
