@@ -40,14 +40,25 @@ they're production-ready" anti-pattern this project avoids elsewhere.
 password, matching the existing staff pattern) now; left OTP for when a
 real SMS/WhatsApp provider is contracted, per `integrations.md`.
 
-Also still open: **patient self-registration**. There's no signup
-endpoint — every patient account today is created by a dev seed script
-(`apps/api/scripts/seed-dev.ts`), the same bootstrap-only pattern as the
-first staff admin. A real "patient creates their own account" flow
-(with what verification? email confirmation? staff-assisted at
-registration desk, matching the OPD registration workflow in
-`docs/workflows/clinic-journey.md`?) wasn't asked for here and would be
-guessing at product intent to build now.
+**Patient self-registration — RESOLVED.** `POST /auth/patient/signup`
+(`PatientAuthService.signup`, `PatientsService.selfRegister`) is real: a
+patient supplies name/DOB/phone/email/password directly, no staff or
+seed script involved, and gets an immediately-usable session back (same
+response shape as login). No email verification step — that's a
+deliberate scope cut, not an oversight, since there's no email-sending
+integration wired up any more than there's an SMS one (same "no fake
+integrations" reasoning as the OTP decision above); an unverified email
+is a real, accepted limitation until a real provider exists.
+
+This also resolved the login-side complaint it was blocking on: a
+patient shouldn't have to know an internal `organizationId` to sign up
+or log in in the first place. `patientLoginSchema`/`patientSignupSchema`
+both make it optional, and `AuthController.resolveOrganizationId` falls
+back to `env.DEFAULT_ORGANIZATION_ID` when it's absent — correct for
+today's real deployments (one clinic each, no multi-org UI exists
+anywhere — see #4 below), not a guess at the eventual multi-tenant
+resolution (subdomain, custom domain), which can still pass an explicit
+`organizationId` through the same field once built.
 
 ## 4. Multi-clinic / multi-organization scope for v1
 

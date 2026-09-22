@@ -2,23 +2,24 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { loginSchema, type LoginInput } from '@serenemed/validation';
+import { patientLoginSchema, type PatientLoginInput } from '@serenemed/validation';
 import { Button } from '@serenemed/ui';
 import { ApiError } from '@serenemed/api-client';
 import { apiClient } from '../../lib/api-client';
 import { savePatientToken } from '../../lib/auth';
 
 /**
- * organizationId is a plain text field, not a picker — this mirrors a
- * real, unresolved product decision, not a UI shortcut taken lightly.
- * Patient.email is unique per (organizationId, email), so a login
- * request has to say which organization before a lookup can happen, and
- * there's no decision yet on how a real UI resolves that (subdomain, an
- * org picker, email-domain lookup) — see
- * docs/architecture/open-questions.md#3 and loginSchema's own comment
- * in @serenemed/validation.
+ * No Clinic ID field — a patient shouldn't have to know an internal
+ * organizationId to sign in. The server resolves one automatically
+ * (AuthController.resolveOrganizationId, env.DEFAULT_ORGANIZATION_ID)
+ * when the request doesn't include it, which this form never does. See
+ * patientLoginSchema's comment in @serenemed/validation for why this is
+ * an optional field on the schema rather than removed outright — a
+ * real multi-clinic resolution (subdomain, custom domain) can still
+ * supply it explicitly later without a breaking change here.
  */
 export default function PatientLoginPage() {
   const router = useRouter();
@@ -28,11 +29,11 @@ export default function PatientLoginPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
+  } = useForm<PatientLoginInput>({
+    resolver: zodResolver(patientLoginSchema),
   });
 
-  const onSubmit = async (data: LoginInput) => {
+  const onSubmit = async (data: PatientLoginInput) => {
     setServerError(null);
     try {
       const result = await apiClient.post<{ accessToken: string }>('/auth/patient/login', data);
@@ -52,33 +53,14 @@ export default function PatientLoginPage() {
   };
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-6 py-16">
+    <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">Patient sign in</h1>
+        <h1 className="mb-1 text-xl font-semibold text-slate-900">Sign in</h1>
         <p className="mb-6 text-sm text-slate-600">
           Sign in to view your appointments and records.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-          <div>
-            <label
-              htmlFor="organizationId"
-              className="mb-1 block text-sm font-medium text-slate-700"
-            >
-              Clinic ID
-            </label>
-            <input
-              id="organizationId"
-              type="text"
-              autoComplete="off"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('organizationId')}
-            />
-            {errors.organizationId && (
-              <p className="mt-1 text-xs text-red-600">{errors.organizationId.message}</p>
-            )}
-          </div>
-
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
               Email
@@ -87,7 +69,7 @@ export default function PatientLoginPage() {
               id="email"
               type="email"
               autoComplete="email"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
               {...register('email')}
             />
             {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
@@ -101,7 +83,7 @@ export default function PatientLoginPage() {
               id="password"
               type="password"
               autoComplete="current-password"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
               {...register('password')}
             />
             {errors.password && (
@@ -115,10 +97,17 @@ export default function PatientLoginPage() {
             </p>
           )}
 
-          <Button type="submit" disabled={isSubmitting} className="mt-2 w-full">
+          <Button type="submit" disabled={isSubmitting} className="mt-2 w-full py-2.5">
             {isSubmitting ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
+
+        <p className="mt-5 text-center text-sm text-slate-600">
+          New here?{' '}
+          <Link href="/signup" className="font-medium text-slate-900 underline">
+            Create an account
+          </Link>
+        </p>
       </div>
     </main>
   );

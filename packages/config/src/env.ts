@@ -52,6 +52,17 @@ export const apiEnvSchema = z
     // Comma-separated allowed origins for CORS — see main.ts. Defaults to
     // the two local frontend dev ports if unset.
     CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3001'),
+    // Lets a patient sign up / log in without knowing an internal
+    // organizationId — real deployments today are one clinic per
+    // deployment (no multi-org UI exists anywhere yet — see
+    // docs/architecture/open-questions.md#4), so asking a patient to
+    // supply one made no sense from their side of the product. An
+    // explicit organizationId in the request body still overrides this
+    // when present (AuthController.resolveOrganizationId) — nothing here
+    // removes the ability to resolve it a smarter way later (subdomain,
+    // custom domain per clinic), it just stops blocking today's real
+    // single-clinic case on an unbuilt multi-tenant UI decision.
+    DEFAULT_ORGANIZATION_ID: z.string().optional(),
   })
   /**
    * A schema that only checks JWT_SECRET.min(16) would happily accept

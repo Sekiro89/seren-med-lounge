@@ -134,6 +134,20 @@ messaging, AI, Zoho) belongs to integrations that aren't built yet
 (see `docs/architecture/integrations.md`) — nothing reads them today, so
 there's nothing to configure for them yet.
 
+**`DEFAULT_ORGANIZATION_ID` is different — set it for a real
+deployment, or patient signup/login break.** Unlike the integration keys
+above, this one has a real effect the moment it's missing:
+`patient-web`'s login/signup forms never send an `organizationId` (a
+patient has no way to know one — see
+`docs/architecture/security.md#patient-authentication`), so
+`AuthController.resolveOrganizationId` depends on this var to resolve
+which organization a patient belongs to. Unset, both endpoints return
+`503` instead of silently defaulting to something wrong. Set it to the
+real organization's id once one exists in production (today's
+single-clinic-per-deployment reality — see
+`docs/architecture/open-questions.md#4` on multi-org still being
+undecided).
+
 **Enforced, not just documented**: `packages/config/src/env.ts`'s
 `apiEnvSchema` refuses to boot at all if `NODE_ENV=production` and
 `JWT_SECRET` is still the exact placeholder text above, or if

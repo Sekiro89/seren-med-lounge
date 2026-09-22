@@ -172,15 +172,30 @@ via `@serenemed/permissions`'s `can()`.
 
 **Logging in (patient)**: same shape, different endpoint and table —
 `patient-web`'s `/login` page (`apps/patient-web/app/login`) is a real,
-working form against this:
+working form against this. Unlike staff login, `organizationId` isn't
+required — the server resolves it from `DEFAULT_ORGANIZATION_ID` (see
+`.env.example`) when it's omitted, since a patient has no way to know an
+internal org id:
 
 ```bash
 curl -X POST http://localhost:4000/auth/patient/login \
   -H 'Content-Type: application/json' \
-  -d '{"organizationId":"seed-org","email":"patient@dev.local","password":"dev-password-123"}'
+  -d '{"email":"patient@dev.local","password":"dev-password-123"}'
 # → { accessToken, patient }
 
 curl http://localhost:4000/patients/me -H "Authorization: Bearer <accessToken>"
+```
+
+**Signing up (patient)**: `patient-web`'s `/signup` page is a real
+account-creation flow — `POST /auth/patient/signup` creates the patient
+with a real password and returns a working session immediately, same
+response shape as login:
+
+```bash
+curl -X POST http://localhost:4000/auth/patient/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"firstName":"New","lastName":"Patient","dateOfBirth":"1995-01-01","phone":"9990001111","email":"new-patient@example.com","password":"a-real-password"}'
+# → { accessToken, patient }
 ```
 
 From there, `/dashboard` (mobile-first — this is the surface patients

@@ -1,7 +1,23 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
-import { loginSchema, type LoginInput } from '@serenemed/validation';
+import {
+  loginSchema,
+  patientLoginSchema,
+  patientSignupSchema,
+  type LoginInput,
+  type PatientLoginInput,
+  type PatientSignupInput,
+} from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
@@ -13,7 +29,30 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly patientAuthService: PatientAuthService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * A patient shouldn't have to know an internal organizationId to sign
+   * up or log in — see patientLoginSchema's comment in
+   * @serenemed/validation. An explicit value in the request body still
+   * wins when present; env.DEFAULT_ORGANIZATION_ID is the fallback for
+   * today's real single-clinic-per-deployment case, not a guess at the
+   * eventual multi-tenant resolution (subdomain, custom domain — see
+   * docs/architecture/open-questions.md#4).
+   */
+  private resolveOrganizationId(explicit?: string): string {
+    if (explicit) {
+      return explicit;
+    }
+    const fallback = this.config.get<string>('DEFAULT_ORGANIZATION_ID');
+    if (!fallback) {
+      throw new ServiceUnavailableException(
+        'No organizationId was provided and this deployment has no DEFAULT_ORGANIZATION_ID configured.',
+      );
+    }
+    return fallback;
+  }
 
   // Much stricter than the app-wide default (100/min) — this is a
   // public, unauthenticated endpoint that checks a password, i.e.
@@ -43,22 +82,37 @@ export class AuthController {
   }
 
   /**
-   * Same shape as staff login (organizationId + email + password —
-   * loginSchema's comment explains why organizationId is required) but
-   * against the Patient table via PatientAuthService, never User. Same
+   * Against the Patient table via PatientAuthService, never User — same
    * rate limit rationale as /auth/login — also a public,
-   * password-checking endpoint.
+   * password-checking endpoint. organizationId is optional here (unlike
+   * staff login) — see patientLoginSchema's comment and
+   * resolveOrganizationId above.
    */
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Public()
   @Post('patient/login')
-  patientLogin(@Body(new ZodValidationPipe(loginSchema)) body: LoginInput) {
-    return this.patientAuthService.login(body);
+  patientLogin(@Body(new ZodValidationPipe(patientLoginSchema)) body: PatientLoginInput) {
+    return this.patientAuthService.login(this.resolveOrganizationId(body.organizationId), body);
   }
 
   @Post('patient/logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async patientLogout(@Req() request: Request & { user: AuthenticatedUser }) {
     await this.patientAuthService.logout(request.user.jti, new Date(request.user.expiresAt * 1000));
+  }
+
+  /**
+   * The gap this whole feature closes: before this route existed, the
+   * only way a Patient row got created at all was staff doing it
+   * (POST /patients) or the dev seed script — see
+   * docs/architecture/open-questions.md#3. Same rate limit as login/
+   * signup above (also public, and account creation is exactly the kind
+   * of endpoint spam-signup abuse targets).
+   */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Public()
+  @Post('patient/signup')
+  patientSignup(@Body(new ZodValidationPipe(patientSignupSchema)) body: PatientSignupInput) {
+    return this.patientAuthService.signup(this.resolveOrganizationId(body.organizationId), body);
   }
 }

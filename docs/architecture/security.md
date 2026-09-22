@@ -117,15 +117,31 @@ different authorization model, not just a different table:
   constraint as `User.email` (nullable-safe — Postgres doesn't treat
   `NULL`s as equal, so many patients with no email yet is fine), added
   in `prisma/migrations/20260921080000_patient_email_unique`.
+- **Self-registration — RESOLVED.** `POST /auth/patient/signup`
+  (`PatientAuthService.signup` → `PatientsService.selfRegister`) creates
+  the patient with a real bcrypt-hashed password and returns a working
+  session immediately — no staff or seed script involved, closing the
+  gap `open-questions.md#3` used to flag. No email-verification step
+  (deliberate — no email-sending integration exists, same "no fake
+  integrations" reasoning as the OTP decision below).
+- **No `organizationId` required from a patient — RESOLVED.** Both
+  `patientLoginSchema` and `patientSignupSchema` make it optional;
+  `AuthController.resolveOrganizationId` falls back to
+  `env.DEFAULT_ORGANIZATION_ID` when the request doesn't supply one. A
+  patient never had a way to know an internal organizationId in the
+  first place — this was flagged live by an actual user of the product,
+  not found during a code review. Correct for today's real
+  deployments (one clinic each); an explicit `organizationId` in the
+  request still overrides it, so a smarter multi-tenant resolution
+  (subdomain, custom domain — still undecided, see
+  `open-questions.md#4`) can be added later without a breaking change.
 
-**Not implemented**: patient self-registration/signup (there's no way
-for a new patient to create their own account — `seed-dev.ts` creates
-one dev patient, same bootstrap-only caveat as the staff admin), phone/OTP
-login (`Patient.passwordHash` is nullable specifically so this can be
-added without a schema change — see `open-questions.md#3` — but no
-messaging integration is wired to send a real OTP, and building a fake
-one would violate the "no fake integrations" rule this project holds
-elsewhere).
+**Not implemented**: phone/OTP login (`Patient.passwordHash` is
+nullable specifically so this can be added without a schema change —
+see `open-questions.md#3` — but no messaging integration is wired to
+send a real OTP, and building a fake one would violate the "no fake
+integrations" rule this project holds elsewhere), email verification on
+signup (same reasoning — no real email-sending integration exists yet).
 
 **Verified**: live against a running server (login, `/me`, both
 directions of the actor-type boundary, logout) with real HTTP requests,

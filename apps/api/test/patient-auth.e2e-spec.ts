@@ -141,4 +141,84 @@ describe('Patient auth (e2e)', () => {
       .set('Authorization', `Bearer ${body.accessToken}`)
       .expect(401);
   });
+
+  describe('POST /auth/patient/signup', () => {
+    it('creates the account and immediately returns a working session — the gap that had no endpoint at all before this', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/patient/signup')
+        .send({
+          organizationId: org.id,
+          firstName: 'New',
+          lastName: 'Signup',
+          dateOfBirth: '1998-02-14',
+          phone: '5559998888',
+          email: 'new-signup@e2e.example.com',
+          password: 'a-real-password-123',
+        })
+        .expect(201);
+      expect(res.body.accessToken).toEqual(expect.any(String));
+      expect(res.body.patient).toMatchObject({
+        email: 'new-signup@e2e.example.com',
+        firstName: 'New',
+        organizationId: org.id,
+      });
+
+      // The token from signup itself already works, not just a
+      // subsequent fresh login.
+      const meFromSignup = await request(app.getHttpServer())
+        .get('/patients/me')
+        .set('Authorization', `Bearer ${res.body.accessToken}`)
+        .expect(200);
+      expect(meFromSignup.body.email).toBe('new-signup@e2e.example.com');
+
+      // And a fresh login with the password just set also works —
+      // proves the password was actually hashed and stored, not just
+      // the signup response faked.
+      const freshLogin = await patientLogin('new-signup@e2e.example.com', 'a-real-password-123');
+      expect(freshLogin.status).toBe(201);
+    });
+
+    it('refuses a duplicate email in the same organization with 409', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/patient/signup')
+        .send({
+          organizationId: org.id,
+          firstName: 'Dup',
+          lastName: 'One',
+          dateOfBirth: '1990-01-01',
+          phone: '5551110000',
+          email: 'duplicate@e2e.example.com',
+          password: 'a-real-password-123',
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/auth/patient/signup')
+        .send({
+          organizationId: org.id,
+          firstName: 'Dup',
+          lastName: 'Two',
+          dateOfBirth: '1990-01-01',
+          phone: '5552220000',
+          email: 'duplicate@e2e.example.com',
+          password: 'a-different-password-456',
+        })
+        .expect(409);
+    });
+
+    it('rejects a signup with a too-short password with 400, before ever touching the database', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/patient/signup')
+        .send({
+          organizationId: org.id,
+          firstName: 'Weak',
+          lastName: 'Password',
+          dateOfBirth: '1990-01-01',
+          phone: '5553330000',
+          email: 'weak-password@e2e.example.com',
+          password: 'short',
+        })
+        .expect(400);
+    });
+  });
 });

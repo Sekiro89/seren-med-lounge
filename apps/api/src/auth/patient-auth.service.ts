@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { PatientRole } from '@serenemed/types';
-import type { LoginInput } from '@serenemed/validation';
+import type { PatientLoginInput, PatientSignupInput } from '@serenemed/validation';
 import { PatientsService } from '../patients/patients.service';
 import { TokenBlacklistService } from './token-blacklist.service';
 import type { JwtPayload } from './jwt-payload.interface';
@@ -31,9 +31,16 @@ export class PatientAuthService {
     private readonly tokenBlacklist: TokenBlacklistService,
   ) {}
 
-  async login(credentials: LoginInput) {
+  /**
+   * `organizationId` is a separate argument, not read off `credentials`
+   * — the caller (AuthController.resolveOrganizationId) has already
+   * decided it, whether from an explicit request field or
+   * env.DEFAULT_ORGANIZATION_ID. This service stays agnostic to how
+   * that resolution happened.
+   */
+  async login(organizationId: string, credentials: PatientLoginInput) {
     const patient = await this.patientsService.findByOrgAndEmailWithPassword(
-      credentials.organizationId,
+      organizationId,
       credentials.email,
     );
 
@@ -50,9 +57,42 @@ export class PatientAuthService {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
+    return this.issueSession(patient.id, patient.organizationId, {
+      email: patient.email,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+    });
+  }
+
+  /**
+   * POST /auth/patient/signup — creates the patient (via
+   * PatientsService.selfRegister, which does the actual password
+   * hashing/conflict-checking/audit-logging) and immediately logs them
+   * in, same response shape as login() above, so the frontend can reuse
+   * one "save the session" function for both.
+   */
+  async signup(organizationId: string, input: PatientSignupInput) {
+    const patient = await this.patientsService.selfRegister(organizationId, input);
+    return this.issueSession(patient.id, organizationId, {
+      email: patient.email,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+    });
+  }
+
+  /** See docs/architecture/security.md#token-revocation. */
+  async logout(jti: string, expiresAt: Date): Promise<void> {
+    await this.tokenBlacklist.revoke(jti, expiresAt);
+  }
+
+  private async issueSession(
+    patientId: string,
+    organizationId: string,
+    profile: { email: string | null; firstName: string; lastName: string },
+  ) {
     const payload: JwtPayload = {
-      sub: patient.id,
-      organizationId: patient.organizationId,
+      sub: patientId,
+      organizationId,
       role: PatientRole.PATIENT,
       actorType: 'PATIENT',
       jti: randomUUID(),
@@ -61,17 +101,10 @@ export class PatientAuthService {
     return {
       accessToken: await this.jwtService.signAsync(payload),
       patient: {
-        id: patient.id,
-        email: patient.email,
-        firstName: patient.firstName,
-        lastName: patient.lastName,
-        organizationId: patient.organizationId,
+        id: patientId,
+        organizationId,
+        ...profile,
       },
     };
-  }
-
-  /** See docs/architecture/security.md#token-revocation. */
-  async logout(jti: string, expiresAt: Date): Promise<void> {
-    await this.tokenBlacklist.revoke(jti, expiresAt);
   }
 }

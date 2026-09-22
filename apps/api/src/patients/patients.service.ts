@@ -1,7 +1,11 @@
-import { Injectable } from '@nestjs/common';
-import type { PatientRegistrationInput } from '@serenemed/validation';
+import { ConflictException, Injectable } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import type { PatientRegistrationInput, PatientSignupInput } from '@serenemed/validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+
+// Matches UsersService's convention (apps/api/src/users/users.service.ts).
+const BCRYPT_COST = 12;
 
 @Injectable()
 export class PatientsService {
@@ -47,6 +51,62 @@ export class PatientsService {
         actorType: 'USER',
         actorId,
         action: 'patient.register',
+        entityType: 'Patient',
+        entityId: patient.id,
+        metadata: {},
+      });
+
+      return patient;
+    });
+  }
+
+  /**
+   * The patient-driven counterpart to `register()` above — a real
+   * password this time, since this account needs to log itself back in
+   * (POST /auth/patient/signup, PatientAuthService.signup). Closes the
+   * gap `register()`'s own comment flagged: patient portal
+   * self-registration (docs/architecture/open-questions.md#3) had no
+   * real endpoint at all until this. `actorType: 'PATIENT'` on the
+   * audit entry with `actorId` set to the new patient's own id — the
+   * actor IS the record being created, there's no separate staff user
+   * to attribute this to.
+   */
+  async selfRegister(organizationId: string, input: PatientSignupInput) {
+    const passwordHash = await bcrypt.hash(input.password, BCRYPT_COST);
+
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const existing = await tx.patient.findFirst({
+        where: { organizationId, email: input.email },
+      });
+      if (existing) {
+        throw new ConflictException('An account with this email already exists.');
+      }
+
+      const patient = await tx.patient.create({
+        data: {
+          organizationId,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          dateOfBirth: new Date(input.dateOfBirth),
+          phone: input.phone,
+          email: input.email,
+          passwordHash,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          dateOfBirth: true,
+          phone: true,
+          email: true,
+          createdAt: true,
+        },
+      });
+
+      await this.auditService.record(tx, organizationId, {
+        actorType: 'PATIENT',
+        actorId: patient.id,
+        action: 'patient.self_register',
         entityType: 'Patient',
         entityId: patient.id,
         metadata: {},
