@@ -101,12 +101,22 @@ Whatever's chosen also needs real backups/point-in-time recovery — a
 docker volume (what local dev uses) has neither. Not decided yet: which
 managed Postgres provider, so not built.
 
+**`DATABASE_URL`/`DIRECT_DATABASE_URL` must include an explicit
+`sslmode` param** (`&sslmode=require` for most managed providers,
+`verify-full` with a CA cert for the strictest option, or `disable` only
+if deliberately private-network-only) — the app refuses to boot in
+production without one; see
+`docs/architecture/security.md#encryption-in-transit`.
+
 ## Redis
 
 `RedisService` (`apps/api/src/redis/redis.service.ts`) connects to
 `REDIS_URL` at boot — a reachable Redis is required to start the app at
 all, not just for the not-yet-distributed rate limiter. Any managed
 Redis (or a self-hosted instance) works; nothing here is provider-specific.
+Use `rediss://` instead of `redis://` if the instance isn't already on a
+network this app implicitly trusts — see
+`docs/architecture/security.md#encryption-in-transit`.
 
 ## Secrets
 
@@ -331,19 +341,37 @@ wanted, not assumed here).
   isn't the same as running it anywhere — once a host is picked, that
   host still needs to be told to pull and run
   `ghcr.io/<owner>/serenemed-api:latest` (or a specific SHA tag).
+- **TLS termination for browser ↔ API traffic.** This is the one piece
+  of "encryption in transit" (see
+  `docs/architecture/security.md#encryption-in-transit`) that's still
+  fully blocked on the hosting decision above — a reverse proxy (e.g.
+  Caddy, which auto-provisions Let's Encrypt certs) or the host's own
+  load balancer needs to sit in front of these containers and actually
+  terminate HTTPS. `app.set('trust proxy', 1)` is already in place for
+  whichever single reverse proxy ends up there, and Helmet's HSTS header
+  is already configured — but nothing terminates real TLS yet.
 
 ## Already closed (was "Not done yet")
 
 Distributed rate limiting, structured logging, graceful shutdown, a real
-readiness check, gating `/docs` in production, and error tracking
-(above) — see `app.module.ts` (Redis-backed `ThrottlerStorageRedisService`,
-sharing `RedisService`'s connection), `main.ts` (`enableShutdownHooks()`,
-the `NODE_ENV==='production'` guards around Swagger and the logger),
-`common/json-logger.service.ts`, and `GET /health/ready`
-(`app.service.ts` — checks real Postgres + Redis reachability, not just
-"the process is up"). All verified live: the Redis-backed throttler's
-keys were confirmed actually landing in Redis
+readiness check, gating `/docs` in production, error tracking (above),
+and encryption in transit for the two hops that don't depend on a
+hosting decision (Postgres/Redis TLS support + a boot-time refusal if
+`DATABASE_URL` has no explicit `sslmode`, `trust proxy` for the
+X-Forwarded-For-dependent rate limiter, explicit HSTS) — see
+`app.module.ts` (Redis-backed `ThrottlerStorageRedisService`, sharing
+`RedisService`'s connection), `main.ts` (`enableShutdownHooks()`, the
+`NODE_ENV==='production'` guards around Swagger/the logger/`trust
+proxy`, explicit `hsts` config), `common/json-logger.service.ts`,
+`packages/config/src/env.ts` (`sslmode` boot check), and `GET
+/health/ready` (`app.service.ts` — checks real Postgres + Redis
+reachability, not just "the process is up"). All verified live: the
+Redis-backed throttler's keys were confirmed actually landing in Redis
 (`docker exec ... redis-cli keys`), `/docs` confirmed 200 in dev and 404
 with `NODE_ENV=production`, the JSON logger's output confirmed to be
-100% valid JSON lines end to end, and `/health/ready` confirmed live
-against real Postgres + Redis.
+100% valid JSON lines end to end, `/health/ready` confirmed live against
+real Postgres + Redis, a production boot with no `sslmode` param
+confirmed refused (exit code 1) while an explicit `sslmode=require`/
+`=disable` boot succeeded, and two requests with different
+`X-Forwarded-For` values confirmed to land in independent rate-limit
+buckets.

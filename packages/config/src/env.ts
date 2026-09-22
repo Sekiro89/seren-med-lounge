@@ -100,6 +100,39 @@ export const apiEnvSchema = z
           'docs/architecture/deployment.md#production-postgres.',
       });
     }
+
+    // libpq/Prisma's default sslmode when the param is absent is
+    // "prefer" — it silently falls back to an UNENCRYPTED connection if
+    // the server doesn't offer TLS, rather than failing loudly. That's
+    // the same "nobody actually decided" failure shape as the
+    // placeholder-secret checks above, just for encryption-in-transit
+    // instead of a credential — required by DPDP Act reasonable-security
+    // safeguards (see docs/architecture/security.md#encryption-in-transit).
+    // Only requires the param to be PRESENT, not a specific value — this
+    // still doesn't decide the DB topology for you (a private-VPC-only
+    // Postgres is a legitimate reason to explicitly choose
+    // sslmode=disable), it just refuses to let that be an accident.
+    if (!/[?&]sslmode=/.test(env.DATABASE_URL)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DATABASE_URL'],
+        message:
+          'DATABASE_URL has no explicit sslmode param, so it would silently connect ' +
+          'unencrypted if the server doesn\'t offer TLS. Add "&sslmode=require" (or ' +
+          '"verify-full" with a CA cert) — or "&sslmode=disable" if this is a deliberate ' +
+          'private-network-only connection — see docs/architecture/security.md#encryption-in-transit.',
+      });
+    }
+
+    if (env.DIRECT_DATABASE_URL && !/[?&]sslmode=/.test(env.DIRECT_DATABASE_URL)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DIRECT_DATABASE_URL'],
+        message:
+          'DIRECT_DATABASE_URL has no explicit sslmode param — same requirement as ' +
+          'DATABASE_URL above, see docs/architecture/security.md#encryption-in-transit.',
+      });
+    }
   });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

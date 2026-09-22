@@ -205,13 +205,21 @@ unlimited password-guessing against `POST /auth/login`. Fixed with
   rate-limit hit would test the throttle's existence, not what the tests
   are actually about. The real limit is unchanged everywhere else.
 
-**Tracked by source IP.** Behind a reverse proxy/load balancer that
-doesn't forward/trust `X-Forwarded-For` correctly, every request could
-appear to come from the proxy's own IP, making the limit either
-uselessly shared across all real clients or (if trusted blindly)
-spoofable by a client setting that header itself. Not an issue on a
-single instance with no proxy in front, which is the current setup;
-flagged for whenever a proxy is introduced.
+**Tracked by source IP — RESOLVED for the assumed single-proxy
+topology.** `main.ts` now calls `app.set('trust proxy', 1)` in
+production (see `docs/architecture/security.md#encryption-in-transit`),
+so Express trusts exactly one reverse proxy's `X-Forwarded-For` instead
+of either ignoring it (uselessly sharing the limit across every real
+client behind the proxy) or trusting an unbounded chain of them
+(spoofable by a client setting the header itself, since with no hop
+limit the proxy's own append would be indistinguishable from a client's
+fabricated value). Verified live: two requests with different
+`X-Forwarded-For` values got independent 5/min buckets. Still a real
+assumption, not a general solution: `1` is correct for exactly one
+reverse proxy in front of this app; a deployment that adds a CDN/edge
+layer on top of that needs to raise the number, and nothing here decides
+what that final topology will be — that's still tied to the
+undecided hosting target.
 
 ## CORS
 
@@ -249,6 +257,76 @@ uses inline `<script>`/`<style>`, which Helmet's default CSP blocks.
 disabling CSP app-wide for one page's sake. Verified `/docs` still
 returns `200` and renders the expected Swagger UI HTML with this in
 place.
+
+## Encryption in transit
+
+Relevant to the DPDP Act's "reasonable security safeguards" requirement
+(Section 8(5)) — encryption in transit is one of the commonly-read
+safeguards, alongside encryption at rest (separate, later concern —
+depends on whichever DB/storage provider is eventually chosen) and
+access control (already covered above: RBAC + row-level security).
+Every hop in this architecture, and where each one currently stands:
+
+| Hop                   | State                                                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Browser ↔ API         | Not yet — TLS termination depends on the hosting decision (`docs/architecture/deployment.md#not-done-yet`); nothing here decides it |
+| API ↔ Postgres        | Boot-enforced in production — see below                                                                                             |
+| API ↔ Redis           | Supported, not boot-enforced — see below                                                                                            |
+| API ↔ any integration | Comes free with whatever real provider is eventually contracted (Stripe/Razorpay/Twilio-shaped APIs are HTTPS by default)           |
+
+**Postgres.** `DATABASE_URL`/`DIRECT_DATABASE_URL` must include an
+explicit `sslmode` query param in production, or the app refuses to
+boot (`packages/config/src/env.ts`'s `superRefine`, same mechanism as
+the placeholder-secret/dev-credential checks). This isn't the same as
+requiring TLS be _on_ — `sslmode=disable` is accepted if set
+deliberately (a private-VPC-only Postgres is a legitimate topology) —
+it only refuses to let the choice be an accident. The reason this needed
+enforcing at all: libpq/Prisma's default when the param is absent is
+`sslmode=prefer`, which **silently falls back to an unencrypted
+connection** if the server doesn't offer TLS, rather than failing
+loudly — the same "nobody actually decided" failure shape the
+placeholder-secret check targets, just for encryption instead of a
+credential. Verified live: a production boot with `DATABASE_URL`/
+`DIRECT_DATABASE_URL` missing `sslmode` refuses with a `ZodError`
+listing both, exit code `1`; the same boot with `sslmode=require` (or
+`=disable`, set deliberately) against real non-placeholder credentials
+succeeds and `/health/ready` returns `db: "ok"`.
+
+**Redis.** `ioredis` enables TLS automatically from the URL scheme —
+`rediss://` instead of `redis://`, no code change needed
+(`RedisService` already just passes `REDIS_URL` straight through). Not
+boot-enforced like Postgres: unlike `sslmode=prefer`'s silent downgrade,
+there's no equivalent "accidentally plaintext" failure mode here —
+`redis://` vs `rediss://` is an explicit, deliberate choice either way,
+so enforcing one would mean guessing at network topology (same-VPC
+Redis genuinely may not need it) rather than catching an accident.
+Documented in `.env.example` instead.
+
+**`trust proxy` (`main.ts`, production only).** TLS itself terminates in
+front of this process — a reverse proxy or the host's load balancer,
+not decided yet. Without `app.set('trust proxy', 1)`, Express can't
+trust that proxy's `X-Forwarded-For`/`X-Forwarded-Proto` headers, which
+silently breaks the rate limiter (every request would appear to share
+the proxy's own IP — this was flagged as an open gap under "Rate
+limiting" below) and `req.secure`. `1` trusts exactly one hop, matching
+the single-reverse-proxy topology this whole setup assumes; an
+additional CDN/edge layer in front of that would need to raise this
+number. Verified live: with `trust proxy` enabled, two requests carrying
+different `X-Forwarded-For` values got separate rate-limit buckets (one
+exhausted its 5/min login limit and got `429`; a different forwarded IP
+immediately after was unaffected) — proving the header is actually
+being read and trusted, not the same shared bucket a same-origin `curl`
+would otherwise produce.
+
+**HSTS.** Explicit config in the `helmet()` call rather than accepting
+its default unreviewed: `maxAge: 63072000` (2 years — what
+hstspreload.org expects for a domain intending to submit later),
+`includeSubDomains: true`. `preload` stays `false` deliberately —
+submitting to the browser-hardcoded preload list is a one-way,
+domain-owner decision that shouldn't be flipped on by an app default.
+Verified live: `Strict-Transport-Security: max-age=63072000;
+includeSubDomains` present on every response, with no `preload`
+directive.
 
 ## Clinical record immutability
 

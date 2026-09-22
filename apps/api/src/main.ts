@@ -1,6 +1,7 @@
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import * as Sentry from '@sentry/node';
 import { AppModule } from './app.module';
@@ -20,12 +21,30 @@ if (process.env.SENTRY_DSN) {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Nest's default colored console logger stays for local dev (a
     // person is actually watching `pnpm dev:api` live); production gets
     // JSON lines instead, which is what a log aggregator can parse.
     logger: process.env.NODE_ENV === 'production' ? new JsonLogger() : undefined,
   });
+
+  // TLS itself terminates in front of this process (a reverse proxy or
+  // the host's load balancer — not decided yet, see
+  // docs/architecture/deployment.md#not-done-yet), so Express never sees
+  // an actual HTTPS connection. Without `trust proxy`, it also can't
+  // trust that one proxy's `X-Forwarded-*` headers, which breaks two
+  // things: the rate limiter would see every request as coming from the
+  // proxy's own IP (see docs/architecture/security.md#rate-limiting),
+  // and req.secure would always read false even over real HTTPS. "1"
+  // means exactly one hop is trusted — the single reverse proxy this
+  // topology assumes; a deployment with an additional CDN/edge layer in
+  // front of that needs to raise this number, see Express's own
+  // trust-proxy docs. Not enabled in development — there's no proxy
+  // in front of `pnpm dev:api`, so trusting one would be meaningless
+  // (and if the dev server were ever exposed directly, actively wrong).
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
 
   // Without this, Nest never calls onModuleDestroy() on SIGTERM/SIGINT —
   // PrismaService/RedisService would never get a chance to close their
@@ -51,6 +70,18 @@ async function bootstrap() {
           'style-src': ["'self'", "'unsafe-inline'"],
         },
       },
+      // Explicit rather than accepting Helmet's default unreviewed: 2
+      // years (in seconds) is what browsers/hstspreload.org expect for a
+      // domain that intends to submit to the preload list later, and
+      // includeSubDomains matches this app living on subdomains of one
+      // parent domain (api./patient./staff.). preload itself stays
+      // false — submitting to the hardcoded browser preload list is a
+      // one-way, domain-owner decision (mistakes are very hard to
+      // reverse) that shouldn't be flipped on by an app default; see
+      // docs/architecture/security.md#encryption-in-transit. Harmless on
+      // localhost in development — browsers ignore HSTS for localhost
+      // and bare IP addresses, so no environment branching needed here.
+      hsts: { maxAge: 63072000, includeSubDomains: true, preload: false },
     }),
   );
 

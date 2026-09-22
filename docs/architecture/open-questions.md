@@ -83,10 +83,14 @@ solve, tracked rather than silently assumed away:
   not 5-per-container (10 total) like the old in-memory default would
   have allowed — see
   `docs/architecture/deployment.md#horizontal-scaling--verified-with-real-multiple-instances`.
-- **Tracked by source IP**, which assumes no reverse proxy/load balancer
-  sits in front rewriting or hiding the real client IP. Still genuinely
-  open — whoever introduces a proxy needs to wire `X-Forwarded-For`
-  trust correctly or every client behind it shares one bucket.
+- **Tracked by source IP — now resolved for one reverse proxy.**
+  `main.ts` sets `app.set('trust proxy', 1)` in production, so
+  `X-Forwarded-For` is trusted for exactly one hop — verified live, two
+  different forwarded IPs got independent rate-limit buckets. Still open:
+  this assumes exactly one reverse proxy in front; a deployment that
+  adds a CDN/edge layer on top needs to raise that number, and no hosting
+  target is chosen yet to know what the real chain will look like — see
+  `docs/architecture/security.md#encryption-in-transit`.
 
 ## 7. Object storage provider
 
