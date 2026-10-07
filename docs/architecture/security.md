@@ -135,6 +135,74 @@ different authorization model, not just a different table:
   request still overrides it, so a smarter multi-tenant resolution
   (subdomain, custom domain — still undecided, see
   `open-questions.md#4`) can be added later without a breaking change.
+- **Patient Record Claim Rules — RESOLVED.** `selfRegister()` no longer
+  blindly creates a `Patient` row on signup: it first checks for an
+  existing, _unclaimed_ record it can confidently match (exact email, or
+  exact phone+dateOfBirth+lastName), and **links** credentials onto that
+  existing row instead of creating a duplicate — so a patient who was
+  already registered in person by reception (routinely with no email at
+  all) doesn't silently fragment their appointment/diagnosis/prescription
+  history across two records when they later sign up. Anything less
+  certain (multiple candidates, a name mismatch, or every matching record
+  already claimed) creates a `PatientClaimRequest`
+  (`apps/api/src/patient-claims`) instead of guessing — no session is
+  issued, the response is the same generic `pending_verification` body
+  regardless of _why_ it was ambiguous (never reveals whether a specific
+  person already has a record). A staff member with `patient:write`
+  resolves it via `/patient-claims/:id/{link,create-new,reject}`
+  (staff-web's `/claims` page) — every linking decision and claim
+  resolution is an `AuditLog` entry (`patient_account.linked`,
+  `patient_account.claim_created`, `patient_account.claim_resolved`),
+  written in the same transaction as the change it records
+  (`AuditService.record`, same atomicity pattern as everywhere else).
+  See `PatientsService.selfRegister`'s doc comment and
+  `open-questions.md#3` for the full rule-by-rule mapping, including what
+  was deliberately deferred (OTP-based verification, per-org configurable
+  policy).
+- **Reception's "create patient" flow duplicate detection — RESOLVED
+  (`open-questions.md#14`).** `PatientsService.register` (Reception,
+  `POST /patients`) got the same treatment: it no longer blindly creates
+  either, running the same matching tiers and returning `created`,
+  `existing` (with `hasAccount`), `possible_match`, or `ambiguous_match`
+  — the latter two reuse the _same_ `PatientClaimRequest` table and
+  `/patient-claims/*` resolution endpoints `selfRegister()`'s claims
+  already used (`source: RECEPTION_INTAKE` vs `SELF_SIGNUP`
+  distinguishes them), not a second parallel mechanism. A
+  Reception-sourced `link` resolution never sets a password
+  (`PatientsService.confirmPatientIdentity`, not
+  `linkCredentialsToPatient`) — it may only update `phone`, which is its
+  own audited event (`patient.phone_changed`). A new
+  `POST /patient-claims/:id/escalate` action moves a claim to
+  `ESCALATED` when Reception can't safely decide — still resolvable
+  afterward, not a dead end.
+- **Race-condition protection for the matching check — RESOLVED.** Two
+  concurrent `register()`/`selfRegister()` calls for the same
+  phone+dateOfBirth could both observe "no match" before either commits
+  — `phone` is deliberately not unique (a household can share one
+  number), so there's no constraint to lean on the way `(organizationId,
+email)`'s uniqueness already protects the email-matching path.
+  `PatientsService.acquireIdentityLock` takes a Postgres advisory lock
+  (`pg_advisory_xact_lock`, scoped to the transaction, auto-released at
+  commit/rollback) keyed on `(organizationId, phone, dateOfBirth)` before
+  either method's matching query runs, serializing exactly the requests
+  that would otherwise race. Verified live, not just reasoned about:
+  `test/reception-dedup.e2e-spec.ts`'s concurrent-creation case fires two
+  simultaneous `POST /patients` calls for an identical new patient and
+  asserts exactly one `Patient` row exists afterward.
+  `createPatientRecord` also now catches the email-uniqueness
+  constraint's violation (Prisma error P2002) and returns a clean 409
+  instead of letting it surface as a raw 500.
+- **Account activation ("Send Account Activation") — RESOLVED,
+  deliberately not OTP.** `PatientActivationToken`
+  (`POST /patients/:id/send-activation`, `patient:write`) issues a
+  short, single-use, SHA-256-hashed code for a patient who has a record
+  but no password yet — handed back to Reception to relay in person,
+  never sent automatically (no messaging integration exists, same
+  reasoning as the OTP gap below). The patient redeems it themselves
+  (`POST /auth/patient/activate`, public, rate-limited like login/signup)
+  and sets their own password — Reception is never able to set one on
+  the patient's behalf, and a patient who already has a password gets a
+  `duplicate_account` response instead of a second token.
 
 **Not implemented**: phone/OTP login (`Patient.passwordHash` is
 nullable specifically so this can be added without a schema change —

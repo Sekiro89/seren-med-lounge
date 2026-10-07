@@ -90,29 +90,31 @@ enum StaffRole {
 /// Tenancy root. A deployment can host multiple organizations later;
 /// today there is exactly one, but every table hangs off this from day one.
 model Organization {
-  id                   String                @id @default(cuid())
-  name                 String
-  clinics              Clinic[]
-  users                User[]
-  patients             Patient[]
-  auditLogs            AuditLog[]
-  appointments         Appointment[]
-  encounters           Encounter[]
-  vitals               Vital[]
-  clinicalNotes        ClinicalNote[]
-  deletedAt            DateTime?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  clinicalNoteVersions ClinicalNoteVersion[]
-  diagnoses            Diagnosis[]
-  diagnosisVersions    DiagnosisVersion[]
-  prescriptions        Prescription[]
-  prescriptionItems    PrescriptionItem[]
-  labOrders            LabOrder[]
-  labOrderItems        LabOrderItem[]
-  labResults           LabResult[]
-  patientDocuments     PatientDocument[]
-  patientConsents      PatientConsent[]
+  id                      String                   @id @default(cuid())
+  name                    String
+  clinics                 Clinic[]
+  users                   User[]
+  patients                Patient[]
+  auditLogs               AuditLog[]
+  appointments            Appointment[]
+  encounters              Encounter[]
+  vitals                  Vital[]
+  clinicalNotes           ClinicalNote[]
+  deletedAt               DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  clinicalNoteVersions    ClinicalNoteVersion[]
+  diagnoses               Diagnosis[]
+  diagnosisVersions       DiagnosisVersion[]
+  prescriptions           Prescription[]
+  prescriptionItems       PrescriptionItem[]
+  labOrders               LabOrder[]
+  labOrderItems           LabOrderItem[]
+  labResults              LabResult[]
+  patientDocuments        PatientDocument[]
+  patientConsents         PatientConsent[]
+  patientClaimRequests    PatientClaimRequest[]
+  patientActivationTokens PatientActivationToken[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -140,26 +142,27 @@ model Clinic {
 /// separate deliberately: staff auth/roles and patient auth/consent are
 /// different concerns and must never be merged into one "users" table.
 model User {
-  id                String                @id @default(cuid())
-  organizationId    String
-  organization      Organization          @relation(fields: [organizationId], references: [id])
-  clinicId          String?
-  clinic            Clinic?               @relation(fields: [clinicId], references: [id])
-  email             String
-  passwordHash      String
-  fullName          String
-  role              StaffRole
-  isActive          Boolean               @default(true)
-  authoredNotes     ClinicalNoteVersion[]
-  authoredDiagnoses DiagnosisVersion[]
-  prescriptions     Prescription[]
-  labOrders         LabOrder[]
-  labResultsEntered LabResult[]
-  documentsUploaded PatientDocument[]
-  consentsRecorded  PatientConsent[]
-  deletedAt         DateTime?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
+  id                     String                   @id @default(cuid())
+  organizationId         String
+  organization           Organization             @relation(fields: [organizationId], references: [id])
+  clinicId               String?
+  clinic                 Clinic?                  @relation(fields: [clinicId], references: [id])
+  email                  String
+  passwordHash           String
+  fullName               String
+  role                   StaffRole
+  isActive               Boolean                  @default(true)
+  authoredNotes          ClinicalNoteVersion[]
+  authoredDiagnoses      DiagnosisVersion[]
+  prescriptions          Prescription[]
+  labOrders              LabOrder[]
+  labResultsEntered      LabResult[]
+  documentsUploaded      PatientDocument[]
+  consentsRecorded       PatientConsent[]
+  activationTokensIssued PatientActivationToken[]
+  deletedAt              DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -181,29 +184,30 @@ model User {
 /// attach to this same Patient row by patientId — never duplicated per
 /// module. See docs/database/erd.md.
 model Patient {
-  id             String            @id @default(cuid())
-  organizationId String
-  organization   Organization      @relation(fields: [organizationId], references: [id])
-  clinicId       String?
-  clinic         Clinic?           @relation(fields: [clinicId], references: [id])
-  firstName      String
-  lastName       String
-  dateOfBirth    DateTime
-  phone          String
-  email          String?
-  passwordHash   String?
-  appointments   Appointment[]
-  encounters     Encounter[]
-  vitals         Vital[]
-  clinicalNotes  ClinicalNote[]
-  diagnoses      Diagnosis[]
-  prescriptions  Prescription[]
-  labOrders      LabOrder[]
-  documents      PatientDocument[]
-  consents       PatientConsent[]
-  deletedAt      DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id               String                   @id @default(cuid())
+  organizationId   String
+  organization     Organization             @relation(fields: [organizationId], references: [id])
+  clinicId         String?
+  clinic           Clinic?                  @relation(fields: [clinicId], references: [id])
+  firstName        String
+  lastName         String
+  dateOfBirth      DateTime
+  phone            String
+  email            String?
+  passwordHash     String?
+  appointments     Appointment[]
+  encounters       Encounter[]
+  vitals           Vital[]
+  clinicalNotes    ClinicalNote[]
+  diagnoses        Diagnosis[]
+  prescriptions    Prescription[]
+  labOrders        LabOrder[]
+  documents        PatientDocument[]
+  consents         PatientConsent[]
+  activationTokens PatientActivationToken[]
+  deletedAt        DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -718,4 +722,98 @@ model PatientConsent {
   @@index([organizationId])
   @@index([patientId, consentType])
   @@map("patient_consents")
+}
+
+enum PatientClaimStatus {
+  PENDING
+  ESCALATED
+  LINKED
+  CREATED_NEW
+  REJECTED
+}
+
+/// Who initiated the signup/intake attempt this claim came from — the
+/// same claim-case machinery (matching, staff resolution, audit) now
+/// serves two different front doors, not two different tables. See
+/// PatientClaimRequest's own doc comment.
+enum PatientClaimSource {
+  SELF_SIGNUP
+  RECEPTION_INTAKE
+}
+
+/// Patient Record Claim Rules — see docs/architecture/open-questions.md#3.
+/// Holds an identity that couldn't be confidently resolved to exactly one
+/// existing Patient record on its own — either a patient's self-signup
+/// (PatientsService.selfRegister, `source: SELF_SIGNUP`, always carries
+/// `email`+`passwordHash`) or Reception's "create patient" flow
+/// (`PatientsService.register`, `source: RECEPTION_INTAKE`, never carries
+/// credentials — Reception is finding/creating a RECORD, never an
+/// ACCOUNT, see the "Reception must not impersonate the patient" rule).
+/// `matchReason` records which signal produced the ambiguity (e.g.
+/// "phone_dob_multiple", "name_dob_different_phone") since candidate
+/// count alone can't distinguish a POSSIBLE_MATCH (name+DOB matched, a
+/// different phone) from an AMBIGUOUS_MATCH (phone+DOB matched, but the
+/// name doesn't) — both can have exactly one candidate.
+///
+/// The submitted identity (+ password, when there is one) lives HERE,
+/// not on any Patient row, specifically so a pending/ambiguous attempt
+/// can never silently create or mutate a Patient record on its own —
+/// only a staff member resolving this request (PatientClaimsService)
+/// does that. Mutable by design (status/resolved* change on resolution)
+/// — not the immutable-content pattern used elsewhere, this is an
+/// operational queue, not a clinical record.
+model PatientClaimRequest {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  organization        Organization       @relation(fields: [organizationId], references: [id])
+  source              PatientClaimSource @default(SELF_SIGNUP)
+  matchReason         String
+  firstName           String
+  lastName            String
+  dateOfBirth         DateTime
+  phone               String
+  email               String?
+  passwordHash        String?
+  candidatePatientIds Json
+  status              PatientClaimStatus @default(PENDING)
+  resolvedPatientId   String?
+  resolvedById        String?
+  resolvedAt          DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime           @default(now())
+
+  @@index([organizationId, status])
+  @@map("patient_claim_requests")
+}
+
+/// A one-time, staff-issued code that lets a patient who already has an
+/// unclaimed Patient record set their own password — the "Send Account
+/// Activation" action (see open-questions.md's Patient Record Claim
+/// Rules entry). Deliberately NOT an SMS/email OTP: no messaging
+/// integration exists in this project (same "no fake integrations"
+/// reasoning as phone/OTP login), so the code is generated here and
+/// handed to Reception to relay to the patient by whatever channel
+/// they already use in person — never sent automatically. `codeHash` is
+/// a SHA-256 digest (not bcrypt): this needs exact-match lookup by the
+/// code itself, not verification against one already-known row, and a
+/// short-lived, single-use, org-scoped random code doesn't need
+/// bcrypt's slow-hash/timing protection the way a long-lived password
+/// does. The raw code is returned to the caller exactly once, at
+/// creation, and is never persisted or logged in plaintext.
+model PatientActivationToken {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  codeHash       String
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([patientId])
+  @@map("patient_activation_tokens")
 }

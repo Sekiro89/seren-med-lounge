@@ -5,23 +5,24 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { patientLoginSchema, type PatientLoginInput } from '@serenemed/validation';
+import {
+  activatePatientAccountSchema,
+  type ActivatePatientAccountInput,
+} from '@serenemed/validation';
 import { Button } from '@serenemed/ui';
 import { ApiError } from '@serenemed/api-client';
 import { apiClient } from '../../lib/api-client';
 import { savePatientToken } from '../../lib/auth';
 
 /**
- * No Clinic ID field — a patient shouldn't have to know an internal
- * organizationId to sign in. The server resolves one automatically
- * (AuthController.resolveOrganizationId, env.DEFAULT_ORGANIZATION_ID)
- * when the request doesn't include it, which this form never does. See
- * patientLoginSchema's comment in @serenemed/validation for why this is
- * an optional field on the schema rather than removed outright — a
- * real multi-clinic resolution (subdomain, custom domain) can still
- * supply it explicitly later without a breaking change here.
+ * The patient's half of "Send Account Activation" — Reception issues a
+ * code (POST /patients/:id/send-activation) and relays it in person;
+ * this page is where the patient redeems it themselves and sets their
+ * own password. Deliberately never something Reception fills in on the
+ * patient's behalf — see PatientsService.createActivationCode's doc
+ * comment on why there's no messaging integration behind this either.
  */
-export default function PatientLoginPage() {
+export default function PatientActivatePage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -29,14 +30,17 @@ export default function PatientLoginPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<PatientLoginInput>({
-    resolver: zodResolver(patientLoginSchema),
+  } = useForm<ActivatePatientAccountInput>({
+    resolver: zodResolver(activatePatientAccountSchema),
   });
 
-  const onSubmit = async (data: PatientLoginInput) => {
+  const onSubmit = async (data: ActivatePatientAccountInput) => {
     setServerError(null);
     try {
-      const result = await apiClient.post<{ accessToken: string }>('/auth/patient/login', data);
+      const result = await apiClient.post<{ accessToken: string }>('/auth/patient/activate', {
+        ...data,
+        code: data.code.trim().toUpperCase(),
+      });
       savePatientToken(result.accessToken);
       router.push('/dashboard');
     } catch (error) {
@@ -44,7 +48,7 @@ export default function PatientLoginPage() {
         const message =
           typeof error.body === 'object' && error.body && 'message' in error.body
             ? String((error.body as { message: unknown }).message)
-            : 'Login failed.';
+            : 'Could not activate your account.';
         setServerError(message);
       } else {
         setServerError('Could not reach the server. Please try again.');
@@ -55,34 +59,35 @@ export default function PatientLoginPage() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">Sign in</h1>
+        <h1 className="mb-1 text-xl font-semibold text-slate-900">Activate your account</h1>
         <p className="mb-6 text-sm text-slate-600">
-          Sign in to view your appointments and records.
+          Enter the code given to you at the clinic and choose a password.
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
           <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
-              Email
+            <label htmlFor="code" className="mb-1 block text-sm font-medium text-slate-700">
+              Activation code
             </label>
             <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('email')}
+              id="code"
+              type="text"
+              autoComplete="off"
+              autoCapitalize="characters"
+              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm uppercase tracking-widest focus:border-slate-500 focus:outline-none"
+              {...register('code')}
             />
-            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
+            {errors.code && <p className="mt-1 text-xs text-red-600">{errors.code.message}</p>}
           </div>
 
           <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
-              Password
+              Choose a password
             </label>
             <input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
               {...register('password')}
             />
@@ -98,20 +103,14 @@ export default function PatientLoginPage() {
           )}
 
           <Button type="submit" disabled={isSubmitting} className="mt-2 w-full py-2.5">
-            {isSubmitting ? 'Signing in…' : 'Sign in'}
+            {isSubmitting ? 'Activating…' : 'Activate account'}
           </Button>
         </form>
 
         <p className="mt-5 text-center text-sm text-slate-600">
-          New here?{' '}
-          <Link href="/signup" className="font-medium text-slate-900 underline">
-            Create an account
-          </Link>
-        </p>
-        <p className="mt-2 text-center text-sm text-slate-600">
-          Have an activation code from the clinic?{' '}
-          <Link href="/activate" className="font-medium text-slate-900 underline">
-            Activate your account
+          Already activated?{' '}
+          <Link href="/login" className="font-medium text-slate-900 underline">
+            Sign in
           </Link>
         </p>
       </div>

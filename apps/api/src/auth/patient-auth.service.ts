@@ -3,7 +3,11 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { PatientRole } from '@serenemed/types';
-import type { PatientLoginInput, PatientSignupInput } from '@serenemed/validation';
+import type {
+  ActivatePatientAccountInput,
+  PatientLoginInput,
+  PatientSignupInput,
+} from '@serenemed/validation';
 import { PatientsService } from '../patients/patients.service';
 import { TokenBlacklistService } from './token-blacklist.service';
 import type { JwtPayload } from './jwt-payload.interface';
@@ -65,19 +69,53 @@ export class PatientAuthService {
   }
 
   /**
-   * POST /auth/patient/signup — creates the patient (via
-   * PatientsService.selfRegister, which does the actual password
-   * hashing/conflict-checking/audit-logging) and immediately logs them
-   * in, same response shape as login() above, so the frontend can reuse
-   * one "save the session" function for both.
+   * POST /auth/patient/signup — creates or links the patient (via
+   * PatientsService.selfRegister; see its doc comment for the Patient
+   * Record Claim Rules matching logic) and, when that resolved to an
+   * active account, immediately logs them in — same response shape as
+   * login() above, so the frontend can reuse one "save the session"
+   * function for both. When the signup couldn't be confidently resolved
+   * (`kind: 'pending'`), no session is issued at all: nothing was
+   * created or linked yet, so there's nothing to log into (rule 6) —
+   * the patient can try logging in again once a staff member resolves
+   * the pending PatientClaimRequest.
    */
   async signup(organizationId: string, input: PatientSignupInput) {
-    const patient = await this.patientsService.selfRegister(organizationId, input);
-    return this.issueSession(patient.id, organizationId, {
+    const result = await this.patientsService.selfRegister(organizationId, input);
+    if (result.kind === 'pending') {
+      return { status: 'pending_verification' as const };
+    }
+    const session = await this.issueSession(result.patient.id, organizationId, {
+      email: result.patient.email,
+      firstName: result.patient.firstName,
+      lastName: result.patient.lastName,
+    });
+    return { status: 'active' as const, ...session };
+  }
+
+  /**
+   * POST /auth/patient/activate — redeeming a Reception-issued
+   * activation code (see PatientsService.createActivationCode /
+   * .redeemActivationCode). Deliberately one generic error for every
+   * failure mode (no such code, expired, already used) — same
+   * non-enumeration reasoning as login() above: distinguishing them
+   * would let a caller learn something about whether a code, or a
+   * patient behind it, exists.
+   */
+  async activate(organizationId: string, input: ActivatePatientAccountInput) {
+    const patient = await this.patientsService.redeemActivationCode(organizationId, {
+      code: input.code,
+      password: input.password,
+    });
+    if (!patient) {
+      throw new UnauthorizedException('Invalid or expired activation code.');
+    }
+    const session = await this.issueSession(patient.id, organizationId, {
       email: patient.email,
       firstName: patient.firstName,
       lastName: patient.lastName,
     });
+    return { status: 'active' as const, ...session };
   }
 
   /** See docs/architecture/security.md#token-revocation. */

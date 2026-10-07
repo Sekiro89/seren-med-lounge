@@ -14,9 +14,11 @@ import {
   loginSchema,
   patientLoginSchema,
   patientSignupSchema,
+  activatePatientAccountSchema,
   type LoginInput,
   type PatientLoginInput,
   type PatientSignupInput,
+  type ActivatePatientAccountInput,
 } from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from '../common/decorators/public.decorator';
@@ -114,5 +116,21 @@ export class AuthController {
   @Post('patient/signup')
   patientSignup(@Body(new ZodValidationPipe(patientSignupSchema)) body: PatientSignupInput) {
     return this.patientAuthService.signup(this.resolveOrganizationId(body.organizationId), body);
+  }
+
+  /**
+   * The patient's half of "Send Account Activation" — see
+   * PatientsService.createActivationCode/.redeemActivationCode. Public
+   * (the patient isn't logged in yet) and rate-limited the same as
+   * login/signup above: it's a public code+password endpoint, the same
+   * shape of thing brute-forcing targets.
+   */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Public()
+  @Post('patient/activate')
+  patientActivate(
+    @Body(new ZodValidationPipe(activatePatientAccountSchema)) body: ActivatePatientAccountInput,
+  ) {
+    return this.patientAuthService.activate(this.resolveOrganizationId(body.organizationId), body);
   }
 }

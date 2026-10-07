@@ -167,19 +167,24 @@ describe('Clinic journey spine (e2e)', () => {
           phone: '9888888888',
         })
         .expect(201);
-      expect(registerRes.body.firstName).toBe('Registered');
+      // No blind create any more — see PatientsService.register's doc
+      // comment on the duplicate-detection classification. A genuinely
+      // new patient (this phone/DOB has never been seen) resolves to
+      // `kind: 'created'`.
+      expect(registerRes.body.kind).toBe('created');
+      expect(registerRes.body.patient.firstName).toBe('Registered');
       // No password field ever comes back — passwordHash isn't selected
       // by the create's default return shape, and no password was set
       // by this flow in the first place (see PatientsService.register).
-      expect(registerRes.body.passwordHash).toBeUndefined();
+      expect(registerRes.body.patient.passwordHash).toBeUndefined();
 
       const listRes = await request(app.getHttpServer())
         .get('/patients')
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      expect((listRes.body as { id: string }[]).some((p) => p.id === registerRes.body.id)).toBe(
-        true,
-      );
+      expect(
+        (listRes.body as { id: string }[]).some((p) => p.id === registerRes.body.patient.id),
+      ).toBe(true);
     });
 
     it('?q= searches by name/phone, case-insensitive, and excludes non-matches', async () => {

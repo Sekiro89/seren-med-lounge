@@ -18,9 +18,13 @@ import { savePatientToken } from '../../lib/auth';
  * /patients), or the dev seed script. No Clinic ID field, same
  * reasoning as login/page.tsx's comment.
  */
+type SignupResponse =
+  { status: 'active'; accessToken: string } | { status: 'pending_verification' };
+
 export default function PatientSignupPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   const {
     register,
@@ -33,7 +37,16 @@ export default function PatientSignupPage() {
   const onSubmit = async (data: PatientSignupInput) => {
     setServerError(null);
     try {
-      const result = await apiClient.post<{ accessToken: string }>('/auth/patient/signup', data);
+      const result = await apiClient.post<SignupResponse>('/auth/patient/signup', data);
+      if (result.status === 'pending_verification') {
+        // The details submitted couldn't be confidently matched to an
+        // account on their own (Patient Record Claim Rules — see
+        // PatientsService.selfRegister) — no session was issued, there's
+        // nothing to redirect into yet. A staff member resolves this;
+        // the patient just tries logging in again later.
+        setPending(true);
+        return;
+      }
       savePatientToken(result.accessToken);
       router.push('/dashboard');
     } catch (error) {
@@ -48,6 +61,28 @@ export default function PatientSignupPage() {
       }
     }
   };
+
+  if (pending) {
+    return (
+      <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">
+        <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="mb-2 text-xl font-semibold text-slate-900">
+            We are verifying a few details
+          </h1>
+          <p className="text-sm text-slate-600">
+            We need to double check a few details before your account is ready. Our team will follow
+            up, or you can visit the clinic in person. Try signing in again later.
+          </p>
+          <Link
+            href="/login"
+            className="mt-5 inline-block text-sm font-medium text-slate-900 underline"
+          >
+            Back to sign in
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">

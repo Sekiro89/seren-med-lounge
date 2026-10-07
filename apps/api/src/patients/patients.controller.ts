@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { patientRegistrationSchema, type PatientRegistrationInput } from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -43,6 +43,15 @@ export class PatientsController {
     return this.patientsService.listForOrganization(this.tenantContext.organizationId, q);
   }
 
+  /**
+   * Reception's "create patient" flow — see PatientsService.register's
+   * doc comment for the full duplicate-detection/classification logic.
+   * The response's `kind` distinguishes NEW_PATIENT_CREATED
+   * (`created`) from EXISTING_PATIENT_FOUND (`existing`),
+   * POSSIBLE_MATCH (`possible_match`), and AMBIGUOUS_MATCH
+   * (`ambiguous_match`) — the frontend renders a different state for
+   * each rather than always assuming a patient was just created.
+   */
   @Post()
   @RequirePermissions('patient:write')
   register(@Body(new ZodValidationPipe(patientRegistrationSchema)) body: PatientRegistrationInput) {
@@ -50,6 +59,24 @@ export class PatientsController {
       this.tenantContext.organizationId,
       this.tenantContext.userId,
       body,
+    );
+  }
+
+  /**
+   * Reception's "Send Account Activation" action — see
+   * PatientsService.createActivationCode's doc comment. The raw code is
+   * only ever in THIS response, to be relayed by whoever called this
+   * (never sent automatically — no messaging integration exists).
+   * `kind: 'duplicate_account'` when the patient already has a password
+   * set — no token is issued in that case.
+   */
+  @Post(':id/send-activation')
+  @RequirePermissions('patient:write')
+  sendActivation(@Param('id') id: string) {
+    return this.patientsService.createActivationCode(
+      this.tenantContext.organizationId,
+      this.tenantContext.userId,
+      id,
     );
   }
 

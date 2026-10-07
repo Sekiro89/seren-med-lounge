@@ -187,15 +187,59 @@ curl http://localhost:4000/patients/me -H "Authorization: Bearer <accessToken>"
 ```
 
 **Signing up (patient)**: `patient-web`'s `/signup` page is a real
-account-creation flow — `POST /auth/patient/signup` creates the patient
-with a real password and returns a working session immediately, same
-response shape as login:
+account-creation flow — `POST /auth/patient/signup` creates or links the
+patient (see `PatientsService.selfRegister`'s doc comment for the
+Patient Record Claim Rules matching logic — it never creates a duplicate
+when an existing, unclaimed record can be confidently matched) and
+returns `{ status: 'active', accessToken, patient }`, same shape as
+login, when it can:
 
 ```bash
 curl -X POST http://localhost:4000/auth/patient/signup \
   -H 'Content-Type: application/json' \
   -d '{"firstName":"New","lastName":"Patient","dateOfBirth":"1995-01-01","phone":"9990001111","email":"new-patient@example.com","password":"a-real-password"}'
-# → { accessToken, patient }
+# → { status: "active", accessToken, patient }
+```
+
+When the details can't be confidently matched to an existing record —
+or matched but ambiguously — it instead returns
+`{ status: 'pending_verification' }` with no session, and creates a
+`PatientClaimRequest` for a staff member (`patient:write`) to resolve
+via `GET/POST /patient-claims/*` or staff-web's `/claims` page.
+
+**Reception creating a patient** (`POST /patients`, `patient:write`)
+gets the same duplicate-detection treatment (`PatientsService.register`
+— see its doc comment), never blindly inserting a row:
+
+```bash
+curl -X POST http://localhost:4000/patients \
+  -H "Authorization: Bearer <staffAccessToken>" -H 'Content-Type: application/json' \
+  -d '{"firstName":"Rahul","lastName":"Kumar","dateOfBirth":"1995-12-05","phone":"9876543210"}'
+# → { kind: "created", patient }                      — nothing matched
+# → { kind: "existing", patient, hasAccount }          — confident match, nothing created
+# → { kind: "possible_match", claimRequestId, candidates }   — name+DOB matched, phone didn't
+# → { kind: "ambiguous_match", claimRequestId, candidates }  — can't tell; needs review
+```
+
+A `possible_match`/`ambiguous_match` resolves via the same
+`/patient-claims/:id/{link,create-new,reject,escalate}` endpoints the
+patient-signup claims above use — `link` here never sets a password
+(Reception confirms a record, never touches an account), and may only
+update `phone`, which is its own audited event.
+
+For a patient who exists but has no online account yet, Reception can
+issue a one-time activation code (`patient:write`; no SMS/email is sent
+— the code is returned once, to be relayed in person):
+
+```bash
+curl -X POST http://localhost:4000/patients/<id>/send-activation \
+  -H "Authorization: Bearer <staffAccessToken>"
+# → { kind: "created", code, expiresAt } or { kind: "duplicate_account", patient }
+
+curl -X POST http://localhost:4000/auth/patient/activate \
+  -H 'Content-Type: application/json' \
+  -d '{"code":"<code>","password":"a-real-password"}'
+# → { status: "active", accessToken, patient }
 ```
 
 From there, `/dashboard` (mobile-first — this is the surface patients

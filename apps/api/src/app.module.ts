@@ -17,6 +17,7 @@ import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { PatientsModule } from './patients/patients.module';
+import { PatientClaimsModule } from './patient-claims/patient-claims.module';
 import { PatientDocumentsModule } from './patient-documents/patient-documents.module';
 import { PatientConsentModule } from './patient-consent/patient-consent.module';
 import { PatientTimelineModule } from './patient-timeline/patient-timeline.module';
@@ -91,6 +92,7 @@ import { ReportsModule } from './reports/reports.module';
 
     // --- unified patient record: profile & consent ---
     PatientsModule,
+    PatientClaimsModule,
     PatientDocumentsModule,
     PatientConsentModule,
     PatientTimelineModule,

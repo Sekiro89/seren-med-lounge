@@ -60,6 +60,42 @@ anywhere — see #4 below), not a guess at the eventual multi-tenant
 resolution (subdomain, custom domain), which can still pass an explicit
 `organizationId` through the same field once built.
 
+**Patient Record Claim Rules — RESOLVED.** Self-registration above had a
+real bug: it only checked for an exact email match before creating a
+`Patient` row, so a patient already registered in person by reception
+(commonly with no email at all) would get a **second, duplicate** record
+on signing up — silently fragmenting their history. `selfRegister()` now
+classifies every signup before creating anything: an exact
+`(organizationId, email)` match against an unclaimed record, or an exact
+phone+dateOfBirth+lastName match against exactly one unclaimed record,
+auto-links (sets credentials on the _existing_ row, never creates a
+second one); anything less certain — multiple candidates, a lastName
+mismatch, or every phone+DOB match already claimed — creates a
+`PatientClaimRequest` for staff to resolve via `/patient-claims`
+(`PatientClaimsService`, staff-web's `/claims` page), never guessed at
+automatically. See `PatientsService.selfRegister`'s doc comment and
+`docs/architecture/security.md#patient-authentication` for the full
+rule-by-rule mapping. Two things deliberately **not** built as part of
+this:
+
+- **OTP as identity verification.** The rules anticipate phone/OTP
+  verification (see the OTP paragraph above — still not built, same "no
+  fake integrations" reasoning). The exact-field-match described above
+  is today's stand-in; when a real OTP provider is contracted, OTP
+  alone must not _downgrade_ an ambiguous case to auto-approved — it
+  should raise the auto-link bar, not lower it.
+- **Per-organization configurable claim/consent/retention policy.** The
+  matching thresholds live in one place in `PatientsService` (easy to
+  make configurable later) but there's no per-org settings table/UI
+  anywhere in this app yet — same "no multi-org UI until asked for"
+  reasoning as #4 below, not solved here on a guess.
+
+One more gap this makes newly reachable, not introduced by it: if staff
+**rejects** a claim, the patient has no self-serve retry path — there's
+no password-reset flow at all yet, staff- or patient-side. Pre-existing
+limitation (a forgotten password already had no recovery path), just
+worth flagging since claim rejection is a second way to land there.
+
 ## 4. Multi-clinic / multi-organization scope for v1
 
 The schema is tenancy-aware (`organizationId`/`clinicId` everywhere) per
@@ -289,3 +325,86 @@ types directly (`AppointmentStatus`, `EncounterStatus`,
 `@serenemed/types`'s copies, sidestepping the problem rather than
 solving it, the same way `StaffRole` needed a hand-written mapper
 (`apps/api/src/users/staff-role.mapper.ts`) instead.
+
+## 14. Reception patient duplicate detection + account activation — RESOLVED, three items still open
+
+Extends #3's Patient Record Claim Rules to Reception's own "create
+patient" flow (`POST /patients`, `PatientsService.register`), which
+previously created a `Patient` row unconditionally. It now runs the same
+class of matching `selfRegister()` already used (extended with a new
+"name+DOB matched, phone didn't" tier that `selfRegister()` gained too,
+closing a real gap: a patient whose phone number changed and who then
+self-signs-up would previously have been created as a duplicate, missed
+entirely by the phone+DOB-only check) and returns one of four outcomes:
+`created` (nothing else matched), `existing` (a confident single match —
+phone+DOB+lastName all agree — returned directly, `hasAccount` tells the
+caller whether a password is already set), `possible_match` (name+DOB
+matched under a _different_ phone — the "existing patient, new number"
+case), or `ambiguous_match` (multiple candidates, or a phone+DOB match
+whose name doesn't agree). The latter two never create or link anything
+automatically — they create a `PatientClaimRequest`
+(`source: RECEPTION_INTAKE`, the same table `selfRegister()`'s ambiguous
+cases already used, now shared rather than duplicated — `source` +
+`matchReason` distinguish the two origins) for a staff member to resolve
+via the same `/patient-claims/:id/{link,create-new,reject,escalate}`
+endpoints `selfRegister()`'s claims already used. `link` on a
+Reception-sourced claim never sets a password (`PatientsService.
+confirmPatientIdentity`, not `linkCredentialsToPatient`) — it only
+optionally updates `phone`, audited separately (`patient.phone_changed`)
+— Reception confirms a **record**, never touches an **account**.
+
+**Race-condition protection — RESOLVED.** `phone`/`dateOfBirth` can't
+carry a uniqueness constraint (a household can legitimately share a
+phone number; DOB obviously isn't unique either), so two concurrent
+`register()`/`selfRegister()` calls for the same identity could both
+pass the "no match" check before either commits. `PatientsService.
+acquireIdentityLock` takes a Postgres advisory lock
+(`pg_advisory_xact_lock(hashtext(...))`) scoped to
+`(organizationId, phone, dateOfBirth)` for the rest of the transaction,
+serializing exactly those two requests against each other — the second
+one's matching query now runs after the first's write commits. Verified
+live: two simultaneous `POST /patients` calls for the same new patient
+resolve to exactly one `created` and one `existing`, never two
+`created`s (`test/reception-dedup.e2e-spec.ts`, section H). The
+`(organizationId, email)` unique constraint (pre-existing) is the
+equivalent backstop for the email-matching path; `createPatientRecord`
+now catches that constraint's violation (Prisma P2002) and returns a
+clean 409 instead of a raw 500.
+
+**"Send Account Activation" — RESOLVED, deliberately not OTP/SMS.** A
+new `PatientActivationToken` model holds a short, single-use, hashed
+(SHA-256, not bcrypt — needs exact-match lookup, not verification
+against one known row) code Reception generates
+(`POST /patients/:id/send-activation`) and relays to the patient
+in person or by whatever channel they already use — same "no fake
+integrations" reasoning as #3's OTP decision, since no real SMS/email
+provider is contracted. The patient — never Reception — redeems it
+themselves (`POST /auth/patient/activate`) and sets their own password;
+Reception is refused a second code outright (`duplicate_account`) if one
+already exists, rather than silently letting a second party overwrite
+existing credentials.
+
+**Still open, marked here rather than guessed at:**
+
+- **MRN.** No medical-record-number concept exists anywhere in this
+  schema — `Patient.id` (a `cuid`) is the only stable identifier today.
+  A real MRN (format, numbering scheme, per-clinic vs per-org, whether
+  it's ever displayed to the patient) is a product/compliance decision,
+  not something to invent here; nothing in this extension fabricates
+  one. Wherever "MRN" would be shown in a UI mockup, today's code shows
+  the record's id instead.
+- **Escalation isn't a hard permission boundary yet.** `PatientClaimRequest.status
+= ESCALATED` (via `POST /patient-claims/:id/escalate`) is a workflow/
+  visibility signal only — RECEPTION already holds `patient:write`, the
+  same permission that resolves an escalated claim, so nothing currently
+  stops the same Reception user from escalating and then immediately
+  resolving their own escalation. A real "escalation-only reviewer"
+  tier (e.g. requiring `ADMINISTRATOR` specifically to resolve an
+  `ESCALATED` claim) would need a new permission and is a real RBAC
+  product decision, not assumed here.
+- **Per-org configurable claim/verification policy** (the matching
+  thresholds, the activation code's 24h TTL) — same gap #3 already
+  flags for consent/retention policy: no per-org settings table/UI
+  exists anywhere in this app (single-org-per-deployment reality, see
+  #4). The thresholds live in one place in `PatientsService` so making
+  them configurable later is a scoped change, not a rewrite.

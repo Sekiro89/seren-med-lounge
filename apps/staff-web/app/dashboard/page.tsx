@@ -28,6 +28,31 @@ interface AppointmentRow {
   encounter: { id: string } | null;
 }
 
+interface PatientProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  phone: string;
+  email: string | null;
+  createdAt: string;
+}
+
+/**
+ * PatientsService.register's duplicate-detection outcome (see its doc
+ * comment) — the backend, not this form, decides whether this is a new
+ * patient, an existing one, or needs review.
+ */
+type RegisterPatientResult =
+  | { kind: 'created'; patient: PatientProfile }
+  | { kind: 'existing'; patient: PatientProfile; hasAccount: boolean }
+  | { kind: 'possible_match'; claimRequestId: string; candidates: PatientProfile[] }
+  | { kind: 'ambiguous_match'; claimRequestId: string; candidates: PatientProfile[] };
+
+type ActivationResult =
+  | { kind: 'created'; code: string; expiresAt: string }
+  | { kind: 'duplicate_account'; patient: PatientProfile };
+
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     const body = error.body;
@@ -60,6 +85,9 @@ export default function DashboardPage() {
   const [showRegisterPatient, setShowRegisterPatient] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [registerOutcome, setRegisterOutcome] = useState<RegisterPatientResult | null>(null);
+  const [activationOutcome, setActivationOutcome] = useState<ActivationResult | null>(null);
+  const [claimBusy, setClaimBusy] = useState(false);
 
   // Reused by the event handlers below (post-mutation refresh) — not
   // called directly from the mount effect, which does its own inline
@@ -121,16 +149,92 @@ export default function DashboardPage() {
     resolver: zodResolver(patientRegistrationSchema),
   });
 
+  // Picking a patient (however we got there — a genuinely new record, an
+  // existing one Reception confirmed, or the claim-resolution endpoints
+  // below) always ends the same way: select it for the appointment form
+  // and close out any in-progress register/claim UI.
+  const selectPatient = (patient: PatientProfile) => {
+    setSelectedPatient(patient);
+    appointmentForm.setValue('patientId', patient.id, { shouldValidate: true });
+    patientForm.reset();
+    setShowRegisterPatient(false);
+    setRegisterOutcome(null);
+    setActivationOutcome(null);
+  };
+
   const onRegisterPatient = async (data: PatientRegistrationInput) => {
     setFormError(null);
+    setActivationOutcome(null);
     try {
-      const patient = await apiClient.post<PatientSummary>('/patients', data);
-      setSelectedPatient(patient);
-      appointmentForm.setValue('patientId', patient.id, { shouldValidate: true });
-      patientForm.reset();
-      setShowRegisterPatient(false);
+      const result = await apiClient.post<RegisterPatientResult>('/patients', data);
+      if (result.kind === 'created') {
+        selectPatient(result.patient);
+      } else {
+        setRegisterOutcome(result);
+      }
     } catch (error) {
       setFormError(errorMessage(error, 'Could not register the patient.'));
+    }
+  };
+
+  const handleConfirmSamePatient = async (claimRequestId: string, patientId: string) => {
+    setFormError(null);
+    setClaimBusy(true);
+    try {
+      const patient = await apiClient.post<PatientProfile>(
+        `/patient-claims/${claimRequestId}/link`,
+        {
+          patientId,
+        },
+      );
+      selectPatient(patient);
+    } catch (error) {
+      setFormError(errorMessage(error, 'Could not confirm this patient.'));
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
+  const handleCreateNewFromClaim = async (claimRequestId: string) => {
+    setFormError(null);
+    setClaimBusy(true);
+    try {
+      const patient = await apiClient.post<PatientProfile>(
+        `/patient-claims/${claimRequestId}/create-new`,
+      );
+      selectPatient(patient);
+    } catch (error) {
+      setFormError(errorMessage(error, 'Could not create a new patient record.'));
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
+  const handleEscalateClaim = async (claimRequestId: string) => {
+    setFormError(null);
+    setClaimBusy(true);
+    try {
+      await apiClient.post(`/patient-claims/${claimRequestId}/escalate`, {});
+      setRegisterOutcome(null);
+    } catch (error) {
+      setFormError(errorMessage(error, 'Could not escalate this case.'));
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
+  const handleSendActivation = async (patientId: string) => {
+    setFormError(null);
+    setClaimBusy(true);
+    try {
+      const result = await apiClient.post<ActivationResult>(
+        `/patients/${patientId}/send-activation`,
+      );
+      setActivationOutcome(result);
+    } catch (error) {
+      setFormError(errorMessage(error, 'Could not create an activation code.'));
+    } finally {
+      setClaimBusy(false);
     }
   };
 
@@ -197,9 +301,19 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
-        <Button variant="secondary" onClick={handleLogout}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-3">
+          {can(user?.role, 'patient:write') && (
+            <a
+              href="/claims"
+              className="text-sm font-medium text-slate-700 underline underline-offset-2"
+            >
+              Pending account claims
+            </a>
+          )}
+          <Button variant="secondary" onClick={handleLogout}>
+            Sign out
+          </Button>
+        </div>
       </header>
 
       {formError && (
@@ -232,13 +346,17 @@ export default function DashboardPage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setShowRegisterPatient((prev) => !prev)}
+                onClick={() => {
+                  setShowRegisterPatient((prev) => !prev);
+                  setRegisterOutcome(null);
+                  setActivationOutcome(null);
+                }}
               >
                 {showRegisterPatient ? 'Cancel' : '+ New patient'}
               </Button>
             </div>
 
-            {showRegisterPatient && (
+            {showRegisterPatient && !registerOutcome && (
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -287,6 +405,126 @@ export default function DashboardPage() {
                 </Button>
               </div>
             )}
+
+            {/* PatientsService.register's non-`created` outcomes — the
+                backend found something Reception should look at before
+                any record is created; see that method's doc comment. */}
+            {registerOutcome && registerOutcome.kind === 'existing' && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                <p className="mb-2 text-sm font-semibold text-amber-900">Existing patient found</p>
+                <p className="text-sm text-slate-700">
+                  {registerOutcome.patient.firstName} {registerOutcome.patient.lastName}
+                </p>
+                <p className="text-xs text-slate-500">
+                  DOB {new Date(registerOutcome.patient.dateOfBirth).toLocaleDateString()} ·{' '}
+                  {registerOutcome.patient.phone}
+                </p>
+                <p className="mt-2 text-xs text-slate-600">
+                  {registerOutcome.hasAccount
+                    ? 'This patient already has an online account. They can sign in directly.'
+                    : 'This patient does not have an online account yet.'}
+                </p>
+
+                {activationOutcome && activationOutcome.kind === 'created' && (
+                  <p className="mt-2 rounded-md bg-white px-3 py-2 text-sm text-slate-900">
+                    Activation code:{' '}
+                    <span className="font-mono font-semibold">{activationOutcome.code}</span> —
+                    share this with the patient. Expires{' '}
+                    {new Date(activationOutcome.expiresAt).toLocaleString()}.
+                  </p>
+                )}
+                {activationOutcome && activationOutcome.kind === 'duplicate_account' && (
+                  <p className="mt-2 text-xs text-slate-600">
+                    This patient already has an account — no new code was created.
+                  </p>
+                )}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => selectPatient(registerOutcome.patient)}
+                  >
+                    Open patient record
+                  </Button>
+                  {!registerOutcome.hasAccount && !activationOutcome && (
+                    <Button
+                      variant="secondary"
+                      disabled={claimBusy}
+                      onClick={() => handleSendActivation(registerOutcome.patient.id)}
+                    >
+                      Send account activation
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setRegisterOutcome(null);
+                      setActivationOutcome(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {registerOutcome &&
+              (registerOutcome.kind === 'possible_match' ||
+                registerOutcome.kind === 'ambiguous_match') && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                  <p className="mb-2 text-sm font-semibold text-amber-900">
+                    {registerOutcome.kind === 'possible_match'
+                      ? 'Possible existing patient found'
+                      : 'Multiple possible patients found'}
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {registerOutcome.candidates.map((candidate) => {
+                      const claimRequestId = registerOutcome.claimRequestId;
+                      return (
+                        <li
+                          key={candidate.id}
+                          className="rounded-md border border-slate-200 bg-white p-2 text-sm text-slate-700"
+                        >
+                          <p className="text-slate-900">
+                            {candidate.firstName} {candidate.lastName}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            DOB {new Date(candidate.dateOfBirth).toLocaleDateString()} ·{' '}
+                            {candidate.phone}
+                          </p>
+                          <Button
+                            variant="secondary"
+                            className="mt-2"
+                            disabled={claimBusy}
+                            onClick={() => handleConfirmSamePatient(claimRequestId, candidate.id)}
+                          >
+                            This is the same patient
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={claimBusy}
+                      onClick={() => handleCreateNewFromClaim(registerOutcome.claimRequestId)}
+                    >
+                      None of these — create new patient
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={claimBusy}
+                      onClick={() => handleEscalateClaim(registerOutcome.claimRequestId)}
+                    >
+                      Escalate
+                    </Button>
+                    <Button variant="ghost" onClick={() => setRegisterOutcome(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
 
             <div className="flex flex-wrap gap-3">
               <div>

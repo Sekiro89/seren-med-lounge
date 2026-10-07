@@ -220,5 +220,262 @@ describe('Patient auth (e2e)', () => {
         })
         .expect(400);
     });
+
+    describe('Patient Record Claim Rules', () => {
+      it('auto-links to an existing, unclaimed record by exact email match instead of creating a duplicate', async () => {
+        const staffCreated = await admin.patient.create({
+          data: {
+            organizationId: org.id,
+            firstName: 'Reception',
+            lastName: 'Created',
+            dateOfBirth: new Date('1979-03-03'),
+            phone: '5554440001',
+            email: 'reception-created@e2e.example.com',
+            // No passwordHash — exactly what register() (staff, no
+            // password) leaves behind.
+          },
+        });
+
+        const res = await request(app.getHttpServer())
+          .post('/auth/patient/signup')
+          .send({
+            organizationId: org.id,
+            firstName: 'Reception',
+            lastName: 'Created',
+            dateOfBirth: '1979-03-03',
+            phone: '5554440001',
+            email: 'reception-created@e2e.example.com',
+            password: 'a-real-password-123',
+          })
+          .expect(201);
+
+        expect(res.body.status).toBe('active');
+        expect(res.body.accessToken).toEqual(expect.any(String));
+        expect(res.body.patient.id).toBe(staffCreated.id);
+
+        const rowCount = await admin.patient.count({
+          where: { organizationId: org.id, phone: '5554440001' },
+        });
+        expect(rowCount).toBe(1);
+      });
+
+      it('auto-links on exact phone+DOB+lastName match when email differs from the staff-created record (which had none)', async () => {
+        const staffCreated = await admin.patient.create({
+          data: {
+            organizationId: org.id,
+            firstName: 'Walkin',
+            lastName: 'Match',
+            dateOfBirth: new Date('1982-07-20'),
+            phone: '5554440002',
+          },
+        });
+
+        const res = await request(app.getHttpServer())
+          .post('/auth/patient/signup')
+          .send({
+            organizationId: org.id,
+            firstName: 'Walkin',
+            lastName: 'Match',
+            dateOfBirth: '1982-07-20',
+            phone: '5554440002',
+            email: 'walkin-match@e2e.example.com',
+            password: 'a-real-password-123',
+          })
+          .expect(201);
+
+        expect(res.body.status).toBe('active');
+        expect(res.body.patient.id).toBe(staffCreated.id);
+
+        const rowCount = await admin.patient.count({
+          where: { organizationId: org.id, phone: '5554440002' },
+        });
+        expect(rowCount).toBe(1);
+      });
+
+      it('does not auto-link when the last name differs — goes to pending verification with no token, no duplicate row', async () => {
+        await admin.patient.create({
+          data: {
+            organizationId: org.id,
+            firstName: 'Original',
+            lastName: 'Surname',
+            dateOfBirth: new Date('1975-11-11'),
+            phone: '5554440003',
+          },
+        });
+
+        const res = await request(app.getHttpServer())
+          .post('/auth/patient/signup')
+          .send({
+            organizationId: org.id,
+            firstName: 'Different',
+            lastName: 'LastName',
+            dateOfBirth: '1975-11-11',
+            phone: '5554440003',
+            email: 'ambiguous-lastname@e2e.example.com',
+            password: 'a-real-password-123',
+          })
+          .expect(201);
+
+        expect(res.body).toEqual({ status: 'pending_verification' });
+        expect(res.body.accessToken).toBeUndefined();
+
+        const rowCount = await admin.patient.count({
+          where: { organizationId: org.id, phone: '5554440003' },
+        });
+        expect(rowCount).toBe(1); // still just the original — no duplicate created
+
+        const claim = await admin.patientClaimRequest.findFirst({
+          where: { organizationId: org.id, phone: '5554440003' },
+        });
+        expect(claim?.status).toBe('PENDING');
+      });
+
+      it('goes to pending verification when multiple unclaimed records share the same phone+DOB', async () => {
+        await admin.patient.createMany({
+          data: [
+            {
+              organizationId: org.id,
+              firstName: 'Twin',
+              lastName: 'One',
+              dateOfBirth: new Date('1999-09-09'),
+              phone: '5554440004',
+            },
+            {
+              organizationId: org.id,
+              firstName: 'Twin',
+              lastName: 'Two',
+              dateOfBirth: new Date('1999-09-09'),
+              phone: '5554440004',
+            },
+          ],
+        });
+
+        const res = await request(app.getHttpServer())
+          .post('/auth/patient/signup')
+          .send({
+            organizationId: org.id,
+            firstName: 'Twin',
+            lastName: 'One',
+            dateOfBirth: '1999-09-09',
+            phone: '5554440004',
+            email: 'twin-ambiguous@e2e.example.com',
+            password: 'a-real-password-123',
+          })
+          .expect(201);
+
+        expect(res.body).toEqual({ status: 'pending_verification' });
+
+        const claim = await admin.patientClaimRequest.findFirst({
+          where: { organizationId: org.id, phone: '5554440004' },
+        });
+        expect(claim?.status).toBe('PENDING');
+        expect((claim?.candidatePatientIds as string[]).length).toBe(2);
+      });
+
+      it('retrying signup while a claim is still pending reuses the existing claim instead of creating a second one', async () => {
+        await admin.patient.create({
+          data: {
+            organizationId: org.id,
+            firstName: 'Retry',
+            lastName: 'Original',
+            dateOfBirth: new Date('1983-03-03'),
+            phone: '5554440006',
+          },
+        });
+
+        const first = await request(app.getHttpServer())
+          .post('/auth/patient/signup')
+          .send({
+            organizationId: org.id,
+            firstName: 'Retry',
+            lastName: 'Attempt1',
+            dateOfBirth: '1983-03-03',
+            phone: '5554440006',
+            email: 'retry-attempt1@e2e.example.com',
+            password: 'a-real-password-123',
+          })
+          .expect(201);
+        expect(first.body).toEqual({ status: 'pending_verification' });
+
+        // Retries with a corrected last name and a different password —
+        // simulates someone who typo'd the first time and just resubmits
+        // the form, not knowing it's already pending.
+        const second = await request(app.getHttpServer())
+          .post('/auth/patient/signup')
+          .send({
+            organizationId: org.id,
+            firstName: 'Retry',
+            lastName: 'Attempt2',
+            dateOfBirth: '1983-03-03',
+            phone: '5554440006',
+            email: 'retry-attempt2@e2e.example.com',
+            password: 'a-different-password-456',
+          })
+          .expect(201);
+        expect(second.body).toEqual({ status: 'pending_verification' });
+
+        const claims = await admin.patientClaimRequest.findMany({
+          where: { organizationId: org.id, phone: '5554440006' },
+        });
+        expect(claims.length).toBe(1); // not two
+        const claim = claims[0]!;
+        expect(claim.status).toBe('PENDING');
+        // Refreshed with the second attempt's details, not left stale
+        // on the first.
+        expect(claim.lastName).toBe('Attempt2');
+        expect(claim.email).toBe('retry-attempt2@e2e.example.com');
+
+        // The second attempt's password is the one that ends up working
+        // once staff resolves the claim, not the first's.
+        const passwordMatches = await bcrypt.compare(
+          'a-different-password-456',
+          claim.passwordHash!,
+        );
+        expect(passwordMatches).toBe(true);
+      });
+
+      it('goes to pending verification when phone+DOB do not match anything but name+DOB match a different phone — the "phone number changed" case', async () => {
+        const original = await admin.patient.create({
+          data: {
+            organizationId: org.id,
+            firstName: 'Moved',
+            lastName: 'Numbers',
+            dateOfBirth: new Date('1988-03-15'),
+            phone: '5554440007',
+          },
+        });
+
+        const res = await request(app.getHttpServer())
+          .post('/auth/patient/signup')
+          .send({
+            organizationId: org.id,
+            firstName: 'Moved',
+            lastName: 'Numbers',
+            dateOfBirth: '1988-03-15',
+            phone: '5554440008', // a phone this org has never seen
+            email: 'moved-numbers@e2e.example.com',
+            password: 'a-real-password-123',
+          })
+          .expect(201);
+
+        expect(res.body).toEqual({ status: 'pending_verification' });
+
+        // No duplicate created under the new phone number.
+        const newPhoneCount = await admin.patient.count({
+          where: { organizationId: org.id, phone: '5554440008' },
+        });
+        expect(newPhoneCount).toBe(0);
+        // The original record is untouched — no auto phone change from
+        // a bare self-signup claim (rule 4's spirit).
+        const stillOriginal = await admin.patient.findUniqueOrThrow({ where: { id: original.id } });
+        expect(stillOriginal.phone).toBe('5554440007');
+
+        const claim = await admin.patientClaimRequest.findFirstOrThrow({
+          where: { organizationId: org.id, phone: '5554440008' },
+        });
+        expect(claim.matchReason).toBe('name_dob_different_phone');
+        expect((claim.candidatePatientIds as string[])[0]).toBe(original.id);
+      });
+    });
   });
 });
