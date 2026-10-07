@@ -27,6 +27,7 @@ import { MarketingModule } from './marketing/marketing.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { SchedulingModule } from './scheduling/scheduling.module';
+import { PatientBookingModule } from './patient-booking/patient-booking.module';
 import { RegistrationModule } from './registration/registration.module';
 import { QueueModule } from './queue/queue.module';
 import { EncountersModule } from './encounters/encounters.module';
@@ -109,6 +110,7 @@ import { ReportsModule } from './reports/reports.module';
     // --- clinic journey ---
     AppointmentsModule,
     SchedulingModule,
+    PatientBookingModule,
     RegistrationModule,
     QueueModule,
 

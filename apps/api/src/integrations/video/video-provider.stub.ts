@@ -4,6 +4,7 @@ import type { CreateVideoRoomInput, VideoProvider, VideoRoom } from './video-pro
 /** Not production-ready. No video/WebRTC provider is contracted yet. */
 @Injectable()
 export class StubVideoProvider implements VideoProvider {
+  readonly live = false;
   private readonly logger = new Logger(StubVideoProvider.name);
 
   async createRoom(input: CreateVideoRoomInput): Promise<VideoRoom> {

@@ -518,3 +518,28 @@ user who has sent patient messages cannot be hard-deleted at all.
 - A lead's owner cannot be changed after creation; an assigned message thread cannot be unassigned.
 - A lab order can no longer be cancelled once any result is entered (now enforced by the server, not just the screen).
 - `Payments` and `Reports` still open "is being built" pages: payments are handled inside Billing, and reporting has no backend yet.
+
+## 18. Patient app: online booking, video and payments (October 2026)
+
+Built: patients book a doctor's free slot online (at the clinic or by
+video), cancel up to 2 hours before, and read each past visit
+(`apps/api/src/patient-booking`). The clinic sets doctors' weekly hours on
+the staff app's **Doctor schedules** page; a doctor with no hours can't be
+booked online. Reception is notified of every online booking and
+cancellation. Decisions still needed:
+
+1. **Booking rules** (`BOOKING_RULES` in `patient-booking.service.ts`):
+   60 days ahead, 30 minutes' notice, at most 3 upcoming bookings per
+   patient, cancel no later than 2 hours before. A slot from the doctor's
+   own schedule is booked as CONFIRMED with no reception approval. Confirm
+   or change each.
+2. **Video provider.** Not chosen. Video consultations can be booked, but
+   the join button says "Video calls are not switched on yet. The clinic
+   will phone you at your appointment time." until a provider adapter
+   replaces `StubVideoProvider` (its `live` flag is false).
+3. **Payment gateway.** Not chosen (the Integrations page stores keys but
+   no adapter is built). The diagram's "online consultation unlocks after
+   payment" needs a gateway plus a consultation fee per doctor or visit
+   type; neither exists yet. Patients are told to pay at the clinic desk.
+4. **Results release.** Patients see lab results as soon as the lab enters
+   them; there is no "doctor reviews first" hold. Decide whether to add one.

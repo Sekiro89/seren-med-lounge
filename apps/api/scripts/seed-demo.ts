@@ -869,6 +869,72 @@ async function main() {
     ],
   });
 
+  // A care plan from last month's visit, a review the clinic asked for, and
+  // an in-app alert, so every part of the patient app has something in it.
+  const poojaPlan = await db.carePlan.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      encounterId: pastVisit.id,
+      title: 'Diabetes and vitamin D care',
+      dischargeInstructions:
+        'Walk 30 minutes a day. Take Vitamin D3 once a week after a meal. Repeat HbA1c in 3 months.',
+      createdById: users.senior!,
+      createdAt: lastMonth,
+    },
+  });
+  await db.followUp.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      carePlanId: poojaPlan.id,
+      type: 'REVIEW_APPOINTMENT',
+      dueAt: new Date(Date.now() + 55 * day),
+      createdById: users.senior!,
+    },
+  });
+  await db.reviewRequest.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      stage: 'AFTER_SECOND_CONSULTATION',
+      dedupeKey: 'AFTER_SECOND_CONSULTATION:-',
+      expiresAt: new Date(Date.now() + 21 * day),
+      requestedById: users.marketing!,
+    },
+  });
+  await db.notification.create({
+    data: {
+      organizationId: ORG_ID,
+      type: 'LAB_RESULT_READY',
+      recipientPatientId: pooja,
+      title: 'Your test results are ready',
+      entityType: 'LabOrder',
+      entityId: pastLabs.id,
+    },
+  });
+
+  // ---- Doctors' weekly hours, so patients can book online (Mon to Sat).
+  const hours: Array<[string, string, string, number]> = [
+    ['junior', '09:00', '13:00', 15],
+    ['senior', '10:00', '13:00', 20],
+    ['senior', '16:00', '18:00', 20],
+  ];
+  for (let dayOfWeek = 1; dayOfWeek <= 6; dayOfWeek += 1) {
+    for (const [doctor, startTime, endTime, slotMinutes] of hours) {
+      await db.doctorAvailability.create({
+        data: {
+          organizationId: ORG_ID,
+          doctorId: users[doctor]!,
+          dayOfWeek,
+          startTime,
+          endTime,
+          slotMinutes,
+        },
+      });
+    }
+  }
+
   console.log(`Demo clinic ready.\n  Clinic ID: ${ORG_ID}\n  Password:  ${PASSWORD}`);
   console.log('  Sign in as: ' + STAFF.map(([key]) => `${key}@demo.local`).join(', '));
   console.log('  Patient app: patient@demo.local (Pooja Deshpande)');

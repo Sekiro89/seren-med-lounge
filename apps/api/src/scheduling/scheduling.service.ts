@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { AppointmentStatus, StaffRole } from '@prisma/client';
 import type { CreateDoctorAvailabilityInput } from '@serenemed/validation';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { clinicDayRange } from '../common/clinic-time';
 
@@ -153,52 +153,59 @@ export class SchedulingService {
 
   /** `date` is a clinic-local YYYY-MM-DD (already validated by the controller). */
   async slots(organizationId: string, doctorId: string, date: string): Promise<Slot[]> {
-    return this.prisma.withTenant(organizationId, async (tx) => {
-      const doctor = await tx.user.findUnique({ where: { id: doctorId } });
-      if (!doctor || !DOCTOR_ROLES.includes(doctor.role)) {
-        throw new NotFoundException('Doctor not found.');
-      }
+    return this.prisma.withTenant(organizationId, (tx) => this.slotsInTx(tx, doctorId, date));
+  }
 
-      // The weekday of a calendar date doesn't depend on timezone.
-      const dayOfWeek = new Date(`${date}T00:00:00.000Z`).getUTCDay();
-      const windows = await tx.doctorAvailability.findMany({
-        where: { doctorId, dayOfWeek, isActive: true },
-        orderBy: { startTime: 'asc' },
-      });
-      if (windows.length === 0) {
-        return [];
-      }
+  /**
+   * The caller's transaction, so a booking can recompute the slots under
+   * its own lock and only then create the appointment
+   * (PatientBookingService.book).
+   */
+  async slotsInTx(tx: ExtendedPrismaClient, doctorId: string, date: string): Promise<Slot[]> {
+    const doctor = await tx.user.findUnique({ where: { id: doctorId } });
+    if (!doctor || !DOCTOR_ROLES.includes(doctor.role)) {
+      throw new NotFoundException('Doctor not found.');
+    }
 
-      const { from, to } = clinicDayRange(date);
-      const appointments = await tx.appointment.findMany({
-        where: {
-          doctorId,
-          deletedAt: null,
-          status: { notIn: NON_BLOCKING },
-          scheduledAt: { gte: from, lt: to },
-        },
-        select: { scheduledAt: true },
-      });
-      const booked = appointments.map((a) => a.scheduledAt.getTime());
-
-      const slots: Slot[] = [];
-      for (const window of windows) {
-        const endMinute = minutesOf(window.endTime);
-        for (
-          let minute = minutesOf(window.startTime);
-          minute + window.slotMinutes <= endMinute;
-          minute += window.slotMinutes
-        ) {
-          const start = from.getTime() + minute * 60_000;
-          const end = start + window.slotMinutes * 60_000;
-          slots.push({
-            start: new Date(start).toISOString(),
-            end: new Date(end).toISOString(),
-            available: !booked.some((t) => t >= start && t < end),
-          });
-        }
-      }
-      return slots;
+    // The weekday of a calendar date doesn't depend on timezone.
+    const dayOfWeek = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+    const windows = await tx.doctorAvailability.findMany({
+      where: { doctorId, dayOfWeek, isActive: true },
+      orderBy: { startTime: 'asc' },
     });
+    if (windows.length === 0) {
+      return [];
+    }
+
+    const { from, to } = clinicDayRange(date);
+    const appointments = await tx.appointment.findMany({
+      where: {
+        doctorId,
+        deletedAt: null,
+        status: { notIn: NON_BLOCKING },
+        scheduledAt: { gte: from, lt: to },
+      },
+      select: { scheduledAt: true },
+    });
+    const booked = appointments.map((a) => a.scheduledAt.getTime());
+
+    const slots: Slot[] = [];
+    for (const window of windows) {
+      const endMinute = minutesOf(window.endTime);
+      for (
+        let minute = minutesOf(window.startTime);
+        minute + window.slotMinutes <= endMinute;
+        minute += window.slotMinutes
+      ) {
+        const start = from.getTime() + minute * 60_000;
+        const end = start + window.slotMinutes * 60_000;
+        slots.push({
+          start: new Date(start).toISOString(),
+          end: new Date(end).toISOString(),
+          available: !booked.some((t) => t >= start && t < end),
+        });
+      }
+    }
+    return slots;
   }
 }
