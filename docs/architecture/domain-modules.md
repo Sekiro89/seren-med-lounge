@@ -25,8 +25,16 @@ today:
   real Postgres with RLS actually enforced, not just typechecked. See
   `docs/architecture/security.md#clinical-record-immutability` and
   `apps/api/test/clinic-journey.e2e-spec.ts`.
-- **Lean shell** (`*.module.ts` only, `@Module({})`) — every other module
-  below. Controllers/services/DTOs are added when that module's first
+- **Implemented in the October 2026 backend build** — `registration`,
+  `queue`, `medical-history`, `referrals`, `procedures` (incl. surgery),
+  `pharmacy`, `inventory`, `invoices`, `payments`, `insurance`,
+  `care-plans`, `followups`, `reviews`, `leads`, `campaigns`,
+  `clinical-templates`, `scheduling`, `tasks`, `notifications`,
+  `messages`. Each has an e2e suite under `apps/api/test/`.
+- **Lean shell** (`*.module.ts` only, `@Module({})`) — what's left:
+  `roles`, `permissions`, `patient-timeline`, `crm`, `marketing`,
+  `surgery` (surgery lives in `procedures`), `billing`, `accounting`,
+  `ai`, `reports`. Controllers/services/DTOs are added when that module's first
   real workflow is implemented, per the instruction not to generate files
   ahead of need. Wiring the shell into `AppModule` now means adding a
   real controller later never requires touching `AppModule` again beyond
@@ -37,13 +45,14 @@ today:
 | Group                                      | Modules                                                                                                                                                       |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Identity & access                          | `auth`, `users`, `roles`, `permissions`                                                                                                                       |
-| Unified Patient Record — profile & consent | `patients`, `patient-documents`, `patient-consent`, `patient-timeline`                                                                                        |
+| Unified Patient Record — profile & consent | `patients`, `patient-claims`, `patient-documents`, `patient-consent`, `patient-timeline`                                                                      |
 | Marketing / CRM funnel (pre-patient)       | `leads`, `crm`, `marketing`, `campaigns`                                                                                                                      |
 | Clinic journey                             | `appointments`, `scheduling`, `registration`, `queue`                                                                                                         |
 | Clinical spine                             | `encounters`, `vitals`, `medical-history`, `diagnoses`, `clinical-notes`, `clinical-templates`, `prescriptions`, `referrals`, `labs`, `procedures`, `surgery` |
 | Pharmacy / inventory                       | `pharmacy`, `inventory`                                                                                                                                       |
 | Billing / money                            | `billing`, `invoices`, `payments`, `insurance`, `accounting`                                                                                                  |
-| Retention                                  | `followups`, `care-plans`, `notifications`, `reviews`                                                                                                         |
+| Retention                                  | `followups`, `care-plans`, `notifications`, `reviews`, `messages`                                                                                             |
+| Command centre                             | `scheduling` (doctor availability/slots), `tasks`, `notifications`                                                                                            |
 | Cross-cutting                              | `ai`, `integrations`, `audit`, `reports`                                                                                                                      |
 
 ## Rules for adding to a module

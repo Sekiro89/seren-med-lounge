@@ -35,7 +35,9 @@ server-computed totals, per-org `number`), `GET /invoices[?patientId=]`,
 `GET /invoices/:id`, `POST /invoices/:id/void`,
 `POST /invoices/:invoiceId/payments` (CASH/UPI/CARD, staff-recorded),
 `POST /payments/:id/refunds`, and patient-facing `GET /patients/me/invoices`.
-Covered by `billing.e2e-spec.ts`. `billing` and
+Insurance settlement adds INSURANCE payments through
+`PaymentsService.recordInTx` (see `insurance.md`). Covered by
+`billing.e2e-spec.ts` and `insurance.e2e-spec.ts`. `billing` and
 `accounting` remain lean shells; `integrations/payment` and
 `integrations/accounting` still have only stub adapters, so there is no
 online payment, webhook, or Zoho sync. Open decisions:

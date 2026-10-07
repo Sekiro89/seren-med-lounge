@@ -436,3 +436,57 @@ an invoice once nothing is net-paid. See
   contracted), so there's no online payment, webhook, or Zoho push; the
   `insurance` module isn't built. Payments here are only money already in
   hand.
+
+## 16. October 2026 backend build — decisions still open
+
+Everything below is marked TODO in code rather than guessed at.
+
+**Clinic operations**
+
+- **Timezone.** "Today" (queue tokens, calendars, worklists) is fixed to
+  IST in `apps/api/src/common/clinic-time.ts`; per-org/clinic timezone
+  needs a settings table.
+- **Queue tokens** are numbered per organization per day, not per clinic.
+- **ID proof "required"** at OPD registration = verified at the desk or
+  an ID_PROOF document on file. Confirm that's the rule.
+- **Discharge** is refused while any clinical note or diagnosis on the
+  visit is an unsigned draft, and needs `patient-record:write-clinical`
+  (senior doctor / admin).
+- **Permission grants added** (draft matrix, needs sign-off):
+  `medical-history:write` (nurse, doctors, admin), `queue:manage` for
+  doctors, `referral:write` (doctors), `follow-up:manage` (nurse, doctors),
+  `clinical-template:manage` (senior doctor, admin), `review:manage`
+  (marketing, admin), `schedule:manage` (reception, admin),
+  `message:manage` (reception, nurse, doctors, admin).
+
+**Pharmacy / procedures**
+
+- Prescription items have no total quantity, so over-dispensing can't be
+  checked; dispensing doesn't create invoice lines automatically.
+- No default pre-op checklist per procedure type; a procedure estimate is
+  not an invoice.
+
+**Insurance / billing**
+
+- Every insurance step is recorded manually (no insurer API). A VOID
+  invoice can't be linked to a case; a deactivated policy doesn't block
+  cases already open.
+
+**CRM / reviews / messages**
+
+- Lead conversion needs `lead:write` + `patient:write` (admin only today) —
+  see #5. Duplicate leads only warn. Conversion is two transactions
+  (`register()` then the link); a failed link leaves a real patient that a
+  retry matches as `existing`.
+- Review requests expire after 30 days but only flip to EXPIRED when the
+  patient tries to submit (no sweep job). No public testimonial feed yet.
+- Message read-by-staff is team-wide; viewing a thread marks it read.
+  No attachments, SLAs or auto-assignment.
+
+**Delivery channels** — notifications, reminders and messages are in-app
+only. No SMS/WhatsApp/email provider is contracted, so nothing reaches a
+patient's phone yet.
+
+**Data lifecycle** — users and patients are deactivated / soft-deleted,
+never hard-deleted. Notifications cascade with their recipient; a staff
+user who has sent patient messages cannot be hard-deleted at all.

@@ -26,5 +26,16 @@ and referral.
 
 ## Status
 
-All four modules are lean shells today — no scheduling, reminder, or
-review logic implemented yet.
+Implemented (`care-plans`, `followups`, `reviews`, `notifications`;
+`care.e2e-spec.ts`, `reviews.e2e-spec.ts`): discharge creates the care plan
+and first follow-ups atomically; follow-up worklists (`?view=today|overdue`,
+`?mine=true`); done / missed / cancel / escalate (escalation raises an
+in-app alert to the assignee or senior doctors); review appointments are
+booked through `AppointmentsService`; patients see their plans at
+`/patients/me/care-plans`. Review requests are consent-gated
+(MARKETING_COMMUNICATION) and stage-gated (after 2nd consultation, after
+first completed follow-up, after a completed procedure); patients submit
+text or video-metadata reviews with explicit publish consent; staff
+moderate. Reminders are a staff worklist plus in-app notifications only —
+no SMS/WhatsApp provider is contracted, so nothing reaches the patient's
+phone.

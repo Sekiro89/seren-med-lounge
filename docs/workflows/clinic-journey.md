@@ -41,16 +41,18 @@ entries are created for the patient.
 
 ## Status
 
-All modules referenced above exist as boundaries in `apps/api/src/*`.
-`appointments`, `encounters`, `vitals`, and `clinical-notes` are
-implemented and live-verified — the "clinic journey spine" slice: book
-an appointment, check in (atomically opens an `Encounter` — see
-`AppointmentsService.checkIn()`), record vitals against that encounter,
-and write a clinical note through its full draft → sign-off → amend
-lifecycle (see `docs/architecture/security.md#clinical-record-immutability`).
-Everything else on this page — `registration`, `queue`, `diagnoses`,
-`prescriptions`, `labs`, `referrals`, `procedures`, `patient-timeline`,
-and the billing/fulfilment/discharge/follow-up/review/retention steps —
-remains a lean shell or unimplemented; this document still defines the
-target shape for those so implementation order stays deliberate rather
-than ad hoc.
+Implemented end to end (API + tests, no screens yet for the newer parts):
+appointment (with optional assigned doctor) → check-in (opens the
+`Encounter`) → OPD registration (`POST /encounters/:id/registration`:
+visit type, consultation route A/B, ID-proof check, cancer-screening flag)
+which issues the day's queue token in the same transaction → token queue
+(`/queue`, stations VITALS → JUNIOR/SENIOR_DOCTOR → BILLING → PHARMACY/LAB)
+→ vitals (incl. respiratory rate, height/weight → BMI) and the optional
+metabolic workup → patient medical history → consultation (notes,
+diagnoses, prescriptions, labs, referrals, procedures/surgery) → billing →
+pharmacy → discharge (`POST /encounters/:id/discharge`, refused while any
+note/diagnosis is an unsigned draft; can create the care plan) → follow-up
+→ review. Suites: `opd`, `clinic-journey`, `procedures`, `billing`,
+`pharmacy`, `care`, `reviews`. The AI-assisted front half of the
+consultation is still not built (see `doctor-consultation.md`). Open
+decisions: `docs/architecture/open-questions.md#16`.

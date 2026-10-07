@@ -30,6 +30,12 @@ CLAIM_SUBMITTED → CLAIM_APPROVED/PARTIALLY_APPROVED/REJECTED → SETTLED`)
 
 ## Status
 
-`insurance` is a lean module shell. `integrations/insurance` has the
-interface and a stub provider (`StubInsuranceProvider`) — no insurer is
-contracted yet.
+Implemented (`insurance` module; `insurance.e2e-spec.ts`): policies
+(optionally linked to the INSURANCE_CARD document), cases against a
+policy (optionally linked to encounter/procedure/invoice) moving through
+the `InsuranceCaseStatus` state machine, an append-only event log for every
+transition and every logged communication, and settlement that records a
+`Payment` (method INSURANCE) on the linked invoice in the same transaction.
+Every step is recorded manually by insurance staff — `InsuranceProvider`
+is still a stub and is deliberately not called, so there's no real
+eligibility check or claim submission.

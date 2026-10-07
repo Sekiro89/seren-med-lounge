@@ -78,7 +78,16 @@ Patient ──< Appointment ──< Encounter ─┬─< Vital
 
 Patient ──< PatientDocument
 Patient ──< PatientConsent
+Patient ──< Invoice ──┬─< InvoiceItem
+          (Encounter?)└─< Payment ──< Refund
 ```
+
+`Invoice`/`InvoiceItem`/`Payment`/`Refund` are the billing chunk. `Invoice`
+attaches to `Patient` (and optionally the `Encounter` it bills for);
+`status`/`paidMinor` are its mutable lifecycle, while items, payments and
+refunds are append-only (`REVOKE UPDATE, DELETE`). Amounts are integer
+paise with CHECK constraints at the database level — see
+`docs/architecture/security.md#billing--immutable-money-records-db-checked-amounts`.
 
 `Appointment.status` moves REQUESTED/CONFIRMED → CHECKED_IN via
 `AppointmentsService.checkIn()`, which also creates the `Encounter` row —
@@ -125,46 +134,46 @@ audit trail and a finalized clinical record must never be deletable,
 soft or otherwise — see `docs/architecture/security.md#soft-delete` and
 `#row-level-security`.
 
-## Proposed full ERD (not yet implemented — added table-by-table per module)
+## The October 2026 backend build — every proposed table now exists
+
+53 models. Added on top of the diagram above (all organizationId-scoped,
+all RLS-protected — `verify:tenant-isolation` discovers them
+automatically):
 
 ```
-Organization, Clinic, User, Role, Permission
-        │
-        ▼
-Patient ─┬─ Lead ── Campaign, LeadActivity          (pre-conversion; see marketing-funnel.md)
-         │
-         ├─ Appointment ─┬─ QueueEntry
-         │                ├─ Registration
-         │                └─ Encounter ─┬─ Vital                        (implemented — see above)
-         │                              ├─ MedicalHistory
-         │                              ├─ ClinicalNote ── ClinicalNoteVersion  (implemented — see above)
-         │                              ├─ Referral
-         │                              └─ Procedure ── Surgery
-         │
-         ├─ Invoice ── InvoiceItem
-         │      ├─ Payment ── Refund
-         │      └─ InsuranceCase ── InsuranceClaim
-         │
-         ├─ Dispensing ── (Medication, InventoryItem, StockMovement)
-         │
-         └─ CarePlan ── FollowUp
+Encounter ─┬─ Registration (1:1)          visit type, route A/B, ID proof, cancer-check flag
+           ├─ QueueEntry (1:1)            daily token per org, station + status
+           ├─ MetabolicWorkup             point-of-care glucose/HbA1c/lipids/body composition
+           ├─ Referral                    INTERNAL (to a doctor) / EXTERNAL
+           ├─ Procedure ──< ProcedureChecklistItem      kind PROCEDURE | SURGERY
+           │      └─ ClinicalNote (noteType OPERATIVE / DISCHARGE_SUMMARY, procedureId)
+           └─ CarePlan ──< FollowUp ── Appointment (review visit, 1:1)
+
+Patient ─┬─ MedicalHistoryEntry          allergies, conditions, past surgery, meds, family/social
+         ├─ Dispensing ── PrescriptionItem, Medication ──< StockMovement >── StockBatch
+         ├─ InsurancePolicy ──< InsuranceCase ──< InsuranceCaseEvent   (case → Invoice → Payment INSURANCE)
+         ├─ ReviewRequest ── Review
+         ├─ MessageThread ──< Message
+         └─ Lead (convertedPatientId / referredByPatientId) ── Campaign, LeadActivity
+
+ClinicalTemplate ──< ClinicalTemplateVersion ──< ClinicalNote.templateVersionId
+User ──< DoctorAvailability, StaffTask, Notification (user | role | patient recipient)
+Appointment.doctorId → User                       (doctor's daily calendar)
 ```
 
-`Appointment`, `Encounter`, `Diagnosis`, `Prescription`/`PrescriptionItem`,
-`LabOrder`/`LabOrderItem`/`LabResult`, and now `PatientDocument`/
-`PatientConsent` are also implemented (see above) — `QueueEntry`,
-`Registration`, `MedicalHistory`, `Referral`, and `Procedure`/`Surgery`
-remain proposed under `Encounter`; `Lead`/`Campaign`/`LeadActivity`,
-`Invoice`/`Payment`/`InsuranceCase`, `Dispensing`, and `CarePlan`/
-`FollowUp` remain proposed as the other direct children of `Patient`.
+Append-only at the database (`REVOKE UPDATE, DELETE`): `invoice_items`,
+`payments`, `refunds`, `stock_movements`, `lead_activities`,
+`insurance_case_events`, `clinical_template_versions`; `messages` allows
+UPDATE only on its two read-stamp columns. CHECK constraints guard money
+(non-negative, line totals, `paidMinor <= totalMinor`), stock
+(`quantityOnHand >= 0`, movement sign by type), referral targets,
+procedure scheduling, review rating/video key, availability times,
+one-recipient notifications and message senders.
 
-Cross-cutting, not attached to a single patient:
-
-```
-Medication, InventoryItem, StockMovement   (pharmacy/inventory catalogue)
-Notification                                (per-recipient, references any entity)
-AuditLog                                    (already implemented — generic)
-```
+Still not modelled: AI consultation recordings/transcripts (provider not
+chosen), online payment intents/webhooks (gateway not contracted),
+integration sync/outbox for Zoho/labs, and DB-backed Role/Permission
+tables (the matrix stays in `@serenemed/permissions`).
 
 ## Key relationships and why
 

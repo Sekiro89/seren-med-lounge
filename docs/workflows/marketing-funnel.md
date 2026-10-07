@@ -34,9 +34,18 @@ flagged as an open question in
 `docs/architecture/open-questions.md#5-lead--patient-conversion-ownership`
 pending product sign-off on which module owns the conversion write.
 
-## Not yet implemented
+## Status
 
-Everything above is a domain boundary and a documented flow — `leads`,
-`crm`, `marketing`, `campaigns` are lean module shells today (no
-controllers/services). Implementation follows once the conversion
-ownership question is resolved.
+Implemented (`campaigns`, `leads`; `crm.e2e-spec.ts`): campaigns incl.
+health camps with a per-status funnel count; leads with source/campaign/
+referrer/owner, consent-to-contact, a soft duplicate-phone warning,
+append-only activity history, consent-gated outreach (calls/messages/
+emails refused without consent), automatic NEW → CONTACTED, LOST with a
+reason. Conversion (`POST /leads/:id/convert`) either links an existing
+patient or runs the same duplicate-detection `PatientsService.register`
+uses — a possible/ambiguous match is returned for staff review instead of
+converting, so conversion never creates a duplicate patient. Contact
+consent carries over as a MARKETING_COMMUNICATION PatientConsent. Who owns
+conversion is still open (#5): it needs `lead:write` + `patient:write`,
+which only ADMINISTRATOR holds today. Nurture content/automation sending
+is not built (no messaging provider).
