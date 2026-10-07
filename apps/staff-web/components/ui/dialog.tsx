@@ -51,7 +51,7 @@ export function Dialog({
       className={`${placement} border-line bg-surface p-0 text-fg shadow-popover backdrop:bg-fg/40`}
     >
       <div className="flex h-full max-h-dvh flex-col">
-        <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-7 py-5">
           <div>
             <h2 id="dialog-title" className="text-lg font-semibold leading-7">
               {title}
@@ -67,9 +67,9 @@ export function Dialog({
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto px-7 py-6">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-line bg-surface-muted px-6 py-3">
+          <div className="flex justify-end gap-2 border-t border-line bg-surface-muted px-7 py-4">
             {footer}
           </div>
         )}

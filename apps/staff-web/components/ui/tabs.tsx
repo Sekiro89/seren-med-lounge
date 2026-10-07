@@ -36,7 +36,7 @@ export function Tabs<K extends string>({
 
   return (
     <div className="flex items-end justify-between gap-4 border-b border-line">
-      <div role="tablist" aria-label={label} className="-mb-px flex gap-6 overflow-x-auto">
+      <div role="tablist" aria-label={label} className="-mb-px flex gap-8 overflow-x-auto">
         {tabs.map((tab, index) => {
           const active = tab.key === value;
           return (
@@ -48,7 +48,7 @@ export function Tabs<K extends string>({
               tabIndex={active ? 0 : -1}
               onClick={() => onChange(tab.key)}
               onKeyDown={(event) => onKeyDown(event, index)}
-              className={`flex h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 text-sm font-medium transition-colors ${
+              className={`flex h-12 shrink-0 cursor-pointer items-center gap-2 border-b-2 text-sm font-medium transition-colors ${
                 active
                   ? 'border-primary text-primary-subtle-fg'
                   : 'border-transparent text-fg-muted hover:text-fg'

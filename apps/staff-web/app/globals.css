@@ -85,7 +85,8 @@
 }
 
 html {
-  font-size: 14px;
+  /* Roomier than a typical dashboard: every rem-based space and size scales with this. */
+  font-size: 15px;
 }
 
 body {

@@ -7,7 +7,7 @@ export function SearchBox({
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { 'aria-label': string }) {
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${/(^|\s)w-/.test(className) ? '' : 'w-full'} ${className}`}>
       <MagnifyingGlass
         size={18}
         aria-hidden="true"
@@ -15,7 +15,7 @@ export function SearchBox({
       />
       <input
         type="search"
-        className="h-10 w-full rounded-control border border-control bg-surface pl-10 pr-3 text-base text-fg placeholder:text-fg-subtle"
+        className="h-11 w-full rounded-control border border-control bg-surface pl-10 pr-3 text-base text-fg placeholder:text-fg-subtle"
         {...props}
       />
     </div>

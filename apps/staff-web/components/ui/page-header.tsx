@@ -14,11 +14,11 @@ export function PageHeader({
   eyebrow?: string;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-10 flex flex-wrap items-end justify-between gap-6">
       <div>
         {eyebrow && <p className="mb-1 text-[13px] font-medium text-primary">{eyebrow}</p>}
         <h1 className="text-2xl font-semibold leading-8 tracking-tight text-fg">{title}</h1>
-        {description && <p className="mt-1 text-sm text-fg-muted">{description}</p>}
+        {description && <p className="mt-2 text-sm text-fg-muted">{description}</p>}
       </div>
       {action}
     </div>

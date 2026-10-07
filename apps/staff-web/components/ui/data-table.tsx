@@ -39,7 +39,7 @@ export function DataTable<T>({
               <th
                 key={column.header}
                 scope="col"
-                className={`h-10 px-4 text-xs font-semibold uppercase tracking-wide text-fg-muted ${
+                className={`h-12 px-6 text-xs font-semibold uppercase tracking-wide text-fg-muted ${
                   column.align === 'right' ? 'text-right' : ''
                 }`}
               >
@@ -53,7 +53,7 @@ export function DataTable<T>({
             Array.from({ length: 5 }).map((_, i) => (
               <tr key={i} className="border-b border-line last:border-0">
                 {columns.map((column) => (
-                  <td key={column.header} className="h-10 px-4">
+                  <td key={column.header} className="h-14 px-6">
                     <Skeleton className="h-4 w-full max-w-32" />
                   </td>
                 ))}
@@ -68,7 +68,7 @@ export function DataTable<T>({
                 {columns.map((column) => (
                   <td
                     key={column.header}
-                    className={`h-10 px-4 align-middle text-fg ${
+                    className={`h-14 px-6 align-middle text-fg ${
                       column.align === 'right' ? 'tabular text-right' : ''
                     } ${column.className ?? ''}`}
                   >

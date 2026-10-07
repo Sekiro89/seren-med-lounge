@@ -26,14 +26,14 @@ export function Sidebar({
 
   return (
     <nav aria-label="Main" className="flex h-full flex-col bg-sidebar">
-      <div className="flex h-14 shrink-0 items-center border-b border-line px-5">
+      <div className="flex h-16 shrink-0 items-center border-b border-line px-6">
         <Logo />
       </div>
-      <div className="flex-1 overflow-y-auto px-3 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-6">
         {groups.map((group, index) => (
-          <div key={group.label ?? index} className={index > 0 ? 'mt-6' : ''}>
+          <div key={group.label ?? index} className={index > 0 ? 'mt-8' : ''}>
             {group.label && (
-              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+              <p className="mb-2.5 px-3 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
                 {group.label}
               </p>
             )}
@@ -46,14 +46,14 @@ export function Sidebar({
                     {active && (
                       <span
                         aria-hidden="true"
-                        className="absolute -left-3 top-2 h-5 w-1 rounded-r-full bg-primary"
+                        className="absolute -left-4 top-2.5 h-5 w-1 rounded-r-full bg-primary"
                       />
                     )}
                     <Link
                       href={item.href}
                       onClick={onNavigate}
                       aria-current={active ? 'page' : undefined}
-                      className={`flex h-9 items-center gap-3 rounded-control px-3 text-sm font-medium transition-colors ${
+                      className={`flex h-10 items-center gap-3 rounded-control px-3 text-sm font-medium transition-colors ${
                         active
                           ? 'bg-primary-subtle text-primary-subtle-fg'
                           : 'text-fg-muted hover:bg-surface-muted hover:text-fg'
@@ -73,7 +73,7 @@ export function Sidebar({
           </div>
         ))}
       </div>
-      <div className="shrink-0 border-t border-line p-3">
+      <div className="shrink-0 border-t border-line p-4">
         <div className="rounded-control bg-surface-muted px-3 py-2.5">
           <p className="truncate text-[13px] font-semibold text-fg">{clinicName}</p>
           <p className="text-xs text-fg-subtle">{humanize(role)} workspace</p>

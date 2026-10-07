@@ -5,8 +5,11 @@ import type {
   TextareaHTMLAttributes,
 } from 'react';
 
+/** Full width unless the caller sets its own width (a class starting with w-). */
+const fullWidthUnlessSet = (className: string) => (/(^|\s)w-/.test(className) ? '' : 'w-full');
+
 const CONTROL =
-  'w-full rounded-control border border-control bg-surface px-3 text-base text-fg placeholder:text-fg-subtle disabled:opacity-60';
+  'rounded-control border border-control bg-surface px-3 text-base text-fg placeholder:text-fg-subtle disabled:opacity-60';
 
 /**
  * Label above, helper and error below (design system section 10). The
@@ -27,11 +30,11 @@ export function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-fg">
+      <label htmlFor={htmlFor} className="mb-2 block text-sm font-medium text-fg">
         {label}
       </label>
       {children}
-      {helper && !error && <p className="mt-1.5 text-[13px] text-fg-subtle">{helper}</p>}
+      {helper && !error && <p className="mt-2 text-[13px] text-fg-subtle">{helper}</p>}
       {error && (
         <p role="alert" className="mt-1.5 text-[13px] text-danger-fg">
           {error}
@@ -42,16 +45,28 @@ export function Field({
 }
 
 export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={`h-10 ${CONTROL} ${className}`} {...props} />;
+  return (
+    <input className={`h-11 ${fullWidthUnlessSet(className)} ${CONTROL} ${className}`} {...props} />
+  );
 }
 
 export function Select({ className = '', ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`h-10 cursor-pointer ${CONTROL} ${className}`} {...props} />;
+  return (
+    <select
+      className={`h-11 cursor-pointer ${fullWidthUnlessSet(className)} ${CONTROL} ${className}`}
+      {...props}
+    />
+  );
 }
 
 export function Textarea({
   className = '',
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={`min-h-24 py-2 ${CONTROL} ${className}`} {...props} />;
+  return (
+    <textarea
+      className={`min-h-24 py-2 ${fullWidthUnlessSet(className)} ${CONTROL} ${className}`}
+      {...props}
+    />
+  );
 }

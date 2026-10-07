@@ -189,12 +189,13 @@ Rules:
 
 ## 4. Space, layout, shape, elevation
 
-**Spacing:** 4px grid. Use only 4, 8, 12, 16, 20, 24, 32, 40, 48, 64.
+**Spacing:** 4px grid. Use only 4, 8, 12, 16, 20, 24, 32, 40, 48, 64. Base text size is 15px (rem-based), so every space and size scales with it.
 
 **Layout:**
 
 - Sidebar 248px (collapsible to 64px icon rail), top bar 56px.
-- Content max width 1440px, 24px page padding (16px under 768px).
+- Content max width 1440px, 40px page side padding on desktop, 20px on small screens, 40px above the page title block and 40px between a page header and its content.
+- Gaps between cards and sections: 24px (gap-6); between a card's header and body 24px side padding; KPI tiles 24px padding.
 - CSS Grid for page layouts, never percentage flex maths.
 - Breakpoints: 640 / 768 / 1024 / 1280 / 1536. Desktop-first for
   staff-web (minimum supported width 1024px; tablets at the counter must
@@ -202,9 +203,8 @@ Rules:
 
 **Density:**
 
-- Table rows 40px default, 32px "compact" toggle for power users.
-- Buttons and inputs 36px tall (desktop), 44px minimum touch target on
-  touch devices.
+- Table rows 52px (header 44px, 24px side padding). A tighter "compact" mode may come later for power users; it is not the default.
+- Buttons 40px (small 36px), inputs and selects 44px, sidebar items 40px, top bar 64px.
 
 **Shape (one documented rule, taste-skill shape lock):**
 

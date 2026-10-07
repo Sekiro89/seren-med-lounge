@@ -91,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-line bg-surface px-4 lg:px-6">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-line bg-surface px-5 lg:px-10">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -112,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 lg:px-6">
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-8 lg:px-10 lg:py-10">
           <StaffProvider value={user}>{children}</StaffProvider>
         </main>
       </div>

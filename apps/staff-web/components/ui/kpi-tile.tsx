@@ -47,15 +47,15 @@ export function KpiTile({
       {loading ? (
         <Skeleton className="mt-4 h-9 w-24" />
       ) : (
-        <p className="tabular mt-3 font-mono text-[30px] font-semibold leading-9 tracking-tight text-fg">
+        <p className="tabular mt-4 font-mono text-[30px] font-semibold leading-9 tracking-tight text-fg">
           {value ?? '-'}
         </p>
       )}
-      {hint && <p className="mt-1 text-[13px] text-fg-subtle">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[13px] text-fg-subtle">{hint}</p>}
     </>
   );
 
-  const base = 'block rounded-panel border border-line bg-surface p-5 shadow-card';
+  const base = 'block rounded-panel border border-line bg-surface p-6 shadow-card';
   if (href) {
     return (
       <Link
