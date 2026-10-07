@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
+import { PatientsModule } from '../patients/patients.module';
+import { LeadsController } from './leads.controller';
+import { LeadsService } from './leads.service';
 
-/**
- * Domain boundary placeholder — see docs/architecture/domain-modules.md.
- * Controllers/services/DTOs are added when this module's first workflow
- * is implemented; keep this file the single import site for the module
- * so AppModule never needs to know its internals.
- */
-@Module({})
+@Module({
+  // PatientsModule: conversion goes through PatientsService.register's
+  // duplicate detection, never a parallel patient insert.
+  imports: [AuditModule, PatientsModule],
+  controllers: [LeadsController],
+  providers: [LeadsService],
+  exports: [LeadsService],
+})
 export class LeadsModule {}
