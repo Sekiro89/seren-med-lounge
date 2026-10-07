@@ -30,8 +30,13 @@ PATIENT/STAFF → BACKEND → PAYMENT PROVIDER → PAYMENT WEBHOOK
 
 ## Status
 
-`billing`/`invoices`/`payments`/`insurance`/`accounting` are lean module
-shells. `integrations/payment` and `integrations/accounting` have
-interface + stub adapter (`StubPaymentProvider`, `StubAccountingProvider`)
-— both log and refuse real work, since no gateway/Zoho app is contracted
-yet.
+`invoices` and `payments` are implemented: `POST /invoices` (items in,
+server-computed totals, per-org `number`), `GET /invoices[?patientId=]`,
+`GET /invoices/:id`, `POST /invoices/:id/void`,
+`POST /invoices/:invoiceId/payments` (CASH/UPI/CARD, staff-recorded),
+`POST /payments/:id/refunds`, and patient-facing `GET /patients/me/invoices`.
+Covered by `billing.e2e-spec.ts`. `billing` and
+`accounting` remain lean shells; `integrations/payment` and
+`integrations/accounting` still have only stub adapters, so there is no
+online payment, webhook, or Zoho sync. Open decisions:
+`docs/architecture/open-questions.md#15`.

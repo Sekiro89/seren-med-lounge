@@ -9,6 +9,7 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { DiagnosesService } from '../diagnoses/diagnoses.service';
 import { PrescriptionsService } from '../prescriptions/prescriptions.service';
 import { LabsService } from '../labs/labs.service';
+import { InvoicesService } from '../invoices/invoices.service';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface';
 
 @Controller('patients')
@@ -20,6 +21,7 @@ export class PatientsController {
     private readonly diagnosesService: DiagnosesService,
     private readonly prescriptionsService: PrescriptionsService,
     private readonly labsService: LabsService,
+    private readonly invoicesService: InvoicesService,
   ) {}
 
   /**
@@ -125,5 +127,11 @@ export class PatientsController {
   myLabOrders(@Req() request: Request & { user: AuthenticatedUser }) {
     const user = this.requirePatient(request);
     return this.labsService.listOrdersForPatient(user.organizationId, user.userId);
+  }
+
+  @Get('me/invoices')
+  myInvoices(@Req() request: Request & { user: AuthenticatedUser }) {
+    const user = this.requirePatient(request);
+    return this.invoicesService.listForPatient(user.organizationId, user.userId);
   }
 }

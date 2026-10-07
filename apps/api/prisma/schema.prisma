@@ -115,6 +115,10 @@ model Organization {
   patientConsents         PatientConsent[]
   patientClaimRequests    PatientClaimRequest[]
   patientActivationTokens PatientActivationToken[]
+  invoices                Invoice[]
+  invoiceItems            InvoiceItem[]
+  payments                Payment[]
+  refunds                 Refund[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -160,6 +164,10 @@ model User {
   documentsUploaded      PatientDocument[]
   consentsRecorded       PatientConsent[]
   activationTokensIssued PatientActivationToken[]
+  invoicesIssued         Invoice[]                @relation("InvoiceIssuedBy")
+  invoicesVoided         Invoice[]                @relation("InvoiceVoidedBy")
+  paymentsReceived       Payment[]
+  refundsIssued          Refund[]
   deletedAt              DateTime?
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
@@ -205,6 +213,7 @@ model Patient {
   documents        PatientDocument[]
   consents         PatientConsent[]
   activationTokens PatientActivationToken[]
+  invoices         Invoice[]
   deletedAt        DateTime?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
@@ -389,6 +398,7 @@ model Encounter {
   diagnoses      Diagnosis[]
   prescriptions  Prescription[]
   labOrders      LabOrder[]
+  invoices       Invoice[]
   status         EncounterStatus @default(OPEN)
   startedAt      DateTime        @default(now())
   endedAt        DateTime?
@@ -816,4 +826,166 @@ model PatientActivationToken {
   @@index([organizationId])
   @@index([patientId])
   @@map("patient_activation_tokens")
+}
+
+// =============================================================================
+// BILLING — Invoice/InvoiceItem (invoices module), Payment/Refund (payments
+// module). See docs/workflows/billing.md.
+//
+// MONEY: every amount is an Int in the currency's minor unit (paise for
+// INR) — never Float/Decimal-as-float, so totals add up exactly. CHECK
+// constraints in the migration SQL keep amounts non-negative and an
+// invoice's paidMinor within [0, totalMinor] at the database level.
+//
+// Same "mutable lifecycle pointer + immutable content" shape as
+// Prescription/LabOrder: Invoice.status/paidMinor move, while
+// InvoiceItem/Payment/Refund are REVOKE UPDATE, DELETE — a wrong invoice
+// is voided and reissued, a wrong payment is refunded, nothing is edited.
+// =============================================================================
+
+/// No DRAFT state (unlike @serenemed/types' InvoiceStatus) — an invoice
+/// is issued in one step with its items, same as a Prescription; nothing
+/// uses a draft yet, so the state isn't stored until something does.
+enum InvoiceStatus {
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum InvoiceItemType {
+  CONSULTATION
+  PROCEDURE
+  LAB
+  PHARMACY
+  OTHER
+}
+
+/// Only methods a staff member can record as already-received money.
+/// CREDIT (an unpaid balance) is simply an invoice that isn't PAID yet and
+/// SPLIT is several Payment rows on one invoice. INSURANCE is written only
+/// by the insurance module when a case is SETTLED — never through the
+/// billing desk's POST /invoices/:id/payments.
+/// Online/gateway payments need PaymentProvider (still a stub — see
+/// docs/architecture/integrations.md) and will add a status lifecycle
+/// when built; every row here is money already in hand.
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+}
+
+/// `number` is a per-organization sequence (allocated under an advisory
+/// lock in InvoicesService, with the unique constraint as the backstop);
+/// it's displayed as INV-000001. TODO(compliance): GST invoice-number
+/// format, prefix, and financial-year reset are not decided — see
+/// docs/architecture/open-questions.md#15.
+///
+/// subtotal/tax/total are computed server-side from the items at issue
+/// time and never change afterwards. paidMinor is the running net
+/// (payments minus refunds), recomputed in the same transaction as every
+/// Payment/Refund insert, so listing invoices never needs a sum query.
+model Invoice {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  number         Int
+  patientId      String
+  patient        Patient       @relation(fields: [patientId], references: [id])
+  encounterId    String?
+  encounter      Encounter?    @relation(fields: [encounterId], references: [id])
+  status         InvoiceStatus @default(ISSUED)
+  currency       String        @default("INR")
+  subtotalMinor  Int
+  taxMinor       Int
+  totalMinor     Int
+  paidMinor      Int           @default(0)
+  notes          String?
+  items          InvoiceItem[]
+  payments       Payment[]
+  issuedById     String
+  issuedBy       User          @relation("InvoiceIssuedBy", fields: [issuedById], references: [id])
+  voidedById     String?
+  voidedBy       User?         @relation("InvoiceVoidedBy", fields: [voidedById], references: [id])
+  voidedAt       DateTime?
+  voidReason     String?
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, number])
+  @@index([organizationId, deletedAt])
+  @@index([patientId])
+  @@index([encounterId])
+  @@map("invoices")
+}
+
+/// One billed line. Append-only (REVOKE UPDATE, DELETE). taxMinor is the
+/// line's tax amount as entered by billing staff — no GST-rate/HSN logic
+/// exists yet (TODO(compliance), open-questions.md#15). lineTotalMinor =
+/// quantity * unitPriceMinor + taxMinor, computed server-side.
+/// TODO(product): no price catalogue exists, so description/price are
+/// entered per line rather than picked from a service list.
+model InvoiceItem {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  invoiceId      String
+  invoice        Invoice         @relation(fields: [invoiceId], references: [id])
+  itemType       InvoiceItemType
+  description    String
+  quantity       Int
+  unitPriceMinor Int
+  taxMinor       Int             @default(0)
+  lineTotalMinor Int
+  createdAt      DateTime        @default(now())
+
+  @@index([organizationId])
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+/// Money received against an invoice. Append-only (REVOKE UPDATE,
+/// DELETE) — a mistaken payment is corrected with a Refund, never by
+/// editing or deleting this row. `reference` is the UPI transaction id /
+/// card slip number, if any — never a full card number.
+model Payment {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  invoiceId      String
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id])
+  method         PaymentMethod
+  amountMinor    Int
+  reference      String?
+  receivedById   String
+  receivedBy     User          @relation(fields: [receivedById], references: [id])
+  refunds        Refund[]
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+/// A distinct record from Payment, not a negative payment row (per
+/// docs/workflows/billing.md), so refund and payment history stay
+/// separately auditable. Append-only (REVOKE UPDATE, DELETE). The sum of
+/// a payment's refunds can never exceed that payment — enforced in
+/// PaymentsService under a row lock on the parent invoice.
+model Refund {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  paymentId      String
+  payment        Payment      @relation(fields: [paymentId], references: [id])
+  amountMinor    Int
+  reason         String
+  issuedById     String
+  issuedBy       User         @relation(fields: [issuedById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([paymentId])
+  @@map("refunds")
 }

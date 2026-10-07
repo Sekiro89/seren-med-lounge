@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
+import { InvoicesModule } from '../invoices/invoices.module';
+import { PaymentsController } from './payments.controller';
+import { PaymentsService } from './payments.service';
 
-/**
- * Domain boundary placeholder — see docs/architecture/domain-modules.md.
- * Controllers/services/DTOs are added when this module's first workflow
- * is implemented; keep this file the single import site for the module
- * so AppModule never needs to know its internals.
- */
-@Module({})
+@Module({
+  imports: [AuditModule, InvoicesModule],
+  controllers: [PaymentsController],
+  providers: [PaymentsService],
+  exports: [PaymentsService],
+})
 export class PaymentsModule {}

@@ -408,3 +408,31 @@ existing credentials.
   exists anywhere in this app (single-org-per-deployment reality, see
   #4). The thresholds live in one place in `PatientsService` so making
   them configurable later is a scoped change, not a rewrite.
+
+## 15. Billing — built for staff-recorded payments; four decisions still open
+
+`Invoice`/`InvoiceItem` (`invoices` module) and `Payment`/`Refund`
+(`payments` module) exist: issue an invoice against a patient or an
+encounter, record CASH/UPI/CARD money already received, refund it, void
+an invoice once nothing is net-paid. See
+`docs/architecture/security.md#billing--immutable-money-records-db-checked-amounts`.
+
+**Still open, marked TODO in code rather than guessed at:**
+
+- **GST compliance.** Invoice numbers are a plain per-org sequence shown
+  as `INV-000001`; the GST-required format (prefix, financial-year
+  reset, per-clinic series) is undecided. Tax is a per-line amount the
+  billing desk enters — there's no GST rate, HSN/SAC code, or CGST/SGST
+  split. Needs an accountant's sign-off before real invoices are issued.
+- **Price catalogue.** No service/price list exists, so each line's
+  description and price are typed in. A catalogue (and who may change
+  it) is a product decision.
+- **Who may take money.** Only BILLING/ADMINISTRATOR hold
+  `payment:manage`. Many clinics collect cash at reception; granting
+  RECEPTION that permission is a one-line matrix change, but it's a
+  policy call, not assumed.
+- **Online payments, insurance, accounting sync.** `PaymentProvider` and
+  `AccountingProvider` are still stubs (no gateway or Zoho app
+  contracted), so there's no online payment, webhook, or Zoho push; the
+  `insurance` module isn't built. Payments here are only money already in
+  hand.

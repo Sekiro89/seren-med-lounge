@@ -558,6 +558,25 @@ existing `patient:read`/`patient:write` permissions, not a new slug —
 captured at OPD registration, the same desk that already writes the
 `Patient` record itself.
 
+### Billing — immutable money records, DB-checked amounts
+
+`InvoiceItem`, `Payment` and `Refund` are append-only (`REVOKE UPDATE,
+DELETE` in `prisma/migrations/20261007000000_billing/migration.sql`);
+`Invoice` keeps a mutable `status`/`paidMinor` lifecycle, like
+`Prescription.status`. Corrections are a void-and-reissue (an invoice can
+only be voided once nothing is net-paid) or a `Refund` — never an edit.
+All amounts are integer minor units (paise), and CHECK constraints make
+the database itself reject a negative amount, a line total that doesn't
+equal `quantity * unitPriceMinor + taxMinor`, or `paidMinor` outside
+`[0, totalMinor]`. Payments and refunds take a `SELECT ... FOR UPDATE`
+lock on the parent invoice, so two concurrent payments can't both pass
+the "outstanding balance" check (`billing.e2e-spec.ts` races two
+full-amount payments: exactly one succeeds). Audit metadata carries
+amounts and counts, never line descriptions (a line can name a test or
+procedure). Permissions are the slugs already reserved in the matrix:
+`invoice:manage`, `payment:manage`, `refund:issue` (BILLING and
+ADMINISTRATOR).
+
 ## AI consultation assistant — safety boundary
 
 See `docs/workflows/doctor-consultation.md` for the full flow. The
