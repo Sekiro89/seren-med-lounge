@@ -1,0 +1,203 @@
+# Production stack for "a VPS with Docker". Host-agnostic on purpose: every
+# service is a published image or a stock one, nothing here assumes a
+# cloud provider. Move it later by pointing the same file at a different
+# machine, or replace postgres/redis with managed services by editing the
+# URLs in .env.prod and deleting those two services.
+#
+#   cp .env.prod.example .env.prod   # fill in every value
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+#
+# Walkthrough (first deploy, updates, rollback, restore, key rotation):
+# docs/architecture/runbook.md.
+#
+# Only caddy publishes host ports (80/443). api, the two web apps,
+# postgres and redis are reachable on the private compose network only.
+
+name: serenemed
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '20m'
+    max-file: '5'
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.prod}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env.prod}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account live here. Losing this volume only
+      # means re-issuing certificates, but Let's Encrypt rate-limits that
+      # (5 duplicate certs/week), so keep it.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      staff-web:
+        condition: service_healthy
+      patient-web:
+        condition: service_healthy
+    healthcheck:
+      # Caddy's admin API listens on localhost:2019 inside the container.
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:2019/config/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging: *default-logging
+
+  api:
+    image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env.prod}/serenemed-api:${TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
+      API_PORT: '4000'
+      # Uploaded patient files (apps/api/src/storage/local-disk.storage.ts).
+      # Local disk means exactly ONE api replica: a second one would not
+      # see files the first wrote. Backed up nightly by db-backup. The
+      # intended production target is an S3-compatible bucket once one is
+      # chosen (S3_* vars already exist in packages/config/src/env.ts).
+      STORAGE_DIR: /data/storage
+    volumes:
+      - serenemed-storage:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # /health/ready checks real Postgres + Redis reachability
+      # (apps/api/src/app.service.ts) and answers 503 when either is down.
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:4000/health/ready']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  staff-web:
+    # NEXT_PUBLIC_API_URL is baked in at image build time (see
+    # .github/workflows/ci.yml, publish-web-images) — it cannot be changed
+    # here. Rebuild the image if the API domain changes.
+    image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env.prod}/serenemed-staff-web:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:3001/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  patient-web:
+    image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env.prod}/serenemed-patient-web:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:3000/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # POSTGRES_USER / POSTGRES_DB are fixed to "serenemed" because
+    # infrastructure/docker/postgres-init/01-app-role.sql names that role
+    # and database explicitly (GRANT CONNECT ON DATABASE serenemed; ALTER
+    # DEFAULT PRIVILEGES FOR ROLE serenemed). Only the password varies.
+    # The init script also creates the non-superuser app role
+    # "serenemed_app" with the dev password — the runbook's first-deploy
+    # steps change it before the api starts (the api refuses to boot in
+    # production with the dev credential).
+    environment:
+      POSTGRES_USER: serenemed
+      POSTGRES_DB: serenemed
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U serenemed -d serenemed']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # appendonly: revoked-token markers and rate-limit counters survive a
+    # restart instead of silently resetting (a restart would otherwise
+    # un-revoke every logged-out token until it expired).
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  db-backup:
+    # Same image as the database so pg_dump's version always matches the
+    # server's. Runs infrastructure/backup/nightly.sh: sleeps until 02:00
+    # in CLINIC_TZ, runs backup.sh (pg_dump + a tar of the uploaded-files
+    # volume, same retention), repeats. Dumps land in the "backups"
+    # volume; copy them off the machine (BACKUP_S3_URL, or rsync the
+    # volume) — a backup on the same disk as the database is not a backup.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ['/bin/sh', '/scripts/nightly.sh']
+    environment:
+      TZ: ${CLINIC_TZ:-Asia/Kolkata}
+      BACKUP_AT: ${BACKUP_AT:-02:00}
+      PGHOST: postgres
+      PGPORT: '5432'
+      PGUSER: serenemed
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      PGDATABASE: serenemed
+      BACKUP_DIR: /backups
+      STORAGE_DIR: /data/storage
+      KEEP_DAILY: ${KEEP_DAILY:-14}
+      KEEP_WEEKLY: ${KEEP_WEEKLY:-8}
+      BACKUP_S3_URL: ${BACKUP_S3_URL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+    volumes:
+      - ../backup:/scripts:ro
+      - backups:/backups
+      # read-only for the nightly tar; restore.sh needs it writable, see
+      # the runbook ("Restoring a backup") for the one-off rw mount.
+      - serenemed-storage:/data/storage:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+volumes:
+  postgres-data:
+  redis-data:
+  serenemed-storage:
+  backups:
+  caddy-data:
+  caddy-config:

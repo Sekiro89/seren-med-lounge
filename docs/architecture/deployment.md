@@ -3,9 +3,12 @@
 What's real today: `apps/api` builds into a production container image
 and has been booted from that exact image against a live Postgres +
 Redis, logged in through it, and confirmed default-deny + RLS still
-hold end to end. What's **not** built yet, deliberately: which host runs
-that image, and any CI/CD pipeline that pushes it there — see "Not done
-yet" at the bottom.
+hold end to end. CI publishes all three images to GHCR, and
+`infrastructure/compose/docker-compose.prod.yml` runs the whole system
+(HTTPS, backups included) on any machine with Docker — the operator's
+guide is `docs/architecture/runbook.md`. What's **not** decided,
+deliberately: which machine that is, and nothing deploys there
+automatically — see "Not done yet" at the bottom.
 
 ## Building the image
 
@@ -97,9 +100,16 @@ Run `01-app-role.sql` once against the fresh production database (most
 managed Postgres providers let you run arbitrary SQL as the initial
 owner role), then run migrations as above.
 
-Whatever's chosen also needs real backups/point-in-time recovery — a
-docker volume (what local dev uses) has neither. Not decided yet: which
-managed Postgres provider, so not built.
+Backups for the self-hosted case are built: the `db-backup` sidecar in
+`infrastructure/compose/docker-compose.prod.yml` runs
+`infrastructure/backup/backup.sh` nightly (pg_dump custom format plus a
+tar of uploaded files, 14 daily + 8 weekly kept, optional S3 upload),
+and `verify-backup.sh` proves a dump restores by loading it into a
+throwaway database and counting rows. Both were run against the real
+local dev database. What a docker volume still does not give you is
+point-in-time recovery — a nightly dump means up to a day of data loss
+in the worst case. A managed Postgres with PITR closes that; not chosen,
+so not built.
 
 **`DATABASE_URL`/`DIRECT_DATABASE_URL` must include an explicit
 `sslmode` param** (`&sslmode=require` for most managed providers,
@@ -342,30 +352,72 @@ included in `standalone` by Next's own design (meant to be served by a
 CDN instead) — copied in by hand since there's no CDN in front of
 either app yet.
 
-Not done for these two: publishing to GHCR (the API's `publish-image`
-CI job isn't mirrored for the frontends — same pattern would apply if
-wanted, not assumed here).
+Both are now published by CI too: the `publish-web-images` job (a
+two-entry matrix) pushes `ghcr.io/<owner>/serenemed-staff-web` and
+`serenemed-patient-web` with the same `latest` + `sha-<commit>` tags as
+the API, after the same `checks` + `db-tests` gates. `NEXT_PUBLIC_API_URL`
+comes from the repository variable of that name; when it is unset the
+job builds against `https://api.example.com` so the pipeline stays
+green, but that image cannot talk to any real API — the runbook's first
+step is setting the variable.
+
+All three Dockerfiles carry a `HEALTHCHECK` (api: `GET /health/ready`,
+which is 503 unless Postgres and Redis answer; web apps: `GET /` must be
+2xx after redirects) using alpine's busybox `wget`. Written, not yet
+observed on a rebuilt image — the next image build will show it in
+`docker ps`'s STATUS column.
+
+## Production compose stack (host-agnostic)
+
+`infrastructure/compose/docker-compose.prod.yml` + `Caddyfile` +
+`.env.prod.example` run the whole system on "a VPS with Docker": Caddy
+terminates HTTPS with automatic Let's Encrypt certificates and routes
+`api.`/`staff.`/`app.<DOMAIN>` to the three images from GHCR; Postgres
+16 (with `postgres-init/` mounted, same role split as dev) and Redis 7
+(`appendonly`) run alongside; a `db-backup` sidecar on the same
+`postgres:16-alpine` image dumps the database and tars the uploaded-files
+volume nightly. Only Caddy publishes host ports. Verified: `docker
+compose config` with placeholder values, `caddy validate` on the
+Caddyfile, the Caddy health check against a running container, and the
+backup/restore/verify scripts against the live dev database. Not
+verified: the stack as a whole on a real machine with a real domain —
+nobody has pointed DNS at it yet. The step-by-step is
+`docs/architecture/runbook.md`.
+
+Uploaded patient files sit in the `serenemed-storage` volume
+(`STORAGE_DIR=/data/storage`, `apps/api/src/storage/local-disk.storage.ts`),
+which forces a single api instance until an S3-compatible storage
+adapter exists.
 
 ## Not done yet
 
-- **No hosting target chosen.** All three Dockerfiles are host-agnostic
-  (work on Fly/Railway/Render/ECS/k8s/a plain VPS running `docker run`)
-  — deliberately deferred rather than building against a guess.
-- **No actual deploy step.** Publishing the API image to GHCR (above)
-  isn't the same as running it anywhere — once a host is picked, that
-  host still needs to be told to pull and run
-  `ghcr.io/<owner>/serenemed-api:latest` (or a specific SHA tag).
-- **TLS termination for browser ↔ API traffic.** This is the one piece
-  of "encryption in transit" (see
-  `docs/architecture/security.md#encryption-in-transit`) that's still
-  fully blocked on the hosting decision above — a reverse proxy (e.g.
-  Caddy, which auto-provisions Let's Encrypt certs) or the host's own
-  load balancer needs to sit in front of these containers and actually
-  terminate HTTPS. `app.set('trust proxy', 1)` is already in place for
-  whichever single reverse proxy ends up there, and Helmet's HSTS header
-  is already configured — but nothing terminates real TLS yet.
+- **No hosting target chosen.** The compose stack runs on any VPS, and
+  the Dockerfiles still work on Fly/Railway/Render/ECS/k8s — deliberately
+  deferred rather than building against a guess. Managed Postgres (for
+  point-in-time recovery) and an off-site bucket for the nightly dumps
+  (`BACKUP_S3_URL` is wired, no bucket exists) both wait on it.
+- **No automatic deploy step.** CI publishes images; a human runs
+  `docker compose pull && up -d` on the box (runbook, "Updating to a new
+  image tag"). A watchtower/webhook/SSH-from-CI step is a few lines once
+  there is a box to point it at.
+- **TLS is configured but unproven on a real domain.** The Caddyfile
+  (HSTS, HTTP→HTTPS redirect, Let's Encrypt via `ACME_EMAIL`) validates
+  and `trust proxy`/Helmet on the api side were already in place, but
+  certificate issuance has not been observed end to end because no DNS
+  name points at this stack yet. Encryption in transit between browser
+  and api is therefore "built, awaiting first deploy", not "verified".
+- **Uploaded files on local disk.** One api replica only; the S3 adapter
+  and bucket are not chosen.
+- **`INTEGRATION_ENCRYPTION_KEY` rotation** is not supported (keys must
+  be re-entered — runbook, open-questions #17).
+- **Nothing alerts.** A failed nightly backup or an unhealthy container
+  is only visible in `docker compose logs`/`ps`.
 
 ## Already closed (was "Not done yet")
+
+Image publishing for the two web apps, container health checks, a
+production compose stack with a reverse proxy, and nightly
+backups + a tested restore path — all above.
 
 Distributed rate limiting, structured logging, graceful shutdown, a real
 readiness check, gating `/docs` in production, error tracking (above),

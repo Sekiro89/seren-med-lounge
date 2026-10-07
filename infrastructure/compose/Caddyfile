@@ -1,0 +1,40 @@
+# Reverse proxy + automatic HTTPS for the production compose stack.
+# DOMAIN and ACME_EMAIL come from .env.prod via the caddy service's
+# environment. Caddy obtains and renews Let's Encrypt certificates on
+# its own as long as ports 80 and 443 are reachable from the internet
+# and the three DNS names point at this machine. Plain HTTP is
+# redirected to HTTPS automatically.
+
+{
+	email {$ACME_EMAIL}
+}
+
+(hardened) {
+	encode zstd gzip
+	header {
+		# defer: apply to the proxied response, replacing any upstream
+		# value (the api already sends HSTS via Helmet; one header, not two).
+		defer
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+api.{$DOMAIN} {
+	import hardened
+	# Caddy sets X-Forwarded-For/Proto; the api has `trust proxy` = 1 so
+	# the rate limiter sees the real client IP (apps/api/src/main.ts).
+	reverse_proxy api:4000
+}
+
+staff.{$DOMAIN} {
+	import hardened
+	reverse_proxy staff-web:3001
+}
+
+app.{$DOMAIN} {
+	import hardened
+	reverse_proxy patient-web:3000
+}
