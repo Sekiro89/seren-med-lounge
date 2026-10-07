@@ -124,7 +124,7 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
       >
         <SearchBox
           aria-label="Search medicines"
-          placeholder="Search by name or generic name"
+          placeholder="Search medicines"
           value={text}
           onChange={(e) => setText(e.target.value)}
           className="w-72"
