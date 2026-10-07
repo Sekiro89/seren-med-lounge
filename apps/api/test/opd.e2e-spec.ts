@@ -343,6 +343,7 @@ describe('OPD registration, queue and intake (e2e)', () => {
         .expect(200);
       expect(mine.body.length).toBeGreaterThan(0);
       expect(Object.keys(mine.body[0]).sort()).toEqual([
+        'ahead',
         'id',
         'queueDate',
         'station',

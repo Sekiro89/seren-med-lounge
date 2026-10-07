@@ -91,7 +91,7 @@ export class PrescriptionsService {
     return this.prisma.withTenant(organizationId, (tx) =>
       tx.prescription.findMany({
         where: { patientId },
-        include: { items: true },
+        include: { items: true, author: { select: { fullName: true } } },
         orderBy: { createdAt: 'desc' },
       }),
     );

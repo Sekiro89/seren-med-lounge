@@ -659,8 +659,219 @@ async function main() {
     ],
   });
 
+  // ---- A patient with a portal login and some history (patient-web demo).
+  // Pooja is at the clinic today (token with the junior doctor) and also
+  // had a visit last month with results, a diagnosis and a prescription.
+  const pooja = patients[2]!;
+  await db.patient.update({
+    where: { id: pooja },
+    data: { email: 'patient@demo.local', passwordHash },
+  });
+  const lastMonth = new Date(Date.now() - 32 * day);
+  const pastAppointment = await db.appointment.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      doctorId: users.senior!,
+      entrySource: 'ONLINE_BOOKING',
+      status: 'COMPLETED',
+      scheduledAt: lastMonth,
+    },
+  });
+  const pastVisit = await db.encounter.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      appointmentId: pastAppointment.id,
+      status: 'CLOSED',
+      startedAt: lastMonth,
+      endedAt: lastMonth,
+    },
+  });
+  for (const [icdCode, description] of [
+    ['E11.9', 'Type 2 diabetes, without complications'],
+    ['E55.9', 'Vitamin D deficiency'],
+  ] as const) {
+    await db.diagnosis.create({
+      data: {
+        organizationId: ORG_ID,
+        patientId: pooja,
+        encounterId: pastVisit.id,
+        status: 'FINALIZED',
+        currentVersionNumber: 1,
+        createdAt: lastMonth,
+        versions: {
+          create: {
+            organizationId: ORG_ID,
+            versionNumber: 1,
+            status: 'FINALIZED',
+            icdCode,
+            description,
+            authorId: users.senior!,
+          },
+        },
+      },
+    });
+  }
+  const pastLabs = await db.labOrder.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      encounterId: pastVisit.id,
+      authorId: users.senior!,
+      createdAt: lastMonth,
+      items: {
+        create: [
+          { organizationId: ORG_ID, testName: 'HbA1c' },
+          { organizationId: ORG_ID, testName: 'Fasting blood sugar' },
+          { organizationId: ORG_ID, testName: 'Vitamin D (25-OH)' },
+          { organizationId: ORG_ID, testName: 'Haemoglobin' },
+        ],
+      },
+    },
+    include: { items: true },
+  });
+  const results: Array<[string, string, string]> = [
+    ['7.8', '%', '4.0 to 5.6'],
+    ['142', 'mg/dL', '70 to 100'],
+    ['18', 'ng/mL', '30 to 100'],
+    ['12.9', 'g/dL', '12.0 to 15.5'],
+  ];
+  for (const [i, [resultValue, unit, referenceRange]] of results.entries()) {
+    await db.labResult.create({
+      data: {
+        organizationId: ORG_ID,
+        labOrderItemId: pastLabs.items[i]!.id,
+        resultValue,
+        unit,
+        referenceRange,
+        enteredById: users.lab!,
+        createdAt: new Date(lastMonth.getTime() + day),
+      },
+    });
+  }
+  await db.prescription.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      encounterId: pastVisit.id,
+      authorId: users.senior!,
+      createdAt: lastMonth,
+      items: {
+        create: [
+          {
+            organizationId: ORG_ID,
+            medicationName: 'Vitamin D3 60,000 IU',
+            dosage: '1 sachet',
+            frequency: 'Once a week',
+            durationDays: 56,
+            instructions: 'Mix in milk or water, after a meal.',
+          },
+        ],
+      },
+    },
+  });
+  await db.appointment.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      doctorId: users.senior!,
+      entrySource: 'ONLINE_BOOKING',
+      status: 'CONFIRMED',
+      scheduledAt: new Date(at('10:30').getTime() + 6 * day),
+    },
+  });
+  await db.medicalHistoryEntry.createMany({
+    data: [
+      {
+        organizationId: ORG_ID,
+        patientId: pooja,
+        category: 'ALLERGY',
+        description: 'Penicillin (rash)',
+        severity: 'MODERATE',
+        recordedById: users.nurse!,
+      },
+      {
+        organizationId: ORG_ID,
+        patientId: pooja,
+        category: 'CONDITION',
+        description: 'Type 2 diabetes, diagnosed 2024',
+        recordedById: users.nurse!,
+      },
+      {
+        organizationId: ORG_ID,
+        patientId: pooja,
+        category: 'FAMILY_HISTORY',
+        description: 'Father: heart disease',
+        recordedById: users.nurse!,
+      },
+    ],
+  });
+  await db.invoice.create({
+    data: {
+      organizationId: ORG_ID,
+      number: invoiceSpecs.length + 1,
+      patientId: pooja,
+      status: 'PAID',
+      subtotalMinor: 180000,
+      taxMinor: 0,
+      totalMinor: 180000,
+      paidMinor: 180000,
+      issuedById: users.billing!,
+      createdAt: lastMonth,
+      items: {
+        create: [
+          {
+            organizationId: ORG_ID,
+            itemType: 'CONSULTATION',
+            description: 'OPD consultation',
+            quantity: 1,
+            unitPriceMinor: 80000,
+            taxMinor: 0,
+            lineTotalMinor: 80000,
+          },
+          {
+            organizationId: ORG_ID,
+            itemType: 'LAB',
+            description: 'Diabetes panel',
+            quantity: 1,
+            unitPriceMinor: 100000,
+            taxMinor: 0,
+            lineTotalMinor: 100000,
+          },
+        ],
+      },
+    },
+  });
+  const poojaThread = await db.messageThread.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: pooja,
+      subject: 'Do I need to fast before my next blood test?',
+    },
+  });
+  await db.message.createMany({
+    data: [
+      {
+        organizationId: ORG_ID,
+        threadId: poojaThread.id,
+        senderType: 'PATIENT',
+        body: 'Hi, the doctor asked for a repeat HbA1c next month. Should I come fasting?',
+        readByStaffAt: new Date(),
+      },
+      {
+        organizationId: ORG_ID,
+        threadId: poojaThread.id,
+        senderType: 'USER',
+        senderUserId: users.reception!,
+        body: 'No fasting is needed for HbA1c. Please bring your previous report. See you soon!',
+      },
+    ],
+  });
+
   console.log(`Demo clinic ready.\n  Clinic ID: ${ORG_ID}\n  Password:  ${PASSWORD}`);
   console.log('  Sign in as: ' + STAFF.map(([key]) => `${key}@demo.local`).join(', '));
+  console.log('  Patient app: patient@demo.local (Pooja Deshpande)');
   await db.$disconnect();
 }
 

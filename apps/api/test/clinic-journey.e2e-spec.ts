@@ -1202,6 +1202,10 @@ describe('Clinic journey spine (e2e)', () => {
         .expect(200);
       expect(myAppointments.body).toHaveLength(1);
       expect(myAppointments.body[0].id).toBe(appt.body.id);
+      // Only the booked doctor's name, nothing else about the staff user.
+      if (myAppointments.body[0].doctor) {
+        expect(Object.keys(myAppointments.body[0].doctor)).toEqual(['fullName']);
+      }
 
       const myDiagnoses = await request(app.getHttpServer())
         .get('/patients/me/diagnoses')
@@ -1220,6 +1224,7 @@ describe('Clinic journey spine (e2e)', () => {
         .expect(200);
       expect(myPrescriptions.body).toHaveLength(1);
       expect(myPrescriptions.body[0].items[0].medicationName).toBe('Amoxicillin');
+      expect(Object.keys(myPrescriptions.body[0].author)).toEqual(['fullName']);
 
       const myLabOrders = await request(app.getHttpServer())
         .get('/patients/me/lab-orders')

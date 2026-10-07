@@ -99,15 +99,43 @@ export class QueueService {
     );
   }
 
-  /** Patient-facing: today's token(s) for the signed-in patient. */
+  /**
+   * Patient-facing: today's token(s) for the signed-in patient, with how
+   * many people are waiting ahead of them at the same desk. Only a count
+   * leaves this method, never who those people are.
+   */
   async listTodayForPatient(organizationId: string, patientId: string) {
-    return this.prisma.withTenant(organizationId, (tx) =>
-      tx.queueEntry.findMany({
-        where: { patientId, queueDate: toDbDate(clinicDateString()) },
-        select: { id: true, tokenNumber: true, station: true, status: true, queueDate: true },
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const queueDate = toDbDate(clinicDateString());
+      const entries = await tx.queueEntry.findMany({
+        where: { patientId, queueDate },
+        select: {
+          id: true,
+          tokenNumber: true,
+          station: true,
+          status: true,
+          queueDate: true,
+          waitingSince: true,
+        },
         orderBy: { tokenNumber: 'asc' },
-      }),
-    );
+      });
+      return Promise.all(
+        entries.map(async ({ waitingSince, ...entry }) => ({
+          ...entry,
+          ahead:
+            entry.status === QueueStatus.WAITING
+              ? await tx.queueEntry.count({
+                  where: {
+                    queueDate,
+                    station: entry.station,
+                    status: QueueStatus.WAITING,
+                    waitingSince: { lt: waitingSince },
+                  },
+                })
+              : 0,
+        })),
+      );
+    });
   }
 
   async transition(

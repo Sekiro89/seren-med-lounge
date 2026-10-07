@@ -92,6 +92,8 @@ export class AppointmentsService {
     return this.prisma.withTenant(organizationId, (tx) =>
       tx.appointment.findMany({
         where: { patientId },
+        // The doctor's name only: patients see who they are booked with.
+        include: { doctor: { select: { fullName: true } } },
         orderBy: { scheduledAt: 'desc' },
       }),
     );
