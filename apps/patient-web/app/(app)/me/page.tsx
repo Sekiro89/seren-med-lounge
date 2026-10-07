@@ -3,8 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Bell,
   ChatCircleText,
   Envelope,
+  Star,
   Heartbeat,
   Phone,
   Receipt,
@@ -26,8 +28,8 @@ import {
 import { apiClient } from '../../../lib/api-client';
 import { clearPatientToken } from '../../../lib/auth';
 import { ageFrom, formatDate } from '../../../lib/format';
-import type { HistoryEntry, MessageThread, Profile } from '../../../lib/types';
-import { useApi } from '../../../lib/use-api';
+import type { HistoryEntry, MessageThread, Profile, ReviewRequest } from '../../../lib/types';
+import { useApi, useNow } from '../../../lib/use-api';
 
 const SEVERITY: Record<NonNullable<HistoryEntry['severity']>, string> = {
   MILD: 'Mild reaction',
@@ -44,7 +46,7 @@ const HEALTH_GROUPS: Array<{ category: HistoryEntry['category']; title: string }
 /**
  * Who this record belongs to (name and date of birth, so a family member
  * using the phone can confirm it), allergies first, then conditions,
- * links to bills and messages, and sign out. Design system 18.3.
+ * links to payments, feedback, notifications and messages, and sign out. Design system 18.3.
  */
 export default function MePage() {
   const router = useRouter();
@@ -53,10 +55,15 @@ export default function MePage() {
   const threads = useApi<Array<MessageThread & { unreadCount: number }>>(
     '/patients/me/message-threads',
   );
+  const reviewRequests = useApi<ReviewRequest[]>('/patients/me/review-requests');
+  const now = useNow();
   const [signingOut, setSigningOut] = useState(false);
 
   const allergies = (history.data ?? []).filter((h) => h.category === 'ALLERGY');
   const unread = (threads.data ?? []).reduce((sum, t) => sum + t.unreadCount, 0);
+  const toReview = (reviewRequests.data ?? []).filter(
+    (r) => r.status === 'REQUESTED' && new Date(r.expiresAt).getTime() > now,
+  ).length;
 
   async function signOut() {
     setSigningOut(true);
@@ -139,7 +146,24 @@ export default function MePage() {
               <LinkCard href="/bills">
                 <div className="flex items-center gap-4">
                   <IconBadge icon={Receipt} tone="primary" />
-                  <p className="font-bold">Bills and receipts</p>
+                  <p className="font-bold">Payments</p>
+                </div>
+              </LinkCard>
+            </li>
+            <li>
+              <LinkCard href="/feedback">
+                <div className="flex flex-wrap items-center gap-4">
+                  <IconBadge icon={Star} tone="primary" />
+                  <p className="font-bold">Feedback</p>
+                  {toReview > 0 && <Chip tone="primary">{toReview} to do</Chip>}
+                </div>
+              </LinkCard>
+            </li>
+            <li>
+              <LinkCard href="/notifications">
+                <div className="flex items-center gap-4">
+                  <IconBadge icon={Bell} tone="primary" />
+                  <p className="font-bold">Notifications</p>
                 </div>
               </LinkCard>
             </li>
@@ -147,7 +171,7 @@ export default function MePage() {
               <LinkCard href="/messages">
                 <div className="flex flex-wrap items-center gap-4">
                   <IconBadge icon={ChatCircleText} tone="primary" />
-                  <p className="font-bold">Messages with the clinic</p>
+                  <p className="font-bold">Messages</p>
                   {unread > 0 && <Chip tone="primary">{unread} new</Chip>}
                 </div>
               </LinkCard>

@@ -4,14 +4,23 @@ import Link from 'next/link';
 import {
   ArrowsClockwise,
   CalendarCheck,
+  CalendarPlus,
   ChatCircleText,
+  ClipboardText,
+  CreditCard,
+  FileText,
   Flask,
+  Heartbeat,
   Receipt,
+  Star,
+  VideoCamera,
   type Icon,
 } from '@phosphor-icons/react';
 import {
+  ButtonLink,
   Card,
   CardsSkeleton,
+  DateTile,
   Chip,
   ErrorNote,
   IconBadge,
@@ -20,17 +29,11 @@ import {
   Skeleton,
   type Tone,
 } from '../../../components/ui';
-import {
-  doctorName,
-  formatDay,
-  formatMoney,
-  formatMonthShort,
-  formatDayNumber,
-  formatTime,
-  relativeDay,
-} from '../../../lib/format';
+import { doctorName, formatDay, formatMoney, formatTime, relativeDay } from '../../../lib/format';
 import type {
   Appointment,
+  CarePlan,
+  ReviewRequest,
   Invoice,
   LabOrder,
   MessageThread,
@@ -39,6 +42,46 @@ import type {
   QueueToken,
 } from '../../../lib/types';
 import { useApi, useNow } from '../../../lib/use-api';
+
+const STEP_LABEL: Record<CarePlan['followUps'][number]['type'], string> = {
+  REVIEW_APPOINTMENT: 'review visit',
+  MEDICATION_REMINDER: 'medicine check',
+  RECOVERY_CHECK: 'recovery check-in',
+  REPORT_ALERT: 'report check',
+  OTHER: 'follow-up',
+};
+
+/** The Patient Interface of the SereneMed architecture, one tap each. */
+const ACTIONS: Array<{ href: string; label: string; icon: Icon }> = [
+  { href: '/appointments/book', label: 'Book a visit', icon: CalendarPlus },
+  { href: '/appointments/book', label: 'Video consult', icon: VideoCamera },
+  { href: '/bills', label: 'Payments', icon: CreditCard },
+  { href: '/records', label: 'Records', icon: ClipboardText },
+  { href: '/results', label: 'Reports', icon: FileText },
+  { href: '/messages', label: 'Messages', icon: ChatCircleText },
+];
+
+function QuickActions() {
+  return (
+    <nav aria-label="Quick actions">
+      <ul className="grid grid-cols-3 gap-3">
+        {ACTIONS.map(({ href, label, icon: ActionIcon }) => (
+          <li key={label}>
+            <Link
+              href={href}
+              className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-line bg-surface px-2 py-4 text-center shadow-card transition-transform active:scale-[0.98]"
+            >
+              <span className="flex size-11 items-center justify-center rounded-full bg-primary-subtle text-primary">
+                <ActionIcon size={24} aria-hidden="true" />
+              </span>
+              <span className="text-[0.88rem] font-semibold leading-tight text-fg">{label}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
 
 const DESK: Record<QueueStation, string> = {
   VITALS: 'the nurse for your check-up',
@@ -72,6 +115,8 @@ export default function HomePage() {
   const threads = useApi<Array<MessageThread & { unreadCount: number }>>(
     '/patients/me/message-threads',
   );
+  const carePlans = useApi<CarePlan[]>('/patients/me/care-plans');
+  const reviews = useApi<ReviewRequest[]>('/patients/me/review-requests');
 
   const token = queue.data?.find((t) => t.status !== 'COMPLETED');
   const now = useNow();
@@ -90,6 +135,15 @@ export default function HomePage() {
     .flatMap((o) => o.items.flatMap((item) => item.results))
     .filter((r) => now - new Date(r.createdAt).getTime() < 45 * 86_400_000).length;
   const unread = (threads.data ?? []).reduce((sum, t) => sum + t.unreadCount, 0);
+  const pendingReviews = (reviews.data ?? []).filter(
+    (r) => r.status === 'REQUESTED' && new Date(r.expiresAt).getTime() > now,
+  ).length;
+  // The soonest open step of an active care plan (a review visit, a check-in).
+  const nextStep = (carePlans.data ?? [])
+    .filter((p) => p.status === 'ACTIVE')
+    .flatMap((p) => p.followUps.map((f) => ({ ...f, plan: p.title })))
+    .filter((f) => f.status === 'PENDING')
+    .sort((a, b) => a.dueAt.localeCompare(b.dueAt))[0];
 
   const attention: Array<{ href: string; icon: Icon; tone: Tone; title: string; text: string }> =
     [];
@@ -120,6 +174,15 @@ export default function HomePage() {
       text: 'Tap to read.',
     });
   }
+  if (pendingReviews > 0) {
+    attention.push({
+      href: '/feedback',
+      icon: Star,
+      tone: 'neutral',
+      title: 'How was your visit?',
+      text: 'Tell us in a minute. It helps us care for you better.',
+    });
+  }
 
   const firstName = profile.data?.firstName;
 
@@ -142,6 +205,8 @@ export default function HomePage() {
         token && <QueueCard token={token} onRefresh={queue.reload} />
       )}
 
+      <QuickActions />
+
       <section aria-labelledby="next-visit">
         <SectionHeading>
           <span id="next-visit">Your next visit</span>
@@ -153,27 +218,48 @@ export default function HomePage() {
         ) : next ? (
           <NextVisit appointment={next} />
         ) : (
-          <Card className="flex items-center gap-4">
-            <IconBadge icon={CalendarCheck} tone="neutral" />
-            <div>
-              <p className="font-bold">Nothing booked</p>
-              <p className="text-fg-muted">
-                To book a visit, call the clinic or{' '}
-                <Link href="/messages" className="font-semibold text-primary underline">
-                  send us a message
-                </Link>
-                .
-              </p>
+          <Card className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-4">
+              <IconBadge icon={CalendarCheck} tone="neutral" />
+              <div>
+                <p className="font-bold">Nothing booked</p>
+                <p className="text-fg-muted">Pick a doctor and a time that suits you.</p>
+              </div>
             </div>
+            <ButtonLink
+              href="/appointments/book"
+              icon={<CalendarPlus size={20} aria-hidden="true" />}
+            >
+              Book a visit
+            </ButtonLink>
           </Card>
         )}
       </section>
+
+      {nextStep && (
+        <section aria-labelledby="care-next">
+          <SectionHeading>
+            <span id="care-next">Your care plan</span>
+          </SectionHeading>
+          <LinkCard href="/care">
+            <div className="flex items-center gap-4">
+              <IconBadge icon={Heartbeat} tone="success" />
+              <div className="min-w-0">
+                <p className="font-bold">{nextStep.plan}</p>
+                <p className="text-fg-muted">
+                  Next: {STEP_LABEL[nextStep.type]} {relativeDay(nextStep.dueAt)}
+                </p>
+              </div>
+            </div>
+          </LinkCard>
+        </section>
+      )}
 
       <section aria-labelledby="attention">
         <SectionHeading>
           <span id="attention">For you</span>
         </SectionHeading>
-        {invoices.loading || labs.loading || threads.loading ? (
+        {invoices.loading || labs.loading || threads.loading || reviews.loading ? (
           <CardsSkeleton count={2} />
         ) : attention.length === 0 ? (
           <Card>
@@ -266,14 +352,7 @@ function NextVisit({ appointment }: { appointment: Appointment }) {
   const confirmed = appointment.status === 'CONFIRMED';
   return (
     <Card className="flex gap-5">
-      <div className="flex w-16 shrink-0 flex-col items-center justify-center self-start rounded-2xl bg-primary-subtle py-3 text-primary-subtle-fg">
-        <span className="text-sm font-bold uppercase">
-          {formatMonthShort(appointment.scheduledAt)}
-        </span>
-        <span className="tabular text-3xl font-bold leading-none">
-          {formatDayNumber(appointment.scheduledAt)}
-        </span>
-      </div>
+      <DateTile iso={appointment.scheduledAt} />
       <div className="min-w-0 flex-1">
         <p className="text-lg font-bold">
           {formatDay(appointment.scheduledAt)}, {formatTime(appointment.scheduledAt)}
@@ -285,11 +364,14 @@ function NextVisit({ appointment }: { appointment: Appointment }) {
           <Chip tone={confirmed ? 'success' : 'warning'}>
             {confirmed ? 'Confirmed' : 'Waiting for the clinic to confirm'}
           </Chip>
+          {appointment.entrySource === 'VIDEO_CONSULTATION' && (
+            <Chip tone="info">Video consultation</Chip>
+          )}
           <Link
-            href="/visits"
+            href={`/appointments/${appointment.id}`}
             className="font-semibold text-primary underline-offset-4 hover:underline"
           >
-            All visits
+            Details
           </Link>
         </div>
       </div>

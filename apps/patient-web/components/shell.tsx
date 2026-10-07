@@ -3,26 +3,50 @@
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { CalendarBlank, Flask, House, Pill, UserCircle, type Icon } from '@phosphor-icons/react';
+import {
+  Bell,
+  CalendarBlank,
+  ChatCircleText,
+  FolderOpen,
+  House,
+  UserCircle,
+  type Icon,
+} from '@phosphor-icons/react';
 import { getPatientToken, PATIENT_TOKEN_KEY } from '../lib/auth';
+import type { PatientNotification } from '../lib/types';
+import { useApi } from '../lib/use-api';
 
 interface Tab {
   label: string;
+  /** Shorter label for the phone tab bar, where five tabs share 360px. */
+  short?: string;
   href: string;
   icon: Icon;
 }
 
-/** The five tabs (design system 18.4). Bills and messages live under Home and Me. */
+/**
+ * The five tabs (design system 18.4), following the Patient Interface of
+ * the SereneMed architecture: appointments (with video), records and
+ * reports, messages, and the patient's own space (payments, feedback).
+ */
 const TABS: Tab[] = [
   { label: 'Home', href: '/home', icon: House },
-  { label: 'Visits', href: '/visits', icon: CalendarBlank },
-  { label: 'Medicines', href: '/medicines', icon: Pill },
-  { label: 'Results', href: '/results', icon: Flask },
+  { label: 'Appointments', short: 'Visits', href: '/appointments', icon: CalendarBlank },
+  { label: 'Records', href: '/records', icon: FolderOpen },
+  { label: 'Messages', href: '/messages', icon: ChatCircleText },
   { label: 'Me', href: '/me', icon: UserCircle },
 ];
 
-/** Pages reached from Home or Me highlight the tab they belong to. */
-const PARENT: Record<string, string> = { '/bills': '/me', '/messages': '/me' };
+/** Pages reached from a hub highlight the tab they belong to. */
+const PARENT: Record<string, string> = {
+  '/visits': '/appointments',
+  '/medicines': '/records',
+  '/results': '/records',
+  '/care': '/records',
+  '/bills': '/me',
+  '/feedback': '/me',
+  '/notifications': '/me',
+};
 
 function activeTab(pathname: string): string | undefined {
   const parent = Object.keys(PARENT).find((p) => pathname.startsWith(p));
@@ -97,6 +121,8 @@ export function PatientShell({ children }: { children: ReactNode }) {
               })}
             </ul>
           </nav>
+
+          <NotificationBell />
         </div>
       </header>
 
@@ -126,7 +152,7 @@ export function PatientShell({ children }: { children: ReactNode }) {
                   }`}
                 >
                   <tab.icon size={24} weight={active ? 'fill' : 'regular'} aria-hidden="true" />
-                  {tab.label}
+                  {tab.short ?? tab.label}
                 </Link>
               </li>
             );
@@ -134,5 +160,25 @@ export function PatientShell({ children }: { children: ReactNode }) {
         </ul>
       </nav>
     </div>
+  );
+}
+
+/** Unread in-app alerts (new results, replies). Polls every minute. */
+function NotificationBell() {
+  const { data } = useApi<PatientNotification[]>('/patients/me/notifications', 60_000);
+  const unread = data?.filter((n) => !n.readAt).length ?? 0;
+  return (
+    <Link
+      href="/notifications"
+      aria-label={unread ? `Notifications, ${unread} new` : 'Notifications'}
+      className="relative -mr-2 flex size-12 items-center justify-center rounded-full text-fg-muted hover:bg-surface-muted hover:text-fg lg:ml-2"
+    >
+      <Bell size={24} aria-hidden="true" />
+      {unread > 0 && (
+        <span className="tabular absolute right-1.5 top-1.5 flex min-w-5 items-center justify-center rounded-full bg-danger-fg px-1 text-[0.8rem] font-bold leading-5 text-white">
+          {unread}
+        </span>
+      )}
+    </Link>
   );
 }

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { CaretRight, CircleNotch, WarningCircle, type Icon } from '@phosphor-icons/react';
+import { formatDayNumber, formatMonthShort } from '../lib/format';
 
 /**
  * The patient app's small component set (design system 18.5): 16px cards,
@@ -212,6 +213,23 @@ export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () 
 export function Skeleton({ className = '' }: { className?: string }) {
   return (
     <div className={`animate-pulse rounded-2xl bg-surface-muted ${className}`} aria-hidden="true" />
+  );
+}
+
+/**
+ * Month and day number in a rounded tile, for visit cards. `muted` for
+ * visits that are over, so upcoming ones stand out.
+ */
+export function DateTile({ iso, muted = false }: { iso: string; muted?: boolean }) {
+  return (
+    <div
+      className={`flex w-16 shrink-0 flex-col items-center justify-center self-start rounded-2xl py-3 ${
+        muted ? 'bg-surface-muted text-fg-muted' : 'bg-primary-subtle text-primary-subtle-fg'
+      }`}
+    >
+      <span className="text-sm font-bold uppercase">{formatMonthShort(iso)}</span>
+      <span className="tabular text-3xl font-bold leading-none">{formatDayNumber(iso)}</span>
+    </div>
   );
 }
 

@@ -18,6 +18,7 @@ export interface Appointment {
   id: string;
   status: AppointmentStatus;
   scheduledAt: string;
+  entrySource: 'ONLINE_BOOKING' | 'RECEPTION_WALK_IN' | 'VIDEO_CONSULTATION' | 'CAMP';
   doctor: { fullName: string } | null;
 }
 
@@ -112,4 +113,108 @@ export interface ThreadMessage {
 /** GET /patients/me/message-threads/:id (opening it marks clinic replies read). */
 export interface MessageThreadDetail extends MessageThread {
   messages: ThreadMessage[];
+}
+
+// ---- Online booking and visit records (/patients/me/booking/*, /patients/me/appointments/:id)
+
+export interface BookingDoctor {
+  id: string;
+  fullName: string;
+  role: 'JUNIOR_DOCTOR' | 'SENIOR_DOCTOR';
+  /** Weekdays the doctor sees patients, 0 = Sunday. */
+  days: number[];
+}
+
+export interface Slot {
+  start: string;
+  end: string;
+}
+
+export type BookingMode = 'IN_PERSON' | 'VIDEO';
+
+export interface VisitDetail {
+  id: string;
+  status: AppointmentStatus;
+  entrySource: 'ONLINE_BOOKING' | 'RECEPTION_WALK_IN' | 'VIDEO_CONSULTATION' | 'CAMP';
+  scheduledAt: string;
+  notes: string | null;
+  doctor: { fullName: string } | null;
+  encounter: {
+    id: string;
+    status: string;
+    startedAt: string;
+    endedAt: string | null;
+    diagnoses: Array<{
+      id: string;
+      versions: Array<{ icdCode: string | null; description: string }>;
+    }>;
+    prescriptions: Array<{
+      id: string;
+      status: string;
+      createdAt: string;
+      items: PrescriptionItem[];
+    }>;
+    labOrders: Array<{
+      id: string;
+      createdAt: string;
+      items: Array<{ id: string; testName: string; results: LabResult[] }>;
+    }>;
+    invoices: Array<{
+      id: string;
+      number: number;
+      status: string;
+      totalMinor: number;
+      paidMinor: number;
+    }>;
+  } | null;
+}
+
+// ---- Care, feedback and alerts
+
+export interface CarePlan {
+  id: string;
+  title: string;
+  dischargeInstructions: string | null;
+  status: 'ACTIVE' | 'COMPLETED' | string;
+  createdAt: string;
+  followUps: Array<{
+    id: string;
+    type:
+      'REVIEW_APPOINTMENT' | 'MEDICATION_REMINDER' | 'RECOVERY_CHECK' | 'REPORT_ALERT' | 'OTHER';
+    dueAt: string;
+    notes: string | null;
+    status: string;
+    appointmentId: string | null;
+  }>;
+}
+
+export interface ReviewRequest {
+  id: string;
+  stage: 'AFTER_SECOND_CONSULTATION' | 'AFTER_FIRST_FOLLOW_UP' | 'AFTER_PROCEDURE';
+  status: 'REQUESTED' | 'SUBMITTED' | 'EXPIRED' | 'CANCELLED';
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface PatientNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/** GET /patients/me/reviews (newest first). */
+export interface PatientReview {
+  id: string;
+  requestId: string;
+  stage: ReviewRequest['stage'];
+  rating: number;
+  comment: string | null;
+  publishConsent: boolean;
+  moderationStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  createdAt: string;
 }

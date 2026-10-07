@@ -37,7 +37,7 @@ export default function BillsPage() {
 
   return (
     <div>
-      <PageTitle title="Bills" description="What you owe the clinic and what you have paid." />
+      <PageTitle title="Payments" description="Your bills, what you've paid, and what's left." />
       {invoices.loading ? (
         <div className="flex flex-col gap-10">
           <Skeleton className="h-32" />
