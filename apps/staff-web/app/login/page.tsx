@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Eye, EyeSlash, ListChecks, ShieldCheck, UsersThree } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -50,20 +51,68 @@ export default function StaffLoginPage() {
     }
   };
 
+  const [showPassword, setShowPassword] = useState(false);
   const inputClass =
-    'h-10 w-full rounded-control border border-control bg-surface px-3 text-base text-fg placeholder:text-fg-subtle';
+    'h-11 w-full rounded-control border border-control bg-surface px-3 text-base text-fg placeholder:text-fg-subtle';
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-bg px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex justify-center">
-          <Logo />
+    <main className="grid min-h-dvh lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <aside className="relative hidden overflow-hidden bg-brand-deep p-12 text-brand-deep-fg lg:flex lg:flex-col lg:justify-between">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-32 -top-32 size-[420px] rounded-full border border-brand-deep-fg/10"
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-40 -left-24 size-[480px] rounded-full border border-brand-deep-fg/10"
+        />
+        <Logo tone="light" />
+        <div className="relative max-w-md">
+          <h2 className="text-4xl font-semibold leading-tight tracking-tight text-on-primary">
+            Every visit, in one calm workspace.
+          </h2>
+          <ul className="mt-10 flex flex-col gap-6">
+            {[
+              {
+                icon: UsersThree,
+                title: 'The right desk for every role',
+                text: 'Reception, nurses, doctors, pharmacy and billing each see only what they need.',
+              },
+              {
+                icon: ListChecks,
+                title: 'One record per patient',
+                text: 'Visits, prescriptions, labs and bills stay together from first call to follow-up.',
+              },
+              {
+                icon: ShieldCheck,
+                title: 'Every action on the record',
+                text: 'Clinical notes are versioned and every change is audited.',
+              },
+            ].map(({ icon: IconComponent, title, text }) => (
+              <li key={title} className="flex gap-4">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-brand-deep-fg/10 text-on-primary">
+                  <IconComponent size={22} aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="block font-medium text-on-primary">{title}</span>
+                  <span className="mt-0.5 block text-sm leading-relaxed">{text}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="rounded-panel border border-line bg-surface p-6">
-          <h1 className="text-xl font-semibold text-fg">Sign in</h1>
-          <p className="mb-6 mt-1 text-sm text-fg-muted">Use your clinic staff account.</p>
+        <p className="relative text-[13px]">SereneMed Lounge, Digital Clinic Operating System</p>
+      </aside>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+      <section className="flex items-center justify-center bg-bg px-6 py-12">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 lg:hidden">
+            <Logo />
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-fg">Welcome back</h1>
+          <p className="mb-8 mt-2 text-sm text-fg-muted">Sign in to your clinic workspace.</p>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
             <div>
               <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-fg">
                 Email
@@ -72,6 +121,7 @@ export default function StaffLoginPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
+                autoFocus
                 className={inputClass}
                 {...register('email')}
               />
@@ -84,13 +134,28 @@ export default function StaffLoginPage() {
               <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-fg">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                className={inputClass}
-                {...register('password')}
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  className={`${inputClass} pr-11`}
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-control text-fg-muted hover:bg-surface-muted hover:text-fg"
+                >
+                  {showPassword ? (
+                    <EyeSlash size={20} aria-hidden="true" />
+                  ) : (
+                    <Eye size={20} aria-hidden="true" />
+                  )}
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1.5 text-[13px] text-danger-fg">{errors.password.message}</p>
               )}
@@ -99,18 +164,22 @@ export default function StaffLoginPage() {
             {serverError && (
               <p
                 role="alert"
-                className="rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
+                className="rounded-control bg-danger-bg px-3 py-2.5 text-sm text-danger-fg"
               >
                 {serverError}
               </p>
             )}
 
-            <Button type="submit" loading={isSubmitting} className="mt-1 h-10 w-full">
+            <Button type="submit" loading={isSubmitting} className="h-11 w-full text-[15px]">
               Sign in
             </Button>
           </form>
+
+          <p className="mt-8 text-center text-[13px] text-fg-subtle">
+            Trouble signing in? Ask your clinic administrator.
+          </p>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

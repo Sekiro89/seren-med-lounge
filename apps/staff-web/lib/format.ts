@@ -34,6 +34,17 @@ export function formatDate(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** `Wednesday, 07 Oct 2026`. */
+export function formatLongDate(iso: string | Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: CLINIC_TZ,
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(typeof iso === 'string' ? new Date(iso) : iso);
+}
+
 /** Paise to rupees, Indian digit grouping: 12345000 -> ₹1,23,450.00 */
 export function formatMoney(paise: number): string {
   return new Intl.NumberFormat('en-IN', {

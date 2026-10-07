@@ -56,7 +56,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Front desk',
     items: [
-      { label: 'Patients', href: '/patients', icon: Users, anyOf: ['patient:read'], ready: false },
+      { label: 'Patients', href: '/patients', icon: Users, anyOf: ['patient:read'], ready: true },
       {
         label: 'Appointments',
         href: '/appointments',
@@ -116,7 +116,7 @@ export const NAV: NavGroup[] = [
         href: '/follow-ups',
         icon: CalendarCheck,
         anyOf: ['follow-up:manage'],
-        ready: false,
+        ready: true,
       },
     ],
   },
@@ -128,14 +128,14 @@ export const NAV: NavGroup[] = [
         href: '/dispensing',
         icon: FirstAidKit,
         anyOf: ['pharmacy:dispense'],
-        ready: false,
+        ready: true,
       },
       {
         label: 'Inventory',
         href: '/inventory',
         icon: Package,
         anyOf: ['inventory:manage'],
-        ready: false,
+        ready: true,
       },
     ],
   },
@@ -147,7 +147,7 @@ export const NAV: NavGroup[] = [
         href: '/billing',
         icon: Receipt,
         anyOf: ['invoice:manage'],
-        ready: false,
+        ready: true,
       },
       {
         label: 'Payments',
@@ -182,7 +182,7 @@ export const NAV: NavGroup[] = [
         anyOf: ['message:manage'],
         ready: false,
       },
-      { label: 'Tasks', href: '/tasks', icon: CheckSquare, ready: false },
+      { label: 'Tasks', href: '/tasks', icon: CheckSquare, ready: true },
     ],
   },
   {

@@ -1,7 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { ListNumbers, Megaphone, Play, Check, SkipForward } from '@phosphor-icons/react';
+import {
+  Check,
+  FirstAidKit,
+  Flask,
+  Heartbeat,
+  ListNumbers,
+  Megaphone,
+  Play,
+  Receipt,
+  SkipForward,
+  Stethoscope,
+} from '@phosphor-icons/react';
+import type { Icon } from '@phosphor-icons/react';
 import { ApiError } from '@serenemed/api-client';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
@@ -33,6 +45,15 @@ const STATIONS = [
   'PHARMACY',
   'LAB',
 ] as const;
+
+const STATION_ICONS: Record<(typeof STATIONS)[number], Icon> = {
+  VITALS: Heartbeat,
+  JUNIOR_DOCTOR: Stethoscope,
+  SENIOR_DOCTOR: Stethoscope,
+  BILLING: Receipt,
+  PHARMACY: FirstAidKit,
+  LAB: Flask,
+};
 
 type Action = 'call' | 'start' | 'complete' | 'skip';
 
@@ -108,10 +129,16 @@ export default function QueuePage() {
               <section
                 key={station}
                 aria-label={humanize(station)}
-                className="rounded-panel border border-line bg-surface-muted p-3"
+                className="rounded-panel border border-line bg-surface-muted/60 p-3"
               >
                 <div className="mb-3 flex items-center justify-between px-1">
-                  <h2 className="text-sm font-semibold text-fg">{humanize(station)}</h2>
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+                    {(() => {
+                      const StationIcon = STATION_ICONS[station];
+                      return <StationIcon size={18} className="text-primary" aria-hidden="true" />;
+                    })()}
+                    {humanize(station)}
+                  </h2>
                   <span className="tabular rounded-full bg-surface px-2 py-0.5 font-mono text-xs font-medium text-fg-muted">
                     {entries.length}
                   </span>
@@ -153,10 +180,10 @@ function TokenCard({
   onMove: (station: string) => void;
 }) {
   return (
-    <article className="rounded-control border border-line bg-surface p-3">
+    <article className="rounded-control border border-line bg-surface p-3 shadow-card">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-baseline gap-2.5">
-          <span className="tabular font-mono text-xl font-semibold text-fg">
+        <div className="flex items-center gap-3">
+          <span className="tabular flex h-10 min-w-12 items-center justify-center rounded-control bg-primary-subtle px-2 font-mono text-lg font-semibold text-primary-subtle-fg">
             {String(entry.tokenNumber).padStart(3, '0')}
           </span>
           <span className="text-sm font-medium text-fg">{fullName(entry.patient)}</span>

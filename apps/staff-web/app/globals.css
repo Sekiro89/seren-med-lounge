@@ -24,6 +24,9 @@
   --on-primary: #ffffff;
   --ring: #12706f;
   --sidebar: #ffffff;
+  /* Deep teal brand surface (serene-900), used for the sign-in panel. */
+  --brand-deep: #0c3d3e;
+  --brand-deep-fg: #d8f0ee;
 
   --success-fg: #15803d;
   --success-bg: #f0fdf4;
@@ -56,6 +59,8 @@
   --color-on-primary: var(--on-primary);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-deep-fg: var(--brand-deep-fg);
   --color-danger: var(--danger);
   --color-success-fg: var(--success-fg);
   --color-success-bg: var(--success-bg);
@@ -74,6 +79,9 @@
   --radius-control: 8px;
   --radius-panel: 12px;
   --shadow-popover: 0 8px 24px rgba(15, 23, 42, 0.08);
+  /* Cards lift a hair off the page; slate-tinted, never black. */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.07);
 }
 
 html {

@@ -13,6 +13,8 @@ import { StaffProvider } from '../../lib/staff-context';
 import { Skeleton } from '../ui/skeleton';
 import { Logo } from './logo';
 import { NotificationBell } from './notification-bell';
+import { TopbarSearch } from './topbar-search';
+import { can } from '../../lib/permissions';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
 
@@ -22,6 +24,12 @@ import { UserMenu } from './user-menu';
  * /login. This is a UX redirect only; the API still rejects any request
  * without a valid token.
  */
+/**
+ * TODO(product): the clinic's display name should come from the signed-in
+ * user's organization once the API returns it; until then a neutral label.
+ */
+const CLINIC_NAME = 'SereneMed Lounge';
+
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   // undefined while rendering on the server / hydrating, null when signed out.
@@ -61,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[248px_1fr]">
       <aside className="sticky top-0 hidden h-dvh border-r border-line lg:block">
-        <Sidebar role={user.role} />
+        <Sidebar role={user.role} clinicName={CLINIC_NAME} />
       </aside>
 
       {drawerOpen && (
@@ -73,7 +81,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="absolute inset-0 cursor-pointer bg-fg/40"
           />
           <aside className="absolute inset-y-0 left-0 w-[248px] border-r border-line bg-sidebar shadow-popover">
-            <Sidebar role={user.role} onNavigate={() => setDrawerOpen(false)} />
+            <Sidebar
+              role={user.role}
+              clinicName={CLINIC_NAME}
+              onNavigate={() => setDrawerOpen(false)}
+            />
           </aside>
         </div>
       )}
@@ -93,6 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Logo />
             </div>
           </div>
+          {can(user.role, 'patient:read') ? <TopbarSearch /> : <span />}
           <div className="flex items-center gap-1">
             <NotificationBell />
             <UserMenu user={user} onSignOut={signOut} />

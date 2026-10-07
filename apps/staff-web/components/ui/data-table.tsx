@@ -39,7 +39,7 @@ export function DataTable<T>({
               <th
                 key={column.header}
                 scope="col"
-                className={`h-10 px-4 text-xs font-medium uppercase tracking-wide text-fg-muted ${
+                className={`h-10 px-4 text-xs font-semibold uppercase tracking-wide text-fg-muted ${
                   column.align === 'right' ? 'text-right' : ''
                 }`}
               >
@@ -63,7 +63,7 @@ export function DataTable<T>({
             rows?.map((row) => (
               <tr
                 key={getRowKey(row)}
-                className="border-b border-line transition-colors last:border-0 hover:bg-primary-subtle"
+                className="border-b border-line transition-colors last:border-0 hover:bg-surface-muted/70"
               >
                 {columns.map((column) => (
                   <td

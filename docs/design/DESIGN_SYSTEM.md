@@ -214,7 +214,8 @@ Rules:
 
 **Elevation:** border first, shadow rarely.
 
-- Cards: 1px `--border`, no shadow.
+- Cards: 1px `--border` plus `shadow-card` (`0 1px 2px` and `0 1px 3px` at 4% slate), a hair of lift, never a heavy shadow.
+- Interactive cards (KPI tiles that link to a desk) gain `shadow-card-hover` and a faint brand border on hover.
 - Popovers, menus: `0 8px 24px rgba(15, 23, 42, 0.08)` (slate-tinted, never black).
 - Dialogs: the same plus a `rgba(15, 23, 42, 0.4)` scrim.
 - Use a card only when elevation means hierarchy; otherwise group with
@@ -485,6 +486,29 @@ real numbers only; no decorative sparklines without data.
   comma, a period, or a hyphen.
 
 ---
+
+## 14a. Polish layer (added after the first review)
+
+Small touches that make the product feel finished without adding a second
+accent or any decoration:
+
+- **Sign in** is a split screen: a deep-teal brand panel (`--brand-deep`,
+  serene-900) with the promise and three plain benefits, and the form on a
+  calm background. The panel is the only large teal surface in the product.
+  Password has a show/hide toggle.
+- **People get avatars.** Initials in a tinted circle (`Avatar`,
+  `PersonCell`); the tint is derived from the name, so a person keeps the
+  same colour on every screen. Titles ("Dr.") are skipped for initials.
+- **Page headers** may carry one small `eyebrow` line (the date) above the
+  title. Not more than one per page.
+- **KPI tiles** carry a tone for their icon (primary, info, warning,
+  success, danger) and link to the desk that owns the number.
+- **Top bar** has a global patient search (Ctrl/Cmd+K), the notification
+  bell and the account menu. **Sidebar** ends with a clinic card, and the
+  active item has a short brand bar at its left edge.
+- **Today** is a briefing, not a wall of numbers: tiles, a time-ordered
+  schedule that highlights who is next, queue bars, and a "Needs
+  attention" list that links straight to the work.
 
 ## 15. Implementation plan
 
