@@ -10,6 +10,8 @@ import { DiagnosesService } from '../diagnoses/diagnoses.service';
 import { PrescriptionsService } from '../prescriptions/prescriptions.service';
 import { LabsService } from '../labs/labs.service';
 import { InvoicesService } from '../invoices/invoices.service';
+import { MedicalHistoryService } from '../medical-history/medical-history.service';
+import { QueueService } from '../queue/queue.service';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface';
 
 @Controller('patients')
@@ -22,6 +24,8 @@ export class PatientsController {
     private readonly prescriptionsService: PrescriptionsService,
     private readonly labsService: LabsService,
     private readonly invoicesService: InvoicesService,
+    private readonly medicalHistoryService: MedicalHistoryService,
+    private readonly queueService: QueueService,
   ) {}
 
   /**
@@ -133,5 +137,18 @@ export class PatientsController {
   myInvoices(@Req() request: Request & { user: AuthenticatedUser }) {
     const user = this.requirePatient(request);
     return this.invoicesService.listForPatient(user.organizationId, user.userId);
+  }
+
+  @Get('me/medical-history')
+  myMedicalHistory(@Req() request: Request & { user: AuthenticatedUser }) {
+    const user = this.requirePatient(request);
+    return this.medicalHistoryService.listForPatient(user.organizationId, user.userId);
+  }
+
+  /** Today's queue token(s) — "your token is 14, now at: pharmacy". */
+  @Get('me/queue')
+  myQueue(@Req() request: Request & { user: AuthenticatedUser }) {
+    const user = this.requirePatient(request);
+    return this.queueService.listTodayForPatient(user.organizationId, user.userId);
   }
 }

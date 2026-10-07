@@ -21,6 +21,9 @@ export class EncountersService {
         where: { id: encounterId },
         include: {
           vitals: { orderBy: { recordedAt: 'desc' } },
+          metabolicWorkups: { orderBy: { createdAt: 'desc' } },
+          registration: true,
+          queueEntry: true,
           clinicalNotes: {
             include: {
               versions: {

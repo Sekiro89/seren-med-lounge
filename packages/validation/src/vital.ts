@@ -9,6 +9,9 @@ export const recordVitalSchema = z
     spo2Percent: z.number().int().min(0).max(100).optional(),
     temperatureCelsius: z.number().min(25).max(45).optional(),
     bmi: z.number().min(5).max(100).optional(),
+    respiratoryRate: z.number().int().min(1).max(100).optional(),
+    heightCm: z.number().min(20).max(272).optional(),
+    weightKg: z.number().min(0.5).max(500).optional(),
   })
   .refine(
     (data) =>

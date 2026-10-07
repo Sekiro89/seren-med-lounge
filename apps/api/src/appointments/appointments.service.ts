@@ -1,8 +1,15 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { AppointmentStatus, EncounterStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { AppointmentStatus, EncounterStatus, StaffRole } from '@prisma/client';
 import type { CreateAppointmentInput } from '@serenemed/validation';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+
+const DOCTOR_ROLES: StaffRole[] = [StaffRole.JUNIOR_DOCTOR, StaffRole.SENIOR_DOCTOR];
 
 @Injectable()
 export class AppointmentsService {
@@ -13,17 +20,36 @@ export class AppointmentsService {
 
   async create(organizationId: string, input: CreateAppointmentInput) {
     return this.prisma.withTenant(organizationId, (tx) =>
-      tx.appointment.create({
-        data: {
-          organizationId,
-          clinicId: input.clinicId,
-          patientId: input.patientId,
-          entrySource: input.entrySource,
-          scheduledAt: new Date(input.scheduledAt),
-          notes: input.notes,
-        },
-      }),
+      this.createInTx(tx, organizationId, input),
     );
+  }
+
+  /**
+   * For callers that book as part of a larger transaction (e.g. a
+   * follow-up's review appointment — FollowupsService.book).
+   */
+  async createInTx(
+    tx: ExtendedPrismaClient,
+    organizationId: string,
+    input: CreateAppointmentInput,
+  ) {
+    if (input.doctorId) {
+      const doctor = await tx.user.findUnique({ where: { id: input.doctorId } });
+      if (!doctor || !DOCTOR_ROLES.includes(doctor.role) || !doctor.isActive) {
+        throw new BadRequestException('doctorId must be an active doctor in this organization.');
+      }
+    }
+    return tx.appointment.create({
+      data: {
+        organizationId,
+        clinicId: input.clinicId,
+        patientId: input.patientId,
+        doctorId: input.doctorId,
+        entrySource: input.entrySource,
+        scheduledAt: new Date(input.scheduledAt),
+        notes: input.notes,
+      },
+    });
   }
 
   /**
@@ -32,13 +58,21 @@ export class AppointmentsService {
    * who each appointment is for and link straight to an already-checked-
    * in encounter, without a separate round trip per row.
    */
-  async listForOrganization(organizationId: string) {
+  async listForOrganization(
+    organizationId: string,
+    filter: { doctorId?: string; from?: Date; to?: Date } = {},
+  ) {
     return this.prisma.withTenant(organizationId, (tx) =>
       tx.appointment.findMany({
+        where: {
+          doctorId: filter.doctorId,
+          scheduledAt: filter.from || filter.to ? { gte: filter.from, lt: filter.to } : undefined,
+        },
         orderBy: { scheduledAt: 'desc' },
         include: {
           patient: { select: { id: true, firstName: true, lastName: true } },
           encounter: { select: { id: true } },
+          doctor: { select: { id: true, fullName: true } },
         },
       }),
     );

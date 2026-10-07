@@ -11,3 +11,4 @@ export * from './patient-document';
 export * from './patient-consent';
 export * from './patient-claims';
 export * from './billing';
+export * from './opd';

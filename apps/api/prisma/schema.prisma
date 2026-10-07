@@ -119,6 +119,10 @@ model Organization {
   invoiceItems            InvoiceItem[]
   payments                Payment[]
   refunds                 Refund[]
+  registrations           Registration[]
+  queueEntries            QueueEntry[]
+  medicalHistoryEntries   MedicalHistoryEntry[]
+  metabolicWorkups        MetabolicWorkup[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -137,6 +141,7 @@ model Clinic {
   deletedAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  queueEntries   QueueEntry[]
 
   @@index([organizationId, deletedAt])
   @@map("clinics")
@@ -146,31 +151,35 @@ model Clinic {
 /// separate deliberately: staff auth/roles and patient auth/consent are
 /// different concerns and must never be merged into one "users" table.
 model User {
-  id                     String                   @id @default(cuid())
-  organizationId         String
-  organization           Organization             @relation(fields: [organizationId], references: [id])
-  clinicId               String?
-  clinic                 Clinic?                  @relation(fields: [clinicId], references: [id])
-  email                  String
-  passwordHash           String
-  fullName               String
-  role                   StaffRole
-  isActive               Boolean                  @default(true)
-  authoredNotes          ClinicalNoteVersion[]
-  authoredDiagnoses      DiagnosisVersion[]
-  prescriptions          Prescription[]
-  labOrders              LabOrder[]
-  labResultsEntered      LabResult[]
-  documentsUploaded      PatientDocument[]
-  consentsRecorded       PatientConsent[]
-  activationTokensIssued PatientActivationToken[]
-  invoicesIssued         Invoice[]                @relation("InvoiceIssuedBy")
-  invoicesVoided         Invoice[]                @relation("InvoiceVoidedBy")
-  paymentsReceived       Payment[]
-  refundsIssued          Refund[]
-  deletedAt              DateTime?
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
+  id                       String                   @id @default(cuid())
+  organizationId           String
+  organization             Organization             @relation(fields: [organizationId], references: [id])
+  clinicId                 String?
+  clinic                   Clinic?                  @relation(fields: [clinicId], references: [id])
+  email                    String
+  passwordHash             String
+  fullName                 String
+  role                     StaffRole
+  isActive                 Boolean                  @default(true)
+  authoredNotes            ClinicalNoteVersion[]
+  authoredDiagnoses        DiagnosisVersion[]
+  prescriptions            Prescription[]
+  labOrders                LabOrder[]
+  labResultsEntered        LabResult[]
+  documentsUploaded        PatientDocument[]
+  consentsRecorded         PatientConsent[]
+  activationTokensIssued   PatientActivationToken[]
+  invoicesIssued           Invoice[]                @relation("InvoiceIssuedBy")
+  invoicesVoided           Invoice[]                @relation("InvoiceVoidedBy")
+  paymentsReceived         Payment[]
+  refundsIssued            Refund[]
+  deletedAt                DateTime?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  doctorAppointments       Appointment[]            @relation("AppointmentDoctor")
+  registrationsRecorded    Registration[]
+  medicalHistoryRecorded   MedicalHistoryEntry[]
+  metabolicWorkupsRecorded MetabolicWorkup[]
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -217,6 +226,10 @@ model Patient {
   deletedAt        DateTime?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
+  registrations    Registration[]
+  queueEntries     QueueEntry[]
+  medicalHistory   MedicalHistoryEntry[]
+  metabolicWorkups MetabolicWorkup[]
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -370,10 +383,13 @@ model Appointment {
   deletedAt      DateTime?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
+  doctorId       String?
+  doctor         User?                  @relation("AppointmentDoctor", fields: [doctorId], references: [id])
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
   @@index([clinicId])
+  @@index([doctorId, scheduledAt])
   @@map("appointments")
 }
 
@@ -384,27 +400,30 @@ model Appointment {
 /// traverse through Appointment — same rationale as Patient.clinicId
 /// being denormalized rather than requiring a Clinic join everywhere.
 model Encounter {
-  id             String          @id @default(cuid())
-  organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id])
-  clinicId       String?
-  clinic         Clinic?         @relation(fields: [clinicId], references: [id])
-  patientId      String
-  patient        Patient         @relation(fields: [patientId], references: [id])
-  appointmentId  String          @unique
-  appointment    Appointment     @relation(fields: [appointmentId], references: [id])
-  vitals         Vital[]
-  clinicalNotes  ClinicalNote[]
-  diagnoses      Diagnosis[]
-  prescriptions  Prescription[]
-  labOrders      LabOrder[]
-  invoices       Invoice[]
-  status         EncounterStatus @default(OPEN)
-  startedAt      DateTime        @default(now())
-  endedAt        DateTime?
-  deletedAt      DateTime?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               String            @id @default(cuid())
+  organizationId   String
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  clinicId         String?
+  clinic           Clinic?           @relation(fields: [clinicId], references: [id])
+  patientId        String
+  patient          Patient           @relation(fields: [patientId], references: [id])
+  appointmentId    String            @unique
+  appointment      Appointment       @relation(fields: [appointmentId], references: [id])
+  vitals           Vital[]
+  clinicalNotes    ClinicalNote[]
+  diagnoses        Diagnosis[]
+  prescriptions    Prescription[]
+  labOrders        LabOrder[]
+  invoices         Invoice[]
+  status           EncounterStatus   @default(OPEN)
+  startedAt        DateTime          @default(now())
+  endedAt          DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  registration     Registration?
+  queueEntry       QueueEntry?
+  metabolicWorkups MetabolicWorkup[]
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -433,6 +452,9 @@ model Vital {
   deletedAt              DateTime?
   createdAt              DateTime     @default(now())
   updatedAt              DateTime     @updatedAt
+  respiratoryRate        Int?
+  heightCm               Float?
+  weightKg               Float?
 
   @@index([organizationId, deletedAt])
   @@index([encounterId])
@@ -688,20 +710,21 @@ model LabResult {
 /// (e.g. a blurry ID photo) can legitimately need replacing, unlike a
 /// clinical record.
 model PatientDocument {
-  id             String              @id @default(cuid())
-  organizationId String
-  organization   Organization        @relation(fields: [organizationId], references: [id])
-  patientId      String
-  patient        Patient             @relation(fields: [patientId], references: [id])
-  documentType   PatientDocumentType
-  storageKey     String
-  fileName       String
-  mimeType       String
-  uploadedById   String
-  uploadedBy     User                @relation(fields: [uploadedById], references: [id])
-  deletedAt      DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                     String              @id @default(cuid())
+  organizationId         String
+  organization           Organization        @relation(fields: [organizationId], references: [id])
+  patientId              String
+  patient                Patient             @relation(fields: [patientId], references: [id])
+  documentType           PatientDocumentType
+  storageKey             String
+  fileName               String
+  mimeType               String
+  uploadedById           String
+  uploadedBy             User                @relation(fields: [uploadedById], references: [id])
+  deletedAt              DateTime?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  registrationsAsIdProof Registration[]
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -988,4 +1011,189 @@ model Refund {
   @@index([organizationId])
   @@index([paymentId])
   @@map("refunds")
+}
+
+// =============================================================================
+// OPD REGISTRATION, TOKEN QUEUE, INTAKE — registration, queue,
+// medical-history and vitals modules. See docs/workflows/clinic-journey.md.
+// =============================================================================
+
+enum VisitType {
+  NEW_CONSULTATION
+  FOLLOW_UP
+  REPORT_REVIEW
+  PROCEDURE
+}
+
+/// The diagram's "Consultation Route": A = junior doctor assessment
+/// first, B = direct to senior doctor.
+enum ConsultationRoute {
+  JUNIOR_ASSESSMENT
+  DIRECT_SENIOR
+}
+
+/// Where the patient currently is in the clinic, so each desk can pull
+/// its own queue.
+enum QueueStation {
+  VITALS
+  JUNIOR_DOCTOR
+  SENIOR_DOCTOR
+  BILLING
+  PHARMACY
+  LAB
+}
+
+enum QueueStatus {
+  WAITING
+  CALLED
+  IN_SERVICE
+  COMPLETED
+  SKIPPED
+}
+
+enum MedicalHistoryCategory {
+  ALLERGY
+  CONDITION
+  PAST_SURGERY
+  CURRENT_MEDICATION
+  FAMILY_HISTORY
+  SOCIAL_HISTORY
+}
+
+enum MedicalHistoryStatus {
+  ACTIVE
+  RESOLVED
+  ENTERED_IN_ERROR
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum GlucoseContext {
+  FASTING
+  RANDOM
+  POST_PRANDIAL
+}
+
+/// OPD registration for one visit — created at check-in time against the
+/// Encounter (one per encounter). Patient identity fields stay on Patient;
+/// this row holds only what's per-visit: visit type, consultation route,
+/// ID-proof verification, and the case-based cancer-check flag.
+/// TODO(product): "ID proof — required" is enforced as "verified, or an
+/// ID_PROOF PatientDocument on file" — see open-questions.md#16.
+model Registration {
+  id                      String            @id @default(cuid())
+  organizationId          String
+  organization            Organization      @relation(fields: [organizationId], references: [id])
+  patientId               String
+  patient                 Patient           @relation(fields: [patientId], references: [id])
+  encounterId             String            @unique
+  encounter               Encounter         @relation(fields: [encounterId], references: [id])
+  visitType               VisitType
+  consultationRoute       ConsultationRoute
+  idProofDocumentId       String?
+  idProofDocument         PatientDocument?  @relation(fields: [idProofDocumentId], references: [id])
+  idProofVerified         Boolean           @default(false)
+  cancerScreeningRequired Boolean           @default(false)
+  notes                   String?
+  registeredById          String
+  registeredBy            User              @relation(fields: [registeredById], references: [id])
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  @@index([organizationId])
+  @@index([patientId])
+  @@map("registrations")
+}
+
+/// The visit's queue token. tokenNumber is sequential per organization
+/// per queueDate (allocated under an advisory lock in QueueService; the
+/// unique constraint is the backstop). One entry per encounter — the
+/// patient moves between stations on the same token rather than getting
+/// a new one at each desk.
+/// TODO(product): per-clinic token series (today: per organization).
+model QueueEntry {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  clinicId       String?
+  clinic         Clinic?      @relation(fields: [clinicId], references: [id])
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id])
+  encounterId    String       @unique
+  encounter      Encounter    @relation(fields: [encounterId], references: [id])
+  queueDate      DateTime     @db.Date
+  tokenNumber    Int
+  station        QueueStation
+  status         QueueStatus  @default(WAITING)
+  calledAt       DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, queueDate, tokenNumber])
+  @@index([organizationId, queueDate, station, status])
+  @@map("queue_entries")
+}
+
+/// Patient-level history (not per visit): allergies, conditions, past
+/// surgeries, current medications, family/social history. Rows are never
+/// deleted — a wrong entry is marked ENTERED_IN_ERROR, a resolved
+/// condition RESOLVED, and every change is audited — so the history of
+/// what clinicians were told stays reconstructable.
+model MedicalHistoryEntry {
+  id             String                 @id @default(cuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient                @relation(fields: [patientId], references: [id])
+  category       MedicalHistoryCategory
+  description    String
+  severity       AllergySeverity?
+  status         MedicalHistoryStatus   @default(ACTIVE)
+  recordedById   String
+  recordedBy     User                   @relation(fields: [recordedById], references: [id])
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([patientId, category])
+  @@map("medical_history_entries")
+}
+
+/// The diagram's separate/optional metabolic workup, per encounter.
+/// Same mutability as Vital (a mistyped reading is corrected, not
+/// versioned). Point-of-care readings — a sent-out lab test still goes
+/// through LabOrder/LabResult.
+model MetabolicWorkup {
+  id                   String          @id @default(cuid())
+  organizationId       String
+  organization         Organization    @relation(fields: [organizationId], references: [id])
+  patientId            String
+  patient              Patient         @relation(fields: [patientId], references: [id])
+  encounterId          String
+  encounter            Encounter       @relation(fields: [encounterId], references: [id])
+  glucoseMgDl          Float?
+  glucoseContext       GlucoseContext?
+  hba1cPercent         Float?
+  totalCholesterolMgDl Float?
+  ldlMgDl              Float?
+  hdlMgDl              Float?
+  triglyceridesMgDl    Float?
+  bodyFatPercent       Float?
+  muscleMassKg         Float?
+  visceralFatLevel     Float?
+  otherTests           Json?
+  recordedById         String
+  recordedBy           User            @relation(fields: [recordedById], references: [id])
+  deletedAt            DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([encounterId])
+  @@map("metabolic_workups")
 }

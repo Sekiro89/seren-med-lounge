@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { createAppointmentSchema, type CreateAppointmentInput } from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { TenantContextService } from '../prisma/tenant-context.service';
 import { AppointmentsService } from './appointments.service';
+import { clinicDayRange, isDateString } from '../common/clinic-time';
 
 @Controller('appointments')
 export class AppointmentsController {
@@ -12,10 +13,22 @@ export class AppointmentsController {
     private readonly tenantContext: TenantContextService,
   ) {}
 
+  /**
+   * `?doctorId=&date=YYYY-MM-DD` gives one doctor's daily calendar (the
+   * command centre's "doctor daily calendar"); both are optional. The
+   * day boundary is UTC — TODO(product): clinic timezone, see
+   * open-questions.md#16.
+   */
   @Get()
   @RequirePermissions('appointment:read')
-  list() {
-    return this.appointmentsService.listForOrganization(this.tenantContext.organizationId);
+  list(@Query('doctorId') doctorId?: string, @Query('date') date?: string) {
+    if (date && !isDateString(date)) {
+      throw new BadRequestException('date must be YYYY-MM-DD.');
+    }
+    return this.appointmentsService.listForOrganization(this.tenantContext.organizationId, {
+      doctorId,
+      ...(date ? clinicDayRange(date) : {}),
+    });
   }
 
   @Post()
