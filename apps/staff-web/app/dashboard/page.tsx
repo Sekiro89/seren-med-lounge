@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -303,12 +304,12 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           {can(user?.role, 'patient:write') && (
-            <a
+            <Link
               href="/claims"
               className="text-sm font-medium text-slate-700 underline underline-offset-2"
             >
               Pending account claims
-            </a>
+            </Link>
           )}
           <Button variant="secondary" onClick={handleLogout}>
             Sign out

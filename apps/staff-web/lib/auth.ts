@@ -7,7 +7,7 @@ import type { StaffRole } from '@serenemed/types';
  * string in two places. Mirrors patient-web/lib/auth.ts's shape.
  */
 export const STAFF_TOKEN_KEY = 'serenemed_staff_token';
-const STAFF_USER_KEY = 'serenemed_staff_user';
+export const STAFF_USER_KEY = 'serenemed_staff_user';
 
 export interface StaffUser {
   id: string;
@@ -46,4 +46,21 @@ export function getStaffUser(): StaffUser | null {
 export function clearStaffSession(): void {
   window.localStorage.removeItem(STAFF_TOKEN_KEY);
   window.localStorage.removeItem(STAFF_USER_KEY);
+  // The 'storage' event only fires in *other* tabs; tell this one too.
+  window.dispatchEvent(new Event('serenemed-session'));
+}
+
+/** For useSyncExternalStore: re-read when the session changes in any tab. */
+export function subscribeToSession(onChange: () => void): () => void {
+  window.addEventListener('storage', onChange);
+  window.addEventListener('serenemed-session', onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener('serenemed-session', onChange);
+  };
+}
+
+/** The raw stored user. A string is a stable snapshot, unlike a parsed object. */
+export function getStoredUserSnapshot(): string | null {
+  return window.localStorage.getItem(STAFF_USER_KEY);
 }

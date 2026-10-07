@@ -1,33 +1,108 @@
 @import 'tailwindcss';
 
 /*
- * Deliberately no `prefers-color-scheme: dark` variant (the Next.js
- * scaffold default had one) — every component in this app (Button,
- * Card, every form) is hardcoded to a fixed light Tailwind palette
- * (slate-900 text, white/slate-50 backgrounds), not dark-mode-aware.
- * The scaffold's media query used to flip `body`'s background to
- * near-black while leaving those components' light-on-light colors
- * unchanged, which made anything sitting directly on `body` (not
- * inside a Card) invisible for anyone with an OS dark theme — dark
- * text on a dark background. Pinning to light here is a real fix, not
- * a partial one: doing this properly (a real dark theme) would mean
- * `dark:` variants throughout, which hasn't been designed yet.
+ * Design tokens from docs/design/DESIGN_SYSTEM.md (section 2). Components
+ * use the semantic classes below (bg-surface, text-fg-muted, border-control,
+ * bg-primary, ...) and never raw palette classes or hex values.
+ *
+ * Light only for now. Dark mode is defined in the design system but ships
+ * after the light workspace; when it does, only the :root values change.
  */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f7f9fa;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --fg: #0f172a;
+  --fg-muted: #475569;
+  --fg-subtle: #64748b;
+  --line: #e2e8f0;
+  --control: #64748b;
+  --primary: #12706f;
+  --primary-hover: #0f5a5a;
+  --primary-subtle: #f0f9f8;
+  --primary-subtle-fg: #0e4a4a;
+  --on-primary: #ffffff;
+  --ring: #12706f;
+  --sidebar: #ffffff;
+
+  --success-fg: #15803d;
+  --success-bg: #f0fdf4;
+  --warning-fg: #92400e;
+  --warning-bg: #fffbeb;
+  --danger-fg: #b91c1c;
+  --danger-bg: #fef2f2;
+  --danger: #dc2626;
+  --info-fg: #075985;
+  --info-bg: #f0f9ff;
+  --neutral-fg: #334155;
+  --neutral-bg: #f1f5f9;
+
   color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-line: var(--line);
+  --color-control: var(--control);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-subtle-fg: var(--primary-subtle-fg);
+  --color-on-primary: var(--on-primary);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-danger: var(--danger);
+  --color-success-fg: var(--success-fg);
+  --color-success-bg: var(--success-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-bg: var(--danger-bg);
+  --color-info-fg: var(--info-fg);
+  --color-info-bg: var(--info-bg);
+  --color-neutral-fg: var(--neutral-fg);
+  --color-neutral-bg: var(--neutral-bg);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --shadow-popover: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+html {
+  font-size: 14px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One visible focus treatment everywhere (WCAG 2.4.7). */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Numbers line up in columns and KPI tiles. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
