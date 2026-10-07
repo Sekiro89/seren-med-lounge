@@ -12,20 +12,11 @@ const JOBS: Array<[string, string]> = [
   ['Message the clinic', 'Ask a question and get a reply in opening hours.'],
 ];
 
-/** The five stages of a clinic visit, as on Home (decorative here). */
-const STAGES: Array<[string, 'done' | 'now' | 'todo']> = [
-  ['Check-in', 'done'],
-  ['Nurse', 'done'],
-  ['Doctor', 'now'],
-  ['Lab', 'todo'],
-  ['Pay', 'todo'],
-];
-
 /**
  * Signed-out pages (sign in, create account, activate) in Clinical Ink:
  * a calm editorial page. On a phone the form comes first (title, 1px ink
- * rule, fields), then a ruled "what you can do here" list with the visit
- * ruler from Home as a motif. From `lg` the two sit side by side: the
+ * rule, fields), then a ruled "what you can do here" list. Nothing on
+ * these pages looks like a patient's own data. From `lg` the two sit side by side: the
  * editorial column at the left, the form at the right, a hairline
  * between. No brand panel, no illustration, no shadows.
  */
@@ -77,9 +68,7 @@ export function AuthFrame({
               in one calm place.
             </p>
 
-            <VisitRuler />
-
-            <h2 className="mt-10 border-t border-fg pt-3 font-semibold">What you can do here</h2>
+            <h2 className="border-t border-fg pt-3 font-semibold lg:mt-12">What you can do here</h2>
             <ol className="mt-1 border-b border-line">
               {JOBS.map(([job, text], i) => (
                 <li
@@ -105,54 +94,5 @@ export function AuthFrame({
         </main>
       </div>
     </IconContext.Provider>
-  );
-}
-
-/**
- * The Home token ruler as a quiet motif: a big mono token, then
- * Check-in to Pay on a hairline, the current stage in cobalt.
- */
-function VisitRuler() {
-  return (
-    <figure aria-hidden="true" className="mt-0 lg:mt-12">
-      <div className="flex items-end justify-between gap-4 border-t border-fg pt-3">
-        <span className="text-sm text-fg-muted">Your token today</span>
-        <span className="inline-flex items-center gap-1.5 bg-info-bg px-2 py-0.5 text-sm font-medium text-info-fg">
-          <span className="size-1.5 bg-current" />
-          Live
-        </span>
-      </div>
-      <p className="tabular mt-1 font-mono text-[3.6rem] font-medium leading-none tracking-[-0.02em] text-fg lg:text-[4.4rem]">
-        012
-      </p>
-      <ol className="mt-5 grid grid-cols-5 border-t border-control text-[0.8rem]">
-        {STAGES.map(([label, state]) => (
-          <li
-            key={label}
-            className={`relative pt-3 ${
-              state === 'now'
-                ? 'font-semibold text-primary'
-                : state === 'done'
-                  ? 'text-fg'
-                  : 'text-fg-muted'
-            }`}
-          >
-            <span
-              className={`absolute -top-[6px] left-0 size-[11px] border ${
-                state === 'now'
-                  ? 'border-primary bg-primary'
-                  : state === 'done'
-                    ? 'border-fg bg-fg'
-                    : 'border-control bg-surface'
-              }`}
-            />
-            {label}
-          </li>
-        ))}
-      </ol>
-      <figcaption className="mt-3 text-sm text-fg-muted">
-        At the clinic, the app shows your token and your next step as it happens.
-      </figcaption>
-    </figure>
   );
 }
