@@ -183,7 +183,7 @@ describe('Discharge, care plans and follow-ups (e2e)', () => {
       expect(after.body).toHaveLength(0);
     });
 
-    it('escalates a follow-up to a doctor', async () => {
+    it('escalates to a doctor and notifies them', async () => {
       const followUp = await ctx
         .http()
         .post('/follow-ups')
@@ -202,6 +202,15 @@ describe('Discharge, care plans and follow-ups (e2e)', () => {
         .send({ outcome: 'Wound discharge reported', assignedToId: ctx.ids.senior })
         .expect(201);
       expect(escalated.body.status).toBe('ESCALATED');
+
+      const inbox = await ctx
+        .http()
+        .get('/notifications?unread=true')
+        .set(ctx.as('senior'))
+        .expect(200);
+      const alert = inbox.body.find((n: { entityId: string }) => n.entityId === followUp.body.id);
+      expect(alert.type).toBe('FOLLOW_UP_ESCALATED');
+      expect(JSON.stringify(alert)).not.toContain('Wound');
 
       // Plan can't complete while it's open.
       await ctx.http().post(`/care-plans/${planId}/complete`).set(ctx.as('nurse')).expect(409);

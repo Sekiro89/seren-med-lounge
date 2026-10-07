@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CarePlanStatus, FollowUpStatus, FollowUpType, type FollowUp } from '@prisma/client';
+import {
+  CarePlanStatus,
+  FollowUpStatus,
+  FollowUpType,
+  NotificationType,
+  StaffRole,
+  type FollowUp,
+} from '@prisma/client';
 import { AppointmentEntrySource } from '@serenemed/types';
 import type {
   BookFollowUpInput,
@@ -17,6 +24,7 @@ import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.servi
 import { AuditService } from '../audit/audit.service';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { clinicDateString, clinicDayRange } from '../common/clinic-time';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const OPEN: FollowUpStatus[] = [FollowUpStatus.PENDING, FollowUpStatus.ESCALATED];
 
@@ -41,6 +49,7 @@ export class FollowupsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly appointmentsService: AppointmentsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(organizationId: string, actorId: string, input: CreateFollowUpInput) {
@@ -189,6 +198,16 @@ export class FollowupsService {
         });
         await this.audit(tx, organizationId, actorId, 'follow_up.escalate', followUp, {
           assignedToId: updated.assignedToId,
+        });
+        // To the assignee, or every senior doctor when nobody is named.
+        await this.notificationsService.notifyInTx(tx, organizationId, {
+          type: NotificationType.FOLLOW_UP_ESCALATED,
+          recipient: updated.assignedToId
+            ? { userId: updated.assignedToId }
+            : { role: StaffRole.SENIOR_DOCTOR },
+          title: 'A follow-up was escalated',
+          entityType: 'FollowUp',
+          entityId: followUp.id,
         });
         return updated;
       },

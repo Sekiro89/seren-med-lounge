@@ -48,6 +48,8 @@ describe('Clinic journey spine (e2e)', () => {
     // violation.
     const orgFilter = { organizationId: { in: [orgA.id, orgB.id] } };
     await admin.auditLog.deleteMany({ where: orgFilter });
+    // Prescriptions/lab orders/results raise in-app notifications.
+    await admin.notification.deleteMany({ where: orgFilter });
     await admin.clinicalNoteVersion.deleteMany({ where: orgFilter });
     await admin.clinicalNote.deleteMany({ where: orgFilter });
     await admin.diagnosisVersion.deleteMany({ where: orgFilter });

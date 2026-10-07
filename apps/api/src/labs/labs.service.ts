@@ -1,8 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { LabOrderStatus } from '@prisma/client';
+import { LabOrderStatus, NotificationType, StaffRole } from '@prisma/client';
 import type { CreateLabOrderInput, RecordLabResultInput } from '@serenemed/validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Same shape as PrescriptionsService — see its header comment. Two
@@ -16,6 +17,7 @@ export class LabsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createOrder(organizationId: string, authorId: string, input: CreateLabOrderInput) {
@@ -50,6 +52,14 @@ export class LabsService {
           patientId: encounter.patientId,
           itemCount: input.items.length,
         },
+      });
+
+      await this.notificationsService.notifyInTx(tx, organizationId, {
+        type: NotificationType.LAB_PREPARE,
+        recipient: { role: StaffRole.LAB_TECHNICIAN },
+        title: 'Lab order ready to prepare',
+        entityType: 'LabOrder',
+        entityId: labOrder.id,
       });
 
       return labOrder;
@@ -127,7 +137,10 @@ export class LabsService {
     input: RecordLabResultInput,
   ) {
     return this.prisma.withTenant(organizationId, async (tx) => {
-      const item = await tx.labOrderItem.findUnique({ where: { id: labOrderItemId } });
+      const item = await tx.labOrderItem.findUnique({
+        where: { id: labOrderItemId },
+        include: { labOrder: { select: { id: true, authorId: true } } },
+      });
       if (!item) {
         throw new NotFoundException('Lab order item not found.');
       }
@@ -148,6 +161,15 @@ export class LabsService {
         entityType: 'LabResult',
         entityId: result.id,
         metadata: { labOrderItemId },
+      });
+
+      // The ordering doctor hears about it; the title names no test.
+      await this.notificationsService.notifyInTx(tx, organizationId, {
+        type: NotificationType.LAB_RESULT_READY,
+        recipient: { userId: item.labOrder.authorId },
+        title: 'Lab result ready to review',
+        entityType: 'LabOrder',
+        entityId: item.labOrder.id,
       });
 
       return result;

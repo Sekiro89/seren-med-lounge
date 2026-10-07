@@ -4,10 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ReferralStatus, ReferralType, StaffRole } from '@prisma/client';
+import { NotificationType, ReferralStatus, ReferralType, StaffRole } from '@prisma/client';
 import type { CloseReferralInput, CreateReferralInput } from '@serenemed/validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const DOCTOR_ROLES: StaffRole[] = [StaffRole.JUNIOR_DOCTOR, StaffRole.SENIOR_DOCTOR];
 
@@ -22,6 +23,7 @@ export class ReferralsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(organizationId: string, actorId: string, input: CreateReferralInput) {
@@ -69,6 +71,16 @@ export class ReferralsService {
           toUserId: referral.toUserId,
         },
       });
+
+      if (referral.toUserId) {
+        await this.notificationsService.notifyInTx(tx, organizationId, {
+          type: NotificationType.REFERRAL_RECEIVED,
+          recipient: { userId: referral.toUserId },
+          title: 'You have received a referral',
+          entityType: 'Referral',
+          entityId: referral.id,
+        });
+      }
 
       return referral;
     });

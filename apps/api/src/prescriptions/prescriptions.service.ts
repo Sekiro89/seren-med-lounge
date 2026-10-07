@@ -1,8 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrescriptionStatus } from '@prisma/client';
+import { NotificationType, PrescriptionStatus, StaffRole } from '@prisma/client';
 import type { CreatePrescriptionInput } from '@serenemed/validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Deliberately simpler than DiagnosesService/ClinicalNotesService — see
@@ -18,6 +19,7 @@ export class PrescriptionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(organizationId: string, authorId: string, input: CreatePrescriptionInput) {
@@ -52,6 +54,14 @@ export class PrescriptionsService {
           patientId: encounter.patientId,
           itemCount: input.items.length,
         },
+      });
+
+      await this.notificationsService.notifyInTx(tx, organizationId, {
+        type: NotificationType.PHARMACY_PREPARE,
+        recipient: { role: StaffRole.PHARMACY },
+        title: 'Prescription ready to prepare',
+        entityType: 'Prescription',
+        entityId: prescription.id,
       });
 
       return prescription;
