@@ -9,6 +9,9 @@ import { z } from 'zod';
 const PLACEHOLDER_JWT_SECRET = 'replace-with-a-long-random-string';
 const DEV_APP_DB_CREDENTIAL = 'serenemed_app:serenemed_app';
 const DEV_SUPERUSER_DB_CREDENTIAL = 'serenemed:serenemed';
+// Organization ids that only the dev seed scripts create (scripts/seed-dev.ts,
+// scripts/seed-demo.ts). Both hold well-known demo logins.
+const DEV_ORGANIZATION_IDS = ['seed-org', 'demo-clinic'];
 
 /**
  * Server-side environment schema (API only — never import this from a
@@ -78,6 +81,17 @@ export const apiEnvSchema = z
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') {
       return;
+    }
+
+    if (env.DEFAULT_ORGANIZATION_ID && DEV_ORGANIZATION_IDS.includes(env.DEFAULT_ORGANIZATION_ID)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DEFAULT_ORGANIZATION_ID'],
+        message:
+          `DEFAULT_ORGANIZATION_ID is "${env.DEFAULT_ORGANIZATION_ID}", a clinic that only the dev ` +
+          'seed scripts create (with well-known demo passwords). Point it at the real clinic, ' +
+          'or leave it unset and have clients send organizationId.',
+      });
     }
 
     if (env.JWT_SECRET === PLACEHOLDER_JWT_SECRET) {

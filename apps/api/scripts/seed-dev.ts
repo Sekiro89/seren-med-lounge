@@ -20,7 +20,24 @@ import * as bcrypt from 'bcrypt';
 
 const DEV_PASSWORD = 'dev-password-123';
 
+/**
+ * Dev scripts hold well-known demo passwords, so they refuse to run
+ * anywhere that isn't clearly a local development database.
+ */
+function assertLocalDevOnly(scriptName: string): void {
+  const url = process.env.DIRECT_DATABASE_URL ?? '';
+  const host = /@([^:/?]+)/.exec(url)?.[1] ?? '';
+  const local = ['localhost', '127.0.0.1', '::1', 'host.docker.internal'].includes(host);
+  if (process.env.NODE_ENV === 'production' || !local) {
+    throw new Error(
+      `${scriptName} is for local development only (it creates well-known demo logins). ` +
+        `Refusing to run with NODE_ENV=${process.env.NODE_ENV ?? 'unset'} against host "${host || 'unknown'}".`,
+    );
+  }
+}
+
 async function main() {
+  assertLocalDevOnly('seed-dev.ts');
   const prisma = new PrismaClient({
     datasources: { db: { url: process.env.DIRECT_DATABASE_URL } },
   });
