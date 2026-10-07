@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircle, KeyReturn, UserPlus, Warning } from '@phosphor-icons/react';
+import { z } from 'zod';
 import { patientRegistrationSchema, type PatientRegistrationInput } from '@serenemed/validation';
 import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
@@ -24,9 +25,40 @@ type ActivationResult =
   | { kind: 'created'; code: string; expiresAt: string }
   | { kind: 'duplicate_account'; patient: PatientProfile };
 
+/**
+ * The shared schema plus the checks the form needs to catch early:
+ * whitespace-only names, phone numbers with letters, and birth dates
+ * in the future or before 1900. Output still satisfies the shared schema.
+ */
+const registrationFormSchema = patientRegistrationSchema.extend({
+  firstName: z
+    .string()
+    .trim()
+    .min(1, 'Enter a first name.')
+    .max(100, 'Use at most 100 characters.'),
+  lastName: z.string().trim().min(1, 'Enter a last name.').max(100, 'Use at most 100 characters.'),
+  dateOfBirth: z
+    .string()
+    .date('Enter a valid date of birth.')
+    .refine((value) => value <= clinicToday(), 'Date of birth cannot be in the future.')
+    .refine((value) => value >= '1900-01-01', 'Enter a valid date of birth.'),
+  phone: z
+    .string()
+    .trim()
+    .min(1, 'Enter a phone number.')
+    .refine(
+      (value) =>
+        /^\+?[\d\s()-]+$/.test(value) &&
+        value.replace(/\D/g, '').length >= 7 &&
+        value.replace(/\D/g, '').length <= 15,
+      'Enter a valid phone number with 7 to 15 digits.',
+    ),
+  email: z.string().trim().email('Enter a valid email address, or leave it blank.').optional(),
+});
+
 /** An empty optional email is "not given", not an invalid address. */
 const resolver: Resolver<PatientRegistrationInput> = (values, context, options) =>
-  zodResolver(patientRegistrationSchema)(
+  zodResolver(registrationFormSchema)(
     { ...values, email: values.email?.trim() ? values.email.trim() : undefined },
     context,
     options,
@@ -81,6 +113,7 @@ function RegisterFlow({
   };
 
   const submit = handleSubmit(async (values) => {
+    if (isSubmitting) return;
     setError(undefined);
     try {
       const res = await apiClient.post<RegisterResult>('/patients', values);
@@ -290,44 +323,69 @@ function RegisterFlow({
   return (
     <form onSubmit={submit} noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="First name"
-          htmlFor="reg-first"
-          error={errors.firstName && 'Enter a first name.'}
-        >
-          <Input id="reg-first" autoComplete="off" {...register('firstName')} />
+        <Field label="First name" htmlFor="reg-first" error={errors.firstName?.message}>
+          <Input
+            id="reg-first"
+            autoComplete="off"
+            required
+            aria-required="true"
+            aria-invalid={errors.firstName ? true : undefined}
+            {...register('firstName')}
+          />
         </Field>
-        <Field label="Last name" htmlFor="reg-last" error={errors.lastName && 'Enter a last name.'}>
-          <Input id="reg-last" autoComplete="off" {...register('lastName')} />
+        <Field label="Last name" htmlFor="reg-last" error={errors.lastName?.message}>
+          <Input
+            id="reg-last"
+            autoComplete="off"
+            required
+            aria-required="true"
+            aria-invalid={errors.lastName ? true : undefined}
+            {...register('lastName')}
+          />
         </Field>
-        <Field
-          label="Date of birth"
-          htmlFor="reg-dob"
-          error={errors.dateOfBirth && 'Enter a valid date of birth.'}
-        >
-          <Input id="reg-dob" type="date" max={clinicToday()} {...register('dateOfBirth')} />
+        <Field label="Date of birth" htmlFor="reg-dob" error={errors.dateOfBirth?.message}>
+          <Input
+            id="reg-dob"
+            type="date"
+            min="1900-01-01"
+            max={clinicToday()}
+            required
+            aria-required="true"
+            aria-invalid={errors.dateOfBirth ? true : undefined}
+            {...register('dateOfBirth')}
+          />
         </Field>
-        <Field
-          label="Phone"
-          htmlFor="reg-phone"
-          error={errors.phone && 'Enter a phone number of at least 7 digits.'}
-        >
-          <Input id="reg-phone" type="tel" autoComplete="off" {...register('phone')} />
+        <Field label="Phone" htmlFor="reg-phone" error={errors.phone?.message}>
+          <Input
+            id="reg-phone"
+            type="tel"
+            autoComplete="off"
+            required
+            aria-required="true"
+            aria-invalid={errors.phone ? true : undefined}
+            {...register('phone')}
+          />
         </Field>
         <div className="sm:col-span-2">
           <Field
             label="Email (optional)"
             htmlFor="reg-email"
             helper="Used for the patient portal and receipts."
-            error={errors.email && 'Enter a valid email address, or leave it blank.'}
+            error={errors.email?.message}
           >
-            <Input id="reg-email" type="email" autoComplete="off" {...register('email')} />
+            <Input
+              id="reg-email"
+              type="email"
+              autoComplete="off"
+              aria-invalid={errors.email ? true : undefined}
+              {...register('email')}
+            />
           </Field>
         </div>
       </div>
       {errorPanel}
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
+        <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button type="submit" loading={isSubmitting}>

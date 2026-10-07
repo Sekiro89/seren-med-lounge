@@ -1,3 +1,4 @@
+import { isValidElement } from 'react';
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -28,10 +29,23 @@ export function Field({
   error?: string;
   children: ReactNode;
 }) {
+  const childProps = isValidElement(children)
+    ? (children.props as { required?: boolean; 'aria-required'?: boolean | 'true' | 'false' })
+    : {};
+  const isRequired =
+    label.endsWith(' *') ||
+    !!childProps.required ||
+    childProps['aria-required'] === true ||
+    childProps['aria-required'] === 'true';
   return (
     <div>
       <label htmlFor={htmlFor} className="mb-2 block text-sm font-medium text-fg">
-        {label}
+        {label.replace(/ \*$/, '')}
+        {isRequired && (
+          <span aria-hidden="true" className="ml-0.5 text-danger-fg">
+            *
+          </span>
+        )}
       </label>
       {children}
       {helper && !error && <p className="mt-2 text-[13px] text-fg-subtle">{helper}</p>}

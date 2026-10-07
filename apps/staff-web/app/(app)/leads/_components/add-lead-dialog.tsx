@@ -6,6 +6,16 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
+import {
+  emailError,
+  focusFirst,
+  invalidProps,
+  isClean,
+  phoneError,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { humanize } from '../../../../lib/format';
 import { PatientPicker, type PatientOption } from './patient-picker';
 import {
@@ -73,6 +83,7 @@ function AddLeadForm({
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const needsCampaign = source === 'CAMPAIGN' || source === 'CAMP';
   // A health camp lead must point at a health camp campaign.
@@ -82,6 +93,34 @@ function AddLeadForm({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
+    if (!firstName.trim()) next['lead-first'] = 'Enter the first name.';
+    else if (firstName.trim().length > 100) next['lead-first'] = 'Use 100 characters or fewer.';
+    if (lastName.trim().length > 100) next['lead-last'] = 'Use 100 characters or fewer.';
+    const phoneProblem = phoneError(phone);
+    if (phoneProblem) next['lead-phone'] = phoneProblem;
+    const emailProblem = emailError(email);
+    if (emailProblem) next['lead-email'] = emailProblem;
+    if (needsCampaign && !campaignId) {
+      next['lead-campaign'] =
+        source === 'CAMP'
+          ? 'Choose the health camp.'
+          : 'Choose which campaign this lead came from.';
+    }
+    if (enquiry.length > 2000) next['lead-enquiry'] = 'Use 2000 characters or fewer.';
+    setErrors(next);
+    if (!isClean(next)) {
+      return focusFirst(next, [
+        'lead-first',
+        'lead-last',
+        'lead-phone',
+        'lead-email',
+        'lead-campaign',
+        'lead-enquiry',
+      ]);
+    }
     const parsed = createLeadSchema.safeParse({
       firstName: firstName.trim(),
       lastName: lastName.trim() || undefined,
@@ -95,17 +134,9 @@ function AddLeadForm({
       consentToContact: consent,
     });
     if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      const field = issue?.path[0];
-      if (field === 'phone') return setError('Enter a phone number with at least 7 digits.');
-      if (field === 'email') return setError('Enter a valid email address, or leave it empty.');
-      if (field === 'firstName') return setError('Enter the first name.');
-      if (needsCampaign && !campaignId)
-        return setError('Choose which campaign this lead came from.');
-      return setError(issue?.message ?? 'Check the form.');
+      return setError(parsed.error.issues[0]?.message ?? 'Check the form.');
     }
     setBusy(true);
-    setError(undefined);
     try {
       const created = await apiClient.post<CreatedLead>('/leads', parsed.data);
       onSaved(created);
@@ -134,20 +165,23 @@ function AddLeadForm({
         </>
       }
     >
-      <form id="add-lead-form" onSubmit={submit} className="flex flex-col gap-5">
+      <form id="add-lead-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-4">
-          <Field label="First name" htmlFor="lead-first">
+          <Field label={req('First name')} htmlFor="lead-first" error={errors['lead-first']}>
             <Input
               id="lead-first"
               value={firstName}
               maxLength={100}
+              {...requiredProps}
+              {...invalidProps(errors['lead-first'])}
               autoComplete="off"
               onChange={(e) => setFirstName(e.target.value)}
             />
           </Field>
-          <Field label="Last name (optional)" htmlFor="lead-last">
+          <Field label="Last name (optional)" htmlFor="lead-last" error={errors['lead-last']}>
             <Input
               id="lead-last"
+              {...invalidProps(errors['lead-last'])}
               value={lastName}
               maxLength={100}
               autoComplete="off"
@@ -155,9 +189,11 @@ function AddLeadForm({
             />
           </Field>
         </div>
-        <Field label="Phone" htmlFor="lead-phone">
+        <Field label={req('Phone')} htmlFor="lead-phone" error={errors['lead-phone']}>
           <Input
             id="lead-phone"
+            {...requiredProps}
+            {...invalidProps(errors['lead-phone'])}
             type="tel"
             value={phone}
             maxLength={20}
@@ -165,18 +201,20 @@ function AddLeadForm({
             onChange={(e) => setPhone(e.target.value)}
           />
         </Field>
-        <Field label="Email (optional)" htmlFor="lead-email">
+        <Field label="Email (optional)" htmlFor="lead-email" error={errors['lead-email']}>
           <Input
             id="lead-email"
+            {...invalidProps(errors['lead-email'])}
             type="email"
             value={email}
             autoComplete="off"
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <Field label="Where did they hear about us" htmlFor="lead-source">
+        <Field label={req('Where did they hear about us')} htmlFor="lead-source">
           <Select
             id="lead-source"
+            {...requiredProps}
             value={source}
             onChange={(e) => {
               setSource(e.target.value);
@@ -192,8 +230,9 @@ function AddLeadForm({
         </Field>
         {needsCampaign && (
           <Field
-            label={source === 'CAMP' ? 'Health camp' : 'Campaign'}
+            label={req(source === 'CAMP' ? 'Health camp' : 'Campaign')}
             htmlFor="lead-campaign"
+            error={errors['lead-campaign']}
             helper={
               campaignChoices.length === 0
                 ? source === 'CAMP'
@@ -204,6 +243,8 @@ function AddLeadForm({
           >
             <Select
               id="lead-campaign"
+              {...requiredProps}
+              {...invalidProps(errors['lead-campaign'])}
               value={campaignId}
               onChange={(e) => setCampaignId(e.target.value)}
             >
@@ -237,7 +278,11 @@ function AddLeadForm({
             </Select>
           </Field>
         )}
-        <Field label="What they asked about (optional)" htmlFor="lead-enquiry">
+        <Field
+          label="What they asked about (optional)"
+          htmlFor="lead-enquiry"
+          error={errors['lead-enquiry']}
+        >
           <Textarea
             id="lead-enquiry"
             value={enquiry}

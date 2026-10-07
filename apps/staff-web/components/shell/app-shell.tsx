@@ -16,6 +16,8 @@ import { NotificationBell } from './notification-bell';
 import { TopbarSearch } from './topbar-search';
 import { can } from '../../lib/permissions';
 import { Sidebar } from './sidebar';
+import { usePathname } from 'next/navigation';
+import { findNavItem } from '../../lib/nav';
 import { UserMenu } from './user-menu';
 
 /**
@@ -32,6 +34,8 @@ const CLINIC_NAME = 'SereneMed Lounge';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const pageLabel = findNavItem(pathname)?.label;
   // undefined while rendering on the server / hydrating, null when signed out.
   const stored = useSyncExternalStore(subscribeToSession, getStoredUserSnapshot, () => undefined);
   const user = useMemo<StaffUser | null | undefined>(() => {
@@ -68,12 +72,22 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[248px_1fr]">
+      <title>{pageLabel ? `${pageLabel} · SereneMed Lounge` : 'SereneMed Lounge'}</title>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-control focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-fg focus:shadow-popover"
+      >
+        Skip to content
+      </a>
       <aside className="sticky top-0 hidden h-dvh border-r border-line lg:block">
         <Sidebar role={user.role} clinicName={CLINIC_NAME} />
       </aside>
 
       {drawerOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div
+          className="fixed inset-0 z-40 lg:hidden"
+          onKeyDown={(e) => e.key === 'Escape' && setDrawerOpen(false)}
+        >
           <button
             type="button"
             aria-label="Close menu"
@@ -112,7 +126,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-8 lg:px-10 lg:py-10">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="outline-none mx-auto w-full max-w-[1440px] flex-1 px-5 py-8 lg:px-10 lg:py-10"
+        >
           <StaffProvider value={user}>{children}</StaffProvider>
         </main>
       </div>

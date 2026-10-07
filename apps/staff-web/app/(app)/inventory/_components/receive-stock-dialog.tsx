@@ -8,6 +8,7 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { clinicToday } from '../../../../lib/format';
+import { invalidProps, req, requiredProps } from '../../../../lib/forms';
 import { FormError, medicineLabel, rupeesToPaise, serverMessage, type Medication } from './shared';
 
 interface Values {
@@ -50,6 +51,7 @@ export function ReceiveStockDialog({
   const active = medications.filter((m) => m.isActive);
 
   const submit = handleSubmit(async (v) => {
+    if (busy) return;
     setServerError(undefined);
     if (v.expiryDate && v.expiryDate < clinicToday()) {
       setError('expiryDate', {
@@ -82,8 +84,10 @@ export function ReceiveStockDialog({
               : path === 'expiryDate'
                 ? 'Choose an expiry date.'
                 : path === 'quantity'
-                  ? 'Enter a whole number of units, at least 1.'
-                  : issue.message;
+                  ? 'Enter a whole number of units, from 1 to 1,000,000.'
+                  : path === 'unitCostMinor'
+                    ? 'Enter a cost between 0 and 10,00,000 rupees.'
+                    : issue.message;
         setError(key, { message });
       }
       return;
@@ -119,8 +123,13 @@ export function ReceiveStockDialog({
     >
       <form id="receive-stock-form" onSubmit={submit} className="space-y-4" noValidate>
         <FormError message={serverError} />
-        <Field label="Medicine" htmlFor="rs-med" error={errors.medicationId?.message}>
-          <Select id="rs-med" {...register('medicationId')}>
+        <Field label={req('Medicine')} htmlFor="rs-med" error={errors.medicationId?.message}>
+          <Select
+            id="rs-med"
+            {...requiredProps}
+            {...invalidProps(errors.medicationId?.message)}
+            {...register('medicationId')}
+          >
             <option value="">Choose a medicine</option>
             {active.map((m) => (
               <option key={m.id} value={m.id}>
@@ -130,27 +139,56 @@ export function ReceiveStockDialog({
           </Select>
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Batch number" htmlFor="rs-batch" error={errors.batchNumber?.message}>
-            <Input id="rs-batch" {...register('batchNumber')} />
+          <Field label={req('Batch number')} htmlFor="rs-batch" error={errors.batchNumber?.message}>
+            <Input
+              id="rs-batch"
+              maxLength={100}
+              {...requiredProps}
+              {...invalidProps(errors.batchNumber?.message)}
+              {...register('batchNumber')}
+            />
           </Field>
-          <Field label="Expiry date" htmlFor="rs-expiry" error={errors.expiryDate?.message}>
-            <Input id="rs-expiry" type="date" min={clinicToday()} {...register('expiryDate')} />
+          <Field label={req('Expiry date')} htmlFor="rs-expiry" error={errors.expiryDate?.message}>
+            <Input
+              id="rs-expiry"
+              type="date"
+              min={clinicToday()}
+              {...requiredProps}
+              {...invalidProps(errors.expiryDate?.message)}
+              {...register('expiryDate')}
+            />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Quantity received" htmlFor="rs-qty" error={errors.quantity?.message}>
-            <Input id="rs-qty" inputMode="numeric" {...register('quantity')} />
+          <Field label={req('Quantity received')} htmlFor="rs-qty" error={errors.quantity?.message}>
+            <Input
+              id="rs-qty"
+              inputMode="numeric"
+              {...requiredProps}
+              {...invalidProps(errors.quantity?.message)}
+              {...register('quantity')}
+            />
           </Field>
           <Field
             label="Cost per unit, in rupees (optional)"
             htmlFor="rs-cost"
             error={errors.unitCost?.message}
           >
-            <Input id="rs-cost" inputMode="decimal" {...register('unitCost')} />
+            <Input
+              id="rs-cost"
+              inputMode="decimal"
+              {...invalidProps(errors.unitCost?.message)}
+              {...register('unitCost')}
+            />
           </Field>
         </div>
         <Field label="Supplier (optional)" htmlFor="rs-supplier" error={errors.supplier?.message}>
-          <Input id="rs-supplier" {...register('supplier')} />
+          <Input
+            id="rs-supplier"
+            maxLength={200}
+            {...invalidProps(errors.supplier?.message)}
+            {...register('supplier')}
+          />
         </Field>
       </form>
     </Dialog>

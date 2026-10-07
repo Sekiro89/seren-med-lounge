@@ -59,6 +59,7 @@ function ResultForm({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
     setError(undefined);
     const parsed = recordLabResultSchema.safeParse({
       resultValue: value.trim(),
@@ -66,7 +67,11 @@ function ResultForm({
       referenceRange: range.trim() || undefined,
     });
     if (!parsed.success) {
-      setFieldError('Enter the result value.');
+      setFieldError(
+        value.trim().length > 500
+          ? 'Result can be at most 500 characters.'
+          : 'Enter the result value.',
+      );
       return;
     }
     setFieldError(undefined);
@@ -112,7 +117,13 @@ function ResultForm({
           id="lab-result-value"
           value={value}
           maxLength={500}
-          onChange={(e) => setValue(e.target.value)}
+          required
+          aria-required="true"
+          aria-invalid={fieldError ? true : undefined}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (fieldError) setFieldError(undefined);
+          }}
           autoFocus
         />
       </Field>
@@ -136,7 +147,7 @@ function ResultForm({
       </div>
       <FormError message={error} />
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onClose}>
+        <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
           Close
         </Button>
         <Button type="submit" loading={busy}>
@@ -157,7 +168,7 @@ export function CancelOrderDialog(props: {
   const [error, setError] = useState<string>();
 
   const confirm = async () => {
-    if (!order) return;
+    if (!order || busy) return;
     setBusy(true);
     setError(undefined);
     try {
@@ -182,7 +193,7 @@ export function CancelOrderDialog(props: {
       description={order ? fullName(order.patient) : undefined}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
             Keep order
           </Button>
           <Button variant="danger" loading={busy} onClick={confirm}>

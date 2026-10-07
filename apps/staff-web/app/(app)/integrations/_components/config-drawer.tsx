@@ -11,6 +11,14 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  isEmail,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { connectionStatus, serverMessage, whenText } from './shared';
 
 type Provider = keyof typeof INTEGRATION_CATALOG;
@@ -44,6 +52,7 @@ export function ConfigDrawer({
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
   const [confirm, setConfirm] = useState<Confirm>();
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const secretSet = (key: string) => view?.secrets[key]?.set === true;
 
@@ -55,6 +64,43 @@ export function ConfigDrawer({
   });
 
   const edit = () => setSaved(false);
+
+  /** Errors are never given the secret text itself, only the field's label. */
+  function validate(): FieldErrors {
+    const next: FieldErrors = {};
+    for (const field of fields) {
+      const id = `integration-${provider}-${field.key}`;
+      const raw = field.secret ? (secrets[field.key] ?? '') : (values[field.key] ?? '');
+      const value = raw.trim();
+      if (!value) {
+        const kept = field.secret && secretSet(field.key);
+        if (field.required && !kept) {
+          next[id] =
+            field.kind === 'select'
+              ? `Choose ${field.label.toLowerCase()}.`
+              : `Enter ${field.label.toLowerCase()}.`;
+        }
+        continue;
+      }
+      if (value.length > 4000) next[id] = 'Use 4000 characters or fewer.';
+      else if (field.kind === 'url') {
+        try {
+          const url = new URL(value);
+          if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('scheme');
+        } catch {
+          next[id] = 'Enter a full web address starting with https://.';
+        }
+      } else if (
+        field.kind === 'select' &&
+        !(field.options as readonly string[] | undefined)?.includes(value)
+      ) {
+        next[id] = `Choose ${field.label.toLowerCase()} from the list.`;
+      } else if (field.key === 'fromAddress' && !isEmail(value)) {
+        next[id] = 'Enter a valid email address, like clinic@example.com.';
+      }
+    }
+    return next;
+  }
 
   async function run(action: () => Promise<unknown>, after?: () => void) {
     setBusy(true);
@@ -71,8 +117,18 @@ export function ConfigDrawer({
     }
   }
 
-  const save = () =>
-    run(
+  const save = () => {
+    if (busy) return;
+    const next = validate();
+    setErrors(next);
+    if (!isClean(next)) {
+      setError(undefined);
+      return focusFirst(
+        next,
+        fields.map((f) => `integration-${provider}-${f.key}`),
+      );
+    }
+    return run(
       () => {
         const body: Record<string, string> = { ...values };
         for (const field of fields) {
@@ -89,6 +145,7 @@ export function ConfigDrawer({
         setSaved(true);
       },
     );
+  };
 
   const clearSecret = (field: IntegrationField) =>
     run(
@@ -138,6 +195,7 @@ export function ConfigDrawer({
         <form
           className="flex flex-col gap-6"
           autoComplete="off"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             void save();
@@ -157,6 +215,11 @@ export function ConfigDrawer({
             const id = fieldId(field.key);
             const required = field.required ? 'Required' : 'Optional';
             const label = `${field.label} (${required})`;
+            const fieldError = errors[id];
+            const ariaProps = {
+              ...(field.required ? requiredProps : {}),
+              ...invalidProps(fieldError),
+            };
 
             if (field.secret) {
               const isSet = secretSet(field.key);
@@ -166,6 +229,7 @@ export function ConfigDrawer({
                   key={field.key}
                   label={label}
                   htmlFor={id}
+                  error={fieldError}
                   helper={
                     isSet
                       ? 'Saved. Type a new value to replace it, or leave this empty to keep it.'
@@ -182,6 +246,7 @@ export function ConfigDrawer({
                       setSecrets({ ...secrets, [field.key]: event.target.value });
                     }}
                     {...NO_FILL}
+                    {...ariaProps}
                     spellCheck={false}
                   />
                   {isSet && (
@@ -215,11 +280,18 @@ export function ConfigDrawer({
             }
 
             return (
-              <Field key={field.key} label={label} htmlFor={id} helper={field.helper}>
+              <Field
+                key={field.key}
+                label={label}
+                htmlFor={id}
+                helper={field.helper}
+                error={fieldError}
+              >
                 {field.kind === 'select' ? (
                   <Select
                     id={id}
                     value={values[field.key] ?? ''}
+                    {...ariaProps}
                     onChange={(event) => {
                       edit();
                       setValues({ ...values, [field.key]: event.target.value });
@@ -243,6 +315,7 @@ export function ConfigDrawer({
                       setValues({ ...values, [field.key]: event.target.value });
                     }}
                     {...NO_FILL}
+                    {...ariaProps}
                   />
                 )}
               </Field>

@@ -46,6 +46,7 @@ export function TopbarSearch() {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         type="search"
+        maxLength={100}
         aria-label="Search patients"
         placeholder="Search patients by name or phone"
         className="h-9 w-full rounded-control border border-line bg-surface-muted pl-10 pr-14 text-sm text-fg placeholder:text-fg-subtle focus:border-control focus:bg-surface"

@@ -257,7 +257,7 @@ export default function TodayPage() {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+      <div className="grid gap-6 grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex flex-col gap-6">
           {canAppointments && (
             <Card>

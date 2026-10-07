@@ -8,6 +8,14 @@ import { Field, Input, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { formatMoney, fullName } from '../../../../lib/format';
 import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
+import {
   errorText,
   rupeesToPaise,
   STATUS_LABEL,
@@ -40,6 +48,7 @@ export function TransitionDialog({
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
 
   const close = () => {
@@ -47,21 +56,28 @@ export function TransitionDialog({
     setReference('');
     setNote('');
     setError(undefined);
+    setErrors({});
     onClose();
   };
 
   const submit = async () => {
-    if (!step) return;
+    if (!step || busy) return;
     setError(undefined);
+    const next: FieldErrors = {};
     let amountMinor: number | undefined;
     if (step.needsAmount) {
       const rupees = Number(amount);
-      if (amount.trim() === '' || !Number.isFinite(rupees) || rupees < 0) {
-        setError('Enter the approved amount in rupees.');
-        return;
-      }
-      amountMinor = rupeesToPaise(rupees);
+      if (amount.trim() === '') next['step-amount'] = 'Enter the approved amount in rupees.';
+      else if (!Number.isFinite(rupees) || rupees < 0) {
+        next['step-amount'] = 'Enter an amount of zero or more.';
+      } else if (rupees * 100 > 1_000_000_000_000)
+        next['step-amount'] = 'That amount is too large.';
+      else amountMinor = rupeesToPaise(rupees);
     }
+    if (reference.trim().length > 100) next['step-reference'] = 'Use 100 characters or fewer.';
+    if (note.trim().length > 4000) next['step-note'] = 'Use 4000 characters or fewer.';
+    setErrors(next);
+    if (!isClean(next)) return focusFirst(next, ['step-amount', 'step-reference', 'step-note']);
     const parsed = insuranceTransitionSchema.safeParse({
       toStatus: step.to,
       ...(amountMinor !== undefined ? { amountMinor } : {}),
@@ -112,8 +128,9 @@ export function TransitionDialog({
       >
         {step?.needsAmount && (
           <Field
-            label="Approved amount in rupees"
+            label={req('Approved amount in rupees')}
             htmlFor="step-amount"
+            error={errors['step-amount']}
             helper={
               detail.requestedAmountMinor !== null
                 ? `Requested ${formatMoney(detail.requestedAmountMinor)}.`
@@ -128,14 +145,21 @@ export function TransitionDialog({
               inputMode="decimal"
               className="tabular text-right"
               value={amount}
+              {...requiredProps}
+              {...invalidProps(errors['step-amount'])}
               onChange={(e) => setAmount(e.target.value)}
             />
           </Field>
         )}
         {step?.reference && (
-          <Field label={`${step.reference} (optional)`} htmlFor="step-reference">
+          <Field
+            label={`${step.reference} (optional)`}
+            htmlFor="step-reference"
+            error={errors['step-reference']}
+          >
             <Input
               id="step-reference"
+              {...invalidProps(errors['step-reference'])}
               maxLength={100}
               value={reference}
               onChange={(e) => setReference(e.target.value)}
@@ -146,9 +170,11 @@ export function TransitionDialog({
           label="Note (optional)"
           htmlFor="step-note"
           helper="Who you spoke to, or what the insurer said."
+          error={errors['step-note']}
         >
           <Textarea
             id="step-note"
+            {...invalidProps(errors['step-note'])}
             maxLength={4000}
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -179,27 +205,31 @@ export function SettleDialog({
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
 
   const close = () => {
     setAmount('');
     setReference('');
     setError(undefined);
+    setErrors({});
     onClose();
   };
 
   const submit = async () => {
+    if (busy) return;
     setError(undefined);
+    const next: FieldErrors = {};
     const rupees = amount.trim() === '' ? cap / 100 : Number(amount);
-    const amountMinor = rupeesToPaise(rupees);
+    const amountMinor = Number.isFinite(rupees) ? rupeesToPaise(rupees) : 0;
     if (!Number.isFinite(rupees) || amountMinor <= 0) {
-      setError('Enter the amount the insurer paid, more than zero.');
-      return;
+      next['settle-amount'] = 'Enter the amount the insurer paid, more than zero.';
+    } else if (amountMinor > cap) {
+      next['settle-amount'] = `The amount cannot be more than the approved ${formatMoney(cap)}.`;
     }
-    if (amountMinor > cap) {
-      setError(`The amount cannot be more than the approved ${formatMoney(cap)}.`);
-      return;
-    }
+    if (reference.trim().length > 100) next['settle-reference'] = 'Use 100 characters or fewer.';
+    setErrors(next);
+    if (!isClean(next)) return focusFirst(next, ['settle-amount', 'settle-reference']);
     const parsed = settleInsuranceCaseSchema.safeParse({
       amountMinor,
       ...(reference.trim() ? { reference: reference.trim() } : {}),
@@ -256,8 +286,9 @@ export function SettleDialog({
           </p>
         )}
         <Field
-          label="Amount received in rupees"
+          label={req('Amount received in rupees')}
           htmlFor="settle-amount"
+          error={errors['settle-amount']}
           helper={`Leave blank to settle the full ${formatMoney(cap)}.`}
         >
           <Input
@@ -268,12 +299,19 @@ export function SettleDialog({
             inputMode="decimal"
             className="tabular text-right"
             value={amount}
+            {...requiredProps}
+            {...invalidProps(errors['settle-amount'])}
             onChange={(e) => setAmount(e.target.value)}
           />
         </Field>
-        <Field label="Payment reference (optional)" htmlFor="settle-reference">
+        <Field
+          label="Payment reference (optional)"
+          htmlFor="settle-reference"
+          error={errors['settle-reference']}
+        >
           <Input
             id="settle-reference"
+            {...invalidProps(errors['settle-reference'])}
             maxLength={100}
             value={reference}
             onChange={(e) => setReference(e.target.value)}

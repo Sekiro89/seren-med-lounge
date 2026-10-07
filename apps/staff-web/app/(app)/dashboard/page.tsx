@@ -23,7 +23,7 @@ import { EmptyState } from '../../../components/ui/empty-state';
 import { Field, Input, Select } from '../../../components/ui/fields';
 import { PageHeader } from '../../../components/ui/page-header';
 import { apiClient } from '../../../lib/api-client';
-import { formatDate, formatTime, fullName, humanize } from '../../../lib/format';
+import { clinicToday, formatDate, formatTime, fullName, humanize } from '../../../lib/format';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
@@ -80,8 +80,50 @@ function errorMessage(error: unknown, fallback: string): string {
 // or timezone, which the strict createAppointmentSchema rejects. Loosen
 // just that field for form validation; onCreateAppointment converts it to
 // a real ISO string before it reaches the API, which validates strictly.
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const appointmentFormSchema = createAppointmentSchema.extend({
-  scheduledAt: z.string().min(1, 'Required'),
+  patientId: z.string().min(1, 'Choose a patient.'),
+  scheduledAt: z
+    .string()
+    .min(1, 'Choose a date and time.')
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), 'Enter a valid date and time.')
+    .refine(
+      (value) => new Date(value).getTime() >= Date.now() - DAY_MS,
+      'The appointment time cannot be more than a day in the past.',
+    )
+    .refine(
+      (value) => new Date(value).getTime() <= Date.now() + 366 * DAY_MS,
+      'The appointment time cannot be more than a year ahead.',
+    ),
+});
+
+// The shared registration schema plus the checks the form needs to catch
+// early: whitespace-only names, phone numbers with letters, and birth
+// dates in the future or before 1900.
+const patientFormSchema = patientRegistrationSchema.extend({
+  firstName: z
+    .string()
+    .trim()
+    .min(1, 'Enter a first name.')
+    .max(100, 'Use at most 100 characters.'),
+  lastName: z.string().trim().min(1, 'Enter a last name.').max(100, 'Use at most 100 characters.'),
+  dateOfBirth: z
+    .string()
+    .date('Enter a valid date of birth.')
+    .refine((value) => value <= clinicToday(), 'Date of birth cannot be in the future.')
+    .refine((value) => value >= '1900-01-01', 'Enter a valid date of birth.'),
+  phone: z
+    .string()
+    .trim()
+    .min(1, 'Enter a phone number.')
+    .refine(
+      (value) =>
+        /^\+?[\d\s()-]+$/.test(value) &&
+        value.replace(/\D/g, '').length >= 7 &&
+        value.replace(/\D/g, '').length <= 15,
+      'Enter a valid phone number with 7 to 15 digits.',
+    ),
 });
 
 function MatchPanel({ title, children }: { title: string; children: React.ReactNode }) {
@@ -128,9 +170,14 @@ export default function ConsultationsPage() {
 
   const appointmentForm = useForm<z.infer<typeof appointmentFormSchema>>({
     resolver: zodResolver(appointmentFormSchema),
+    defaultValues: {
+      patientId: '',
+      entrySource: Object.values(AppointmentEntrySource)[0],
+      scheduledAt: '',
+    },
   });
   const patientForm = useForm<PatientRegistrationInput>({
-    resolver: zodResolver(patientRegistrationSchema),
+    resolver: zodResolver(patientFormSchema),
   });
 
   // Picking a patient (a new record, an existing one Reception confirmed,
@@ -146,6 +193,7 @@ export default function ConsultationsPage() {
   };
 
   const onRegisterPatient = async (input: PatientRegistrationInput) => {
+    if (patientForm.formState.isSubmitting) return;
     setFormError(null);
     setActivationOutcome(null);
     try {
@@ -220,13 +268,18 @@ export default function ConsultationsPage() {
   };
 
   const onCreateAppointment = async (input: CreateAppointmentInput) => {
+    if (appointmentForm.formState.isSubmitting) return;
     setFormError(null);
     try {
       await apiClient.post('/appointments', {
         ...input,
         scheduledAt: new Date(input.scheduledAt).toISOString(),
       });
-      appointmentForm.reset();
+      appointmentForm.reset({
+        patientId: '',
+        entrySource: Object.values(AppointmentEntrySource)[0],
+        scheduledAt: '',
+      });
       setSelectedPatient(null);
       reload();
     } catch (error) {
@@ -389,35 +442,71 @@ export default function ConsultationsPage() {
               </div>
 
               {showRegisterPatient && !registerOutcome && (
-                <div className="rounded-control border border-line bg-surface-muted p-4">
+                <div
+                  className="rounded-control border border-line bg-surface-muted p-4"
+                  onKeyDown={(event) => {
+                    // Enter here registers the patient, not the whole appointment.
+                    if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+                      event.preventDefault();
+                      void patientForm.handleSubmit(onRegisterPatient)();
+                    }
+                  }}
+                >
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field
                       label="First name"
                       htmlFor="reg-first-name"
                       error={patientForm.formState.errors.firstName?.message}
                     >
-                      <Input id="reg-first-name" {...patientForm.register('firstName')} />
+                      <Input
+                        id="reg-first-name"
+                        required
+                        aria-required="true"
+                        aria-invalid={patientForm.formState.errors.firstName ? true : undefined}
+                        {...patientForm.register('firstName')}
+                      />
                     </Field>
                     <Field
                       label="Last name"
                       htmlFor="reg-last-name"
                       error={patientForm.formState.errors.lastName?.message}
                     >
-                      <Input id="reg-last-name" {...patientForm.register('lastName')} />
+                      <Input
+                        id="reg-last-name"
+                        required
+                        aria-required="true"
+                        aria-invalid={patientForm.formState.errors.lastName ? true : undefined}
+                        {...patientForm.register('lastName')}
+                      />
                     </Field>
                     <Field
                       label="Date of birth"
                       htmlFor="reg-dob"
                       error={patientForm.formState.errors.dateOfBirth?.message}
                     >
-                      <Input id="reg-dob" type="date" {...patientForm.register('dateOfBirth')} />
+                      <Input
+                        id="reg-dob"
+                        type="date"
+                        min="1900-01-01"
+                        max={clinicToday()}
+                        required
+                        aria-required="true"
+                        aria-invalid={patientForm.formState.errors.dateOfBirth ? true : undefined}
+                        {...patientForm.register('dateOfBirth')}
+                      />
                     </Field>
                     <Field
                       label="Phone"
                       htmlFor="reg-phone"
                       error={patientForm.formState.errors.phone?.message}
                     >
-                      <Input id="reg-phone" {...patientForm.register('phone')} />
+                      <Input
+                        id="reg-phone"
+                        required
+                        aria-required="true"
+                        aria-invalid={patientForm.formState.errors.phone ? true : undefined}
+                        {...patientForm.register('phone')}
+                      />
                     </Field>
                   </div>
                   <Button
@@ -541,8 +630,17 @@ export default function ConsultationsPage() {
                 )}
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Entry source" htmlFor="appt-source">
-                  <Select id="appt-source" {...appointmentForm.register('entrySource')}>
+                <Field
+                  label="Entry source"
+                  htmlFor="appt-source"
+                  error={appointmentForm.formState.errors.entrySource && 'Choose an entry source.'}
+                >
+                  <Select
+                    id="appt-source"
+                    required
+                    aria-required="true"
+                    {...appointmentForm.register('entrySource')}
+                  >
                     {Object.values(AppointmentEntrySource).map((source) => (
                       <option key={source} value={source}>
                         {humanize(source)}
@@ -558,6 +656,9 @@ export default function ConsultationsPage() {
                   <Input
                     id="appt-scheduled"
                     type="datetime-local"
+                    required
+                    aria-required="true"
+                    aria-invalid={appointmentForm.formState.errors.scheduledAt ? true : undefined}
                     {...appointmentForm.register('scheduledAt')}
                   />
                 </Field>

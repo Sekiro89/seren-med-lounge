@@ -10,6 +10,8 @@ import { ApiError } from '@serenemed/api-client';
 import { apiClient } from '../../lib/api-client';
 import { saveStaffSession, type StaffUser } from '../../lib/auth';
 import { homeFor } from '../../lib/nav';
+import { Field, Input } from '../../components/ui/fields';
+import { invalidProps, req, requiredProps } from '../../lib/forms';
 import { Button } from '../../components/ui/button';
 import { Logo } from '../../components/shell/logo';
 import { DemoLogins } from './demo-logins';
@@ -26,6 +28,7 @@ export default function StaffLoginPage() {
     register,
     handleSubmit,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -34,10 +37,10 @@ export default function StaffLoginPage() {
   const onSubmit = async (data: LoginInput) => {
     setServerError(null);
     try {
-      const result = await apiClient.post<{ accessToken: string; user: StaffUser }>(
-        '/auth/login',
-        data,
-      );
+      const result = await apiClient.post<{ accessToken: string; user: StaffUser }>('/auth/login', {
+        ...data,
+        email: data.email.trim(),
+      });
       saveStaffSession(result.accessToken, result.user);
       router.replace(homeFor(result.user.role));
     } catch (error) {
@@ -54,8 +57,16 @@ export default function StaffLoginPage() {
   };
 
   const [showPassword, setShowPassword] = useState(false);
-  const inputClass =
-    'h-11 w-full rounded-control border border-control bg-surface px-3 text-base text-fg placeholder:text-fg-subtle';
+  const emailMessage = errors.email
+    ? getValues('email')?.trim()
+      ? 'Enter a valid email address, like name@clinic.com.'
+      : 'Enter your email address.'
+    : undefined;
+  const passwordMessage = errors.password
+    ? getValues('password')
+      ? 'Passwords have at least 8 characters.'
+      : 'Enter your password.'
+    : undefined;
 
   return (
     <main className="grid min-h-dvh lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
@@ -115,33 +126,28 @@ export default function StaffLoginPage() {
           <p className="mb-8 mt-2 text-sm text-fg-muted">Sign in to your clinic workspace.</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-fg">
-                Email
-              </label>
-              <input
+            <Field label={req('Email')} htmlFor="email" error={emailMessage}>
+              <Input
                 id="email"
                 type="email"
                 autoComplete="email"
                 autoFocus
-                className={inputClass}
+                maxLength={254}
+                {...requiredProps}
+                {...invalidProps(emailMessage)}
                 {...register('email')}
               />
-              {errors.email && (
-                <p className="mt-1.5 text-[13px] text-danger-fg">{errors.email.message}</p>
-              )}
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-fg">
-                Password
-              </label>
+            <Field label={req('Password')} htmlFor="password" error={passwordMessage}>
               <div className="relative">
-                <input
+                <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  className={`${inputClass} pr-11`}
+                  className="pr-11"
+                  {...requiredProps}
+                  {...invalidProps(passwordMessage)}
                   {...register('password')}
                 />
                 <button
@@ -158,10 +164,7 @@ export default function StaffLoginPage() {
                   )}
                 </button>
               </div>
-              {errors.password && (
-                <p className="mt-1.5 text-[13px] text-danger-fg">{errors.password.message}</p>
-              )}
-            </div>
+            </Field>
 
             {serverError && (
               <p

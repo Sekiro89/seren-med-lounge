@@ -18,6 +18,7 @@ import { Field, Input, Select } from '../../../../components/ui/fields';
 import { Toolbar } from '../../../../components/ui/toolbar';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, humanize } from '../../../../lib/format';
+import { invalidProps, req, requiredProps } from '../../../../lib/forms';
 import type { ApiState } from '../../../../lib/use-api';
 
 export interface StaffRow {
@@ -209,6 +210,7 @@ function AddStaffDialog({
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
@@ -223,9 +225,15 @@ function AddStaffDialog({
   }
 
   const submit = handleSubmit(async (values) => {
+    if (isSubmitting) return;
     setServerError(undefined);
+    const clean = { ...values, fullName: values.fullName.trim(), email: values.email.trim() };
+    if (!clean.fullName) {
+      setError('fullName', { message: 'Enter their full name.' });
+      return;
+    }
     try {
-      await apiClient.post('/users', values);
+      await apiClient.post('/users', clean);
       reset();
       setShowPassword(false);
       onDone();
@@ -253,21 +261,40 @@ function AddStaffDialog({
     >
       <form onSubmit={submit} noValidate className="flex flex-col gap-6">
         <Field
-          label="Full name"
+          label={req('Full name')}
           htmlFor="staff-name"
           error={errors.fullName && 'Enter their full name.'}
         >
-          <Input id="staff-name" autoComplete="off" {...register('fullName')} />
+          <Input
+            id="staff-name"
+            autoComplete="off"
+            maxLength={200}
+            {...requiredProps}
+            {...invalidProps(errors.fullName ? 'x' : undefined)}
+            {...register('fullName')}
+          />
         </Field>
         <Field
-          label="Email"
+          label={req('Email')}
           htmlFor="staff-email"
           error={errors.email && 'Enter a valid email address.'}
         >
-          <Input id="staff-email" type="email" autoComplete="off" {...register('email')} />
+          <Input
+            id="staff-email"
+            type="email"
+            autoComplete="off"
+            {...requiredProps}
+            {...invalidProps(errors.email ? 'x' : undefined)}
+            {...register('email')}
+          />
         </Field>
-        <Field label="Role" htmlFor="staff-role" error={errors.role && 'Choose a role.'}>
-          <Select id="staff-role" {...register('role')}>
+        <Field label={req('Role')} htmlFor="staff-role" error={errors.role && 'Choose a role.'}>
+          <Select
+            id="staff-role"
+            {...requiredProps}
+            {...invalidProps(errors.role ? 'x' : undefined)}
+            {...register('role')}
+          >
             {ROLES.map((r) => (
               <option key={r} value={r}>
                 {humanize(r)}
@@ -276,7 +303,7 @@ function AddStaffDialog({
           </Select>
         </Field>
         <Field
-          label="Temporary password"
+          label={req('Temporary password')}
           htmlFor="staff-password"
           helper="At least 8 characters. Share it privately, never by group chat."
           error={errors.password && 'Use at least 8 characters.'}
@@ -287,6 +314,8 @@ function AddStaffDialog({
               type={showPassword ? 'text' : 'password'}
               autoComplete="new-password"
               className="pr-12"
+              {...requiredProps}
+              {...invalidProps(errors.password ? 'x' : undefined)}
               {...register('password')}
             />
             <button
@@ -327,6 +356,7 @@ function ChangeRoleDialog({
   const [error, setError] = useState<string>();
 
   async function save() {
+    if (busy) return;
     setBusy(true);
     setError(undefined);
     try {
@@ -355,8 +385,13 @@ function ChangeRoleDialog({
       }
     >
       <div className="flex flex-col gap-6">
-        <Field label="Role" htmlFor="change-role">
-          <Select id="change-role" value={role} onChange={(e) => setRole(e.target.value)}>
+        <Field label={req('Role')} htmlFor="change-role">
+          <Select
+            id="change-role"
+            value={role}
+            {...requiredProps}
+            onChange={(e) => setRole(e.target.value)}
+          >
             {ROLES.map((r) => (
               <option key={r} value={r}>
                 {humanize(r)}
@@ -393,6 +428,7 @@ function StatusDialog({
   const verb = switchingOff ? 'Switch off' : 'Switch on';
 
   async function confirm() {
+    if (busy) return;
     setBusy(true);
     setError(undefined);
     try {

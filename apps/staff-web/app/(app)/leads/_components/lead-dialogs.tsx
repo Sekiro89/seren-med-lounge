@@ -7,6 +7,15 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
+import { clinicToday } from '../../../../lib/format';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { PatientPicker, type PatientOption } from './patient-picker';
 import { FormError, leadName, messageOf, type LeadDetail } from './shared';
 
@@ -38,13 +47,23 @@ function LostForm({
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const parsed = leadStatusSchema.safeParse({ status: 'LOST', lostReason: reason.trim() });
-    if (!parsed.success) return setError('Write a short reason, so the team knows why.');
-    setBusy(true);
+    if (busy) return;
     setError(undefined);
+    const parsed = leadStatusSchema.safeParse({ status: 'LOST', lostReason: reason.trim() });
+    const next: FieldErrors = parsed.success
+      ? {}
+      : {
+          'lost-reason': reason.trim()
+            ? 'Use 500 characters or fewer.'
+            : 'Write a short reason, so the team knows why.',
+        };
+    setErrors(next);
+    if (!parsed.success) return focusFirst(next, ['lost-reason']);
+    setBusy(true);
     try {
       await apiClient.post(`/leads/${lead.id}/status`, parsed.data);
       onSaved();
@@ -73,12 +92,18 @@ function LostForm({
         </>
       }
     >
-      <form id="lost-form" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="Why was this lead lost" htmlFor="lost-reason">
+      <form id="lost-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <Field
+          label={req('Why was this lead lost')}
+          htmlFor="lost-reason"
+          error={errors['lost-reason']}
+        >
           <Textarea
             id="lost-reason"
             value={reason}
             maxLength={500}
+            {...requiredProps}
+            {...invalidProps(errors['lost-reason'])}
             onChange={(e) => setReason(e.target.value)}
           />
         </Field>
@@ -127,22 +152,37 @@ function ConvertForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [review, setReview] = useState<PendingReview>();
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
+    if (mode === 'link' && !patient)
+      next['convert-patient'] = 'Choose the patient to link this lead to.';
+    if (mode === 'register') {
+      if (!dob) next['convert-dob'] = 'Enter the date of birth.';
+      else if (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || Number.isNaN(Date.parse(dob))) {
+        next['convert-dob'] = 'Enter a valid date of birth.';
+      } else if (dob > clinicToday())
+        next['convert-dob'] = 'The date of birth cannot be in the future.';
+      else if (dob < '1900-01-01') next['convert-dob'] = 'Enter a valid date of birth.';
+      if (!lead.lastName && !lastName.trim()) {
+        next['convert-last'] = 'Enter the last name. The patient record needs one.';
+      } else if (!lead.lastName && lastName.trim().length > 100) {
+        next['convert-last'] = 'Use 100 characters or fewer.';
+      }
+    }
+    setErrors(next);
+    if (!isClean(next)) return focusFirst(next, ['convert-last', 'convert-dob', 'convert-patient']);
     const body =
       mode === 'link'
         ? { patientId: patient?.id }
         : { dateOfBirth: dob, lastName: lead.lastName ? undefined : lastName.trim() || undefined };
-    if (mode === 'link' && !patient) return setError('Choose the patient to link this lead to.');
-    if (mode === 'register' && !dob) return setError('Enter the date of birth.');
-    if (mode === 'register' && !lead.lastName && !lastName.trim()) {
-      return setError('Enter the last name. The patient record needs one.');
-    }
     const parsed = convertLeadSchema.safeParse(body);
     if (!parsed.success) return setError('Check the details and try again.');
     setBusy(true);
-    setError(undefined);
     try {
       const result = await apiClient.post<{
         converted: boolean;
@@ -216,14 +256,16 @@ function ConvertForm({
         </>
       }
     >
-      <form id="convert-form" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="How should the patient record be made" htmlFor="convert-mode">
+      <form id="convert-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <Field label={req('How should the patient record be made')} htmlFor="convert-mode">
           <Select
             id="convert-mode"
             value={mode}
+            {...requiredProps}
             onChange={(e) => {
               setMode(e.target.value as ConvertMode);
               setError(undefined);
+              setErrors({});
             }}
           >
             <option value="register">Register a new patient from this lead</option>
@@ -233,31 +275,36 @@ function ConvertForm({
         {mode === 'register' ? (
           <>
             {!lead.lastName && (
-              <Field label="Last name" htmlFor="convert-last">
+              <Field label={req('Last name')} htmlFor="convert-last" error={errors['convert-last']}>
                 <Input
                   id="convert-last"
                   value={lastName}
                   maxLength={100}
+                  {...requiredProps}
+                  {...invalidProps(errors['convert-last'])}
                   onChange={(e) => setLastName(e.target.value)}
                 />
               </Field>
             )}
             <Field
-              label="Date of birth"
+              label={req('Date of birth')}
               htmlFor="convert-dob"
+              error={errors['convert-dob']}
               helper="Name and phone are taken from the lead. If a similar patient already exists, you will be asked to review it first."
             >
               <Input
                 id="convert-dob"
                 type="date"
                 value={dob}
-                max={new Date().toISOString().slice(0, 10)}
+                max={clinicToday()}
+                {...requiredProps}
+                {...invalidProps(errors['convert-dob'])}
                 onChange={(e) => setDob(e.target.value)}
               />
             </Field>
           </>
         ) : (
-          <Field label="Patient" htmlFor="convert-patient">
+          <Field label={req('Patient')} htmlFor="convert-patient" error={errors['convert-patient']}>
             <PatientPicker id="convert-patient" value={patient} onChange={setPatient} />
           </Field>
         )}

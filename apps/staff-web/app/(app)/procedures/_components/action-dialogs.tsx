@@ -11,6 +11,15 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  rupeesError,
+  type FieldErrors,
+} from '../../../../lib/forms';
+import {
   isoToLocal,
   localToIso,
   messageOf,
@@ -60,14 +69,19 @@ export function EstimateDialog({ procedure, onClose, onSaved }: Props) {
     onSaved();
     onClose();
   });
+  const [errors, setErrors] = useState<FieldErrors>({});
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
+    const amountError = rupeesError(value, { label: 'the estimate', maxMinor: 1_000_000_000 });
+    if (amountError) next['est-amount'] = amountError;
     const estimateMinor = rupeesToPaise(value);
-    if (estimateMinor === undefined || Number.isNaN(estimateMinor)) {
-      return setError('Enter the estimate as a number of rupees.');
-    }
     const parsed = procedureEstimateSchema.safeParse({ estimateMinor });
-    if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Check the amount.');
+    if (!parsed.success && !next['est-amount']) next['est-amount'] = 'Check the amount.';
+    setErrors(next);
+    if (!isClean(next) || !parsed.success) return focusFirst(next, ['est-amount']);
     void run(
       () => apiClient.post(`/procedures/${procedure.id}/estimate`, parsed.data),
       'The estimate was not saved.',
@@ -90,12 +104,14 @@ export function EstimateDialog({ procedure, onClose, onSaved }: Props) {
         </>
       }
     >
-      <form id="estimate-form" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="Estimate in rupees" htmlFor="est-amount">
+      <form id="estimate-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <Field label={req('Estimate in rupees')} htmlFor="est-amount" error={errors['est-amount']}>
           <Input
             id="est-amount"
             inputMode="decimal"
             value={value}
+            {...requiredProps}
+            {...invalidProps(errors['est-amount'])}
             onChange={(e) => setValue(e.target.value)}
           />
         </Field>
@@ -118,10 +134,22 @@ export function ScheduleDialog({
     onSaved();
     onClose();
   });
+  const [errors, setErrors] = useState<FieldErrors>({});
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!when) return setError('Choose the date and time.');
-    if (!doctor) return setError('Choose the doctor who will perform it.');
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
+    if (!when) next['sch-when'] = 'Choose the date and time.';
+    else if (Number.isNaN(new Date(`${when}:00+05:30`).getTime())) {
+      next['sch-when'] = 'Enter a valid date and time.';
+    } else if (new Date(`${when}:00+05:30`).getTime() < Date.now() - 60_000) {
+      next['sch-when'] = 'Choose a time that is not in the past.';
+    }
+    if (!doctor) next['sch-doctor'] = 'Choose the doctor who will perform it.';
+    if (location.length > 200) next['sch-location'] = 'Use 200 characters or fewer.';
+    setErrors(next);
+    if (!isClean(next)) return focusFirst(next, ['sch-when', 'sch-doctor', 'sch-location']);
     const parsed = scheduleProcedureSchema.safeParse({
       scheduledAt: localToIso(when),
       performedById: doctor,
@@ -150,17 +178,25 @@ export function ScheduleDialog({
         </>
       }
     >
-      <form id="schedule-form" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="Date and time" htmlFor="sch-when">
+      <form id="schedule-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <Field label={req('Date and time')} htmlFor="sch-when" error={errors['sch-when']}>
           <Input
             id="sch-when"
             type="datetime-local"
             value={when}
+            {...requiredProps}
+            {...invalidProps(errors['sch-when'])}
             onChange={(e) => setWhen(e.target.value)}
           />
         </Field>
-        <Field label="Doctor" htmlFor="sch-doctor">
-          <Select id="sch-doctor" value={doctor} onChange={(e) => setDoctor(e.target.value)}>
+        <Field label={req('Doctor')} htmlFor="sch-doctor" error={errors['sch-doctor']}>
+          <Select
+            id="sch-doctor"
+            value={doctor}
+            {...requiredProps}
+            {...invalidProps(errors['sch-doctor'])}
+            onChange={(e) => setDoctor(e.target.value)}
+          >
             <option value="">Choose a doctor</option>
             {doctors.map((d) => (
               <option key={d.id} value={d.id}>
@@ -169,7 +205,12 @@ export function ScheduleDialog({
             ))}
           </Select>
         </Field>
-        <Field label="Location (optional)" htmlFor="sch-location" helper="For example, the room.">
+        <Field
+          label="Location (optional)"
+          htmlFor="sch-location"
+          helper="For example, the room."
+          error={errors['sch-location']}
+        >
           <Input
             id="sch-location"
             value={location}
@@ -190,10 +231,21 @@ export function CancelProcedureDialog({ procedure, onClose, onSaved }: Props) {
     onClose();
   });
   const who = `${procedure.patient.firstName} ${procedure.patient.lastName}`.trim();
+  const [errors, setErrors] = useState<FieldErrors>({});
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(undefined);
     const parsed = cancelProcedureSchema.safeParse({ reason: reason.trim() });
-    if (!parsed.success) return setError('Write the reason for cancelling.');
+    const next: FieldErrors = parsed.success
+      ? {}
+      : {
+          'cp-reason': reason.trim()
+            ? 'Use 1000 characters or fewer.'
+            : 'Write the reason for cancelling.',
+        };
+    setErrors(next);
+    if (!parsed.success) return focusFirst(next, ['cp-reason']);
     void run(
       () => apiClient.post(`/procedures/${procedure.id}/cancel`, parsed.data),
       'The procedure was not cancelled.',
@@ -216,12 +268,14 @@ export function CancelProcedureDialog({ procedure, onClose, onSaved }: Props) {
         </>
       }
     >
-      <form id="cancel-procedure-form" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="Reason" htmlFor="cp-reason">
+      <form id="cancel-procedure-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <Field label={req('Reason')} htmlFor="cp-reason" error={errors['cp-reason']}>
           <Textarea
             id="cp-reason"
             value={reason}
             maxLength={1000}
+            {...requiredProps}
+            {...invalidProps(errors['cp-reason'])}
             onChange={(e) => setReason(e.target.value)}
           />
         </Field>

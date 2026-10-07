@@ -13,17 +13,28 @@ import { formatDate, formatTime } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
 import { apiErrorMessage, type Vital } from './types';
 
-const FIELDS: { key: keyof RecordVitalInput; label: string; step?: string }[] = [
-  { key: 'bloodPressureSystolic', label: 'BP systolic' },
-  { key: 'bloodPressureDiastolic', label: 'BP diastolic' },
-  { key: 'pulseBpm', label: 'Pulse (bpm)' },
-  { key: 'spo2Percent', label: 'SpO2 (%)' },
-  { key: 'temperatureCelsius', label: 'Temp (°C)', step: '0.1' },
-  { key: 'respiratoryRate', label: 'Resp. rate (/min)' },
-  { key: 'heightCm', label: 'Height (cm)', step: '0.1' },
-  { key: 'weightKg', label: 'Weight (kg)', step: '0.1' },
-  { key: 'bmi', label: 'BMI', step: '0.1' },
+// min and max mirror recordVitalSchema so the browser and the schema agree.
+const FIELDS: {
+  key: Exclude<keyof RecordVitalInput, 'encounterId'>;
+  label: string;
+  min: number;
+  max: number;
+  step?: string;
+}[] = [
+  { key: 'bloodPressureSystolic', label: 'BP systolic', min: 40, max: 300 },
+  { key: 'bloodPressureDiastolic', label: 'BP diastolic', min: 20, max: 200 },
+  { key: 'pulseBpm', label: 'Pulse (bpm)', min: 20, max: 250 },
+  { key: 'spo2Percent', label: 'SpO2 (%)', min: 0, max: 100 },
+  { key: 'temperatureCelsius', label: 'Temp (°C)', min: 25, max: 45, step: '0.1' },
+  { key: 'respiratoryRate', label: 'Resp. rate (/min)', min: 1, max: 100 },
+  { key: 'heightCm', label: 'Height (cm)', min: 20, max: 272, step: '0.1' },
+  { key: 'weightKg', label: 'Weight (kg)', min: 0.5, max: 500, step: '0.1' },
+  { key: 'bmi', label: 'BMI', min: 5, max: 100, step: '0.1' },
 ];
+
+function rangeMessage(label: string, min: number, max: number): string {
+  return `${label}: enter a number from ${min} to ${max}.`;
+}
 
 function summarize(vital: Vital): string {
   return [
@@ -70,9 +81,10 @@ export function VitalsSection({
     }
   };
 
-  const validationMessages = Object.values(formState.errors)
-    .filter((error) => error && 'message' in error && error.message)
-    .map((error) => String((error as { message?: string }).message));
+  // Per-field errors sit under each input; the "at least one vital" rule
+  // belongs to the whole form, so it is shown once below the grid.
+  const groupError = (formState.errors as Record<string, { message?: string } | undefined>)['']
+    ?.message;
 
   return (
     <Card>
@@ -100,11 +112,24 @@ export function VitalsSection({
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
               {FIELDS.map((field) => (
-                <Field key={field.key} label={field.label} htmlFor={`vital-${field.key}`}>
+                <Field
+                  key={field.key}
+                  label={field.label}
+                  htmlFor={`vital-${field.key}`}
+                  error={
+                    formState.errors[field.key]
+                      ? rangeMessage(field.label, field.min, field.max)
+                      : undefined
+                  }
+                >
                   <Input
                     id={`vital-${field.key}`}
                     type="number"
-                    step={field.step}
+                    inputMode="decimal"
+                    min={field.min}
+                    max={field.max}
+                    step={field.step ?? '1'}
+                    aria-invalid={formState.errors[field.key] ? true : undefined}
                     {...register(field.key, {
                       // valueAsNumber turns an empty input into NaN, which
                       // Zod's z.number().optional() rejects and silently
@@ -115,11 +140,14 @@ export function VitalsSection({
                 </Field>
               ))}
             </div>
-            {validationMessages.map((message, index) => (
-              <p key={index} role="alert" className="text-[13px] text-danger-fg">
-                {message}
+            <p className="text-[13px] text-fg-subtle">
+              Enter at least one measurement. Leave the others blank.
+            </p>
+            {groupError && (
+              <p role="alert" className="text-[13px] text-danger-fg">
+                {groupError}
               </p>
-            ))}
+            )}
             {formError && (
               <p role="alert" className="text-[13px] text-danger-fg">
                 {formError}

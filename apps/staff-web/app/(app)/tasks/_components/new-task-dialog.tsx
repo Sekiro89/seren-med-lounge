@@ -6,6 +6,14 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { humanize } from '../../../../lib/format';
 import { PatientPicker, type PatientOption } from '../../follow-ups/_components/patient-picker';
 import { localToIso, messageOf } from './helpers';
@@ -44,11 +52,31 @@ function NewTaskForm({
   const [assignee, setAssignee] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
+    if (!title.trim()) next['task-title'] = 'Enter a title for the task.';
+    else if (title.trim().length > 200) next['task-title'] = 'Use 200 characters or fewer.';
+    if (description.length > 2000) next['task-description'] = 'Use 2000 characters or fewer.';
+    if (dueAt) {
+      const due = new Date(localToIso(dueAt)).getTime();
+      if (Number.isNaN(due)) next['task-due'] = 'Enter a valid date and time.';
+      else if (due < Date.now() - 60_000)
+        next['task-due'] = 'Choose a due time that is not in the past.';
+    }
+    if (!PRIORITIES.includes(priority as (typeof PRIORITIES)[number])) {
+      next['task-priority'] = 'Choose a priority.';
+    }
+    setErrors(next);
+    if (!isClean(next)) {
+      return focusFirst(next, ['task-title', 'task-description', 'task-due', 'task-priority']);
+    }
     const parsed = createTaskSchema.safeParse({
-      title,
+      title: title.trim(),
       description: description.trim() || undefined,
       patientId: patient?.id,
       dueAt: dueAt ? localToIso(dueAt) : undefined,
@@ -89,16 +117,22 @@ function NewTaskForm({
         </>
       }
     >
-      <form id="new-task-form" onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Title" htmlFor="task-title">
+      <form id="new-task-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
+        <Field label={req('Title')} htmlFor="task-title" error={errors['task-title']}>
           <Input
             id="task-title"
             value={title}
             maxLength={200}
+            {...requiredProps}
+            {...invalidProps(errors['task-title'])}
             onChange={(e) => setTitle(e.target.value)}
           />
         </Field>
-        <Field label="Details (optional)" htmlFor="task-description">
+        <Field
+          label="Details (optional)"
+          htmlFor="task-description"
+          error={errors['task-description']}
+        >
           <Textarea
             id="task-description"
             value={description}
@@ -107,18 +141,21 @@ function NewTaskForm({
           />
         </Field>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Due (optional)" htmlFor="task-due">
+          <Field label="Due (optional)" htmlFor="task-due" error={errors['task-due']}>
             <Input
               id="task-due"
               type="datetime-local"
               value={dueAt}
+              {...invalidProps(errors['task-due'])}
               onChange={(e) => setDueAt(e.target.value)}
             />
           </Field>
-          <Field label="Priority" htmlFor="task-priority">
+          <Field label={req('Priority')} htmlFor="task-priority" error={errors['task-priority']}>
             <Select
               id="task-priority"
               value={priority}
+              {...requiredProps}
+              {...invalidProps(errors['task-priority'])}
               onChange={(e) => setPriority(e.target.value)}
             >
               {PRIORITIES.map((p) => (

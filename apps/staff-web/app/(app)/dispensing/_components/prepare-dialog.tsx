@@ -79,24 +79,32 @@ function PrepareBody({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
     setServerError(undefined);
     const parsed = createDispensingSchema.safeParse({
       prescriptionItemId: item.id,
       medicationId,
       quantity: quantity === '' ? undefined : Number(quantity),
       mode,
-      deliveryAddress: address.trim() || undefined,
+      deliveryAddress: mode === 'HOME_DELIVERY' ? address.trim() || undefined : undefined,
     });
-    if (!parsed.success) {
-      const next: Record<string, string> = {};
-      if (!medicationId) next.medicationId = 'Choose the medicine to dispense.';
-      if (quantity === '' || !Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
-        next.quantity = 'Enter a whole number of units, 1 or more.';
-      }
-      if (mode === 'HOME_DELIVERY' && !address.trim()) {
-        next.deliveryAddress = 'A delivery address is required for home delivery.';
-      }
-      if (Object.keys(next).length === 0) next.form = 'Check the details and try again.';
+    const next: Record<string, string> = {};
+    if (!medicationId) next.medicationId = 'Choose the medicine to dispense.';
+    const units = Number(quantity);
+    if (quantity === '' || !Number.isInteger(units) || units < 1) {
+      next.quantity = 'Enter a whole number of units, 1 or more.';
+    } else if (units > 1_000_000) {
+      next.quantity = 'Quantity cannot be more than 1,000,000.';
+    } else if (medicationId && !batches.loading && batches.data && units > usableTotal) {
+      next.quantity = `Only ${usableTotal} units are usable on hand.`;
+    }
+    if (mode === 'HOME_DELIVERY' && !address.trim()) {
+      next.deliveryAddress = 'A delivery address is required for home delivery.';
+    }
+    if (Object.keys(next).length === 0 && !parsed.success) {
+      next.form = 'Check the details and try again.';
+    }
+    if (Object.keys(next).length > 0 || !parsed.success) {
       setErrors(next);
       return;
     }
@@ -153,7 +161,7 @@ function PrepareBody({
       description={`${patient}: ${item.medicationName}, ${item.dosage}, ${item.frequency}`}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
             Close
           </Button>
           <Button type="submit" form="prepare-form" loading={busy}>
@@ -195,6 +203,9 @@ function PrepareBody({
         >
           <Select
             id="med-select"
+            required
+            aria-required="true"
+            aria-invalid={errors.medicationId ? true : undefined}
             value={medicationId}
             onChange={(e) => setMedicationId(e.target.value)}
           >
@@ -228,6 +239,11 @@ function PrepareBody({
             type="number"
             inputMode="numeric"
             min={1}
+            max={1000000}
+            step={1}
+            required
+            aria-required="true"
+            aria-invalid={errors.quantity ? true : undefined}
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
           />
@@ -248,6 +264,9 @@ function PrepareBody({
           <Field label="Delivery address" htmlFor="addr" error={errors.deliveryAddress}>
             <Textarea
               id="addr"
+              required
+              aria-required="true"
+              aria-invalid={errors.deliveryAddress ? true : undefined}
               value={address}
               maxLength={500}
               onChange={(e) => setAddress(e.target.value)}

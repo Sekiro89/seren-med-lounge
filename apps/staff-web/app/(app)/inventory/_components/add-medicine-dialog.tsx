@@ -8,6 +8,7 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { humanize } from '../../../../lib/format';
+import { invalidProps, req, requiredProps } from '../../../../lib/forms';
 import { FormError, rupeesToPaise, serverMessage } from './shared';
 
 const FORMS = ['TABLET', 'CAPSULE', 'SYRUP', 'INJECTION', 'CREAM', 'DROPS', 'INHALER', 'OTHER'];
@@ -49,6 +50,7 @@ export function AddMedicineDialog({
   const { errors } = formState;
 
   const submit = handleSubmit(async (v) => {
+    if (busy) return;
     setServerError(undefined);
     const price = rupeesToPaise(v.price);
     if (Number.isNaN(price)) {
@@ -70,10 +72,14 @@ export function AddMedicineDialog({
         const key = issue.path[0] === 'unitPriceMinor' ? 'price' : String(issue.path[0]);
         const message =
           issue.path[0] === 'name' || issue.path[0] === 'unit'
-            ? 'This is required.'
+            ? v[issue.path[0]].trim()
+              ? 'That is too long.'
+              : 'This is required.'
             : issue.path[0] === 'reorderLevel'
-              ? 'Enter a whole number, zero or more.'
-              : issue.message;
+              ? 'Enter a whole number from 0 to 1,000,000.'
+              : issue.path[0] === 'unitPriceMinor'
+                ? 'Enter a price between 0 and 10,00,000 rupees.'
+                : issue.message;
         setError(key as keyof Values, { message });
       }
       return;
@@ -109,19 +115,30 @@ export function AddMedicineDialog({
     >
       <form id="add-medicine-form" onSubmit={submit} className="space-y-4" noValidate>
         <FormError message={serverError} />
-        <Field label="Name" htmlFor="med-name" error={errors.name?.message}>
-          <Input id="med-name" {...register('name')} />
+        <Field label={req('Name')} htmlFor="med-name" error={errors.name?.message}>
+          <Input
+            id="med-name"
+            maxLength={200}
+            {...requiredProps}
+            {...invalidProps(errors.name?.message)}
+            {...register('name')}
+          />
         </Field>
         <Field
           label="Generic name (optional)"
           htmlFor="med-generic"
           error={errors.genericName?.message}
         >
-          <Input id="med-generic" {...register('genericName')} />
+          <Input
+            id="med-generic"
+            maxLength={200}
+            {...invalidProps(errors.genericName?.message)}
+            {...register('genericName')}
+          />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Form" htmlFor="med-form">
-            <Select id="med-form" {...register('form')}>
+          <Field label={req('Form')} htmlFor="med-form">
+            <Select id="med-form" {...requiredProps} {...register('form')}>
               {FORMS.map((f) => (
                 <option key={f} value={f}>
                   {humanize(f)}
@@ -134,24 +151,40 @@ export function AddMedicineDialog({
             htmlFor="med-strength"
             error={errors.strength?.message}
           >
-            <Input id="med-strength" {...register('strength')} />
+            <Input
+              id="med-strength"
+              maxLength={100}
+              {...invalidProps(errors.strength?.message)}
+              {...register('strength')}
+            />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field
-            label="Unit"
+            label={req('Unit')}
             htmlFor="med-unit"
             helper="How it is counted, such as tablet or bottle."
             error={errors.unit?.message}
           >
-            <Input id="med-unit" {...register('unit')} />
+            <Input
+              id="med-unit"
+              maxLength={50}
+              {...requiredProps}
+              {...invalidProps(errors.unit?.message)}
+              {...register('unit')}
+            />
           </Field>
           <Field
             label="Price per unit, in rupees (optional)"
             htmlFor="med-price"
             error={errors.price?.message}
           >
-            <Input id="med-price" inputMode="decimal" {...register('price')} />
+            <Input
+              id="med-price"
+              inputMode="decimal"
+              {...invalidProps(errors.price?.message)}
+              {...register('price')}
+            />
           </Field>
         </div>
         <Field
@@ -160,7 +193,12 @@ export function AddMedicineDialog({
           helper="Flagged as low stock when usable units reach this number."
           error={errors.reorderLevel?.message}
         >
-          <Input id="med-reorder" inputMode="numeric" {...register('reorderLevel')} />
+          <Input
+            id="med-reorder"
+            inputMode="numeric"
+            {...invalidProps(errors.reorderLevel?.message)}
+            {...register('reorderLevel')}
+          />
         </Field>
       </form>
     </Dialog>

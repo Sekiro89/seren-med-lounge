@@ -7,6 +7,7 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
+import { invalidProps, req, requiredProps } from '../../../../lib/forms';
 import { FormError, medicineLabel, serverMessage, type BatchRow } from './shared';
 
 interface Values {
@@ -35,8 +36,15 @@ export function AdjustDialog({
   const type = useWatch({ control, name: 'type' });
 
   const submit = handleSubmit(async (v) => {
-    if (!batch) return;
+    if (!batch || busy) return;
     setServerError(undefined);
+    const delta = v.quantityDelta.trim() === '' ? undefined : Number(v.quantityDelta);
+    if (delta !== undefined && Number.isInteger(delta) && delta < -batch.quantityOnHand) {
+      setError('quantityDelta', {
+        message: `Only ${batch.quantityOnHand} on hand, so you cannot remove ${Math.abs(delta)}.`,
+      });
+      return;
+    }
     const parsed = adjustStockSchema.safeParse({
       type: v.type,
       quantityDelta: v.quantityDelta.trim() === '' ? undefined : Number(v.quantityDelta),
@@ -48,9 +56,11 @@ export function AdjustDialog({
         const key = (path ? String(path) : 'quantityDelta') as keyof Values;
         const message =
           path === 'reason'
-            ? 'Say why the stock changed.'
+            ? v.reason.trim()
+              ? 'Use 500 characters or fewer.'
+              : 'Say why the stock changed.'
             : path === 'quantityDelta' && issue.code !== 'custom'
-              ? 'Enter a whole number, such as -5 or 3.'
+              ? 'Enter a whole number between -1,000,000 and 1,000,000, such as -5 or 3.'
               : issue.message.includes('WASTAGE')
                 ? 'Wastage removes stock, so enter a negative number such as -5.'
                 : 'The change cannot be 0.';
@@ -93,14 +103,14 @@ export function AdjustDialog({
     >
       <form id="adjust-stock-form" onSubmit={submit} className="space-y-4" noValidate>
         <FormError message={serverError} />
-        <Field label="Type" htmlFor="adj-type">
-          <Select id="adj-type" {...register('type')}>
+        <Field label={req('Type')} htmlFor="adj-type">
+          <Select id="adj-type" {...requiredProps} {...register('type')}>
             <option value="ADJUSTMENT">Stock count correction</option>
             <option value="WASTAGE">Wastage (expired or damaged)</option>
           </Select>
         </Field>
         <Field
-          label="Change in units"
+          label={req('Change in units')}
           htmlFor="adj-qty"
           helper={
             type === 'WASTAGE'
@@ -109,10 +119,22 @@ export function AdjustDialog({
           }
           error={errors.quantityDelta?.message}
         >
-          <Input id="adj-qty" inputMode="numeric" {...register('quantityDelta')} />
+          <Input
+            id="adj-qty"
+            inputMode="numeric"
+            {...requiredProps}
+            {...invalidProps(errors.quantityDelta?.message)}
+            {...register('quantityDelta')}
+          />
         </Field>
-        <Field label="Reason" htmlFor="adj-reason" error={errors.reason?.message}>
-          <Textarea id="adj-reason" {...register('reason')} />
+        <Field label={req('Reason')} htmlFor="adj-reason" error={errors.reason?.message}>
+          <Textarea
+            id="adj-reason"
+            maxLength={500}
+            {...requiredProps}
+            {...invalidProps(errors.reason?.message)}
+            {...register('reason')}
+          />
         </Field>
       </form>
     </Dialog>

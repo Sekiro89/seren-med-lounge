@@ -19,16 +19,33 @@ import { apiClient } from '../../../../lib/api-client';
 import { can } from '../../../../lib/permissions';
 import { apiErrorMessage, isUnsigned, type Diagnosis } from './types';
 
+const DESCRIPTION_MAX = 2000;
+
+/** Whitespace alone is not a description, so trim before the schema sees it. */
+const trimmed = (value: string | undefined) => (value === undefined ? value : value.trim());
+const trimValue = (value: string) => (typeof value === 'string' ? value.trim() : value);
+
+function descriptionError(error: { type?: string } | undefined): string | undefined {
+  if (!error) return undefined;
+  return error.type === 'too_big'
+    ? `Description can be at most ${DESCRIPTION_MAX} characters.`
+    : 'Enter a diagnosis description.';
+}
+
 function AmendForm({ diagnosisId, onDone }: { diagnosisId: string; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const { register, handleSubmit, formState } = useForm<DiagnosisContentInput>({
     resolver: zodResolver(diagnosisContentSchema),
+    defaultValues: { icdCode: '', description: '' },
   });
 
   const onSubmit = async (data: DiagnosisContentInput) => {
     setError(null);
     try {
-      await apiClient.post(`/diagnoses/${diagnosisId}/amend`, data);
+      await apiClient.post(`/diagnoses/${diagnosisId}/amend`, {
+        description: data.description.trim(),
+        icdCode: trimmed(data.icdCode) || undefined,
+      });
       onDone();
     } catch (submitError) {
       setError(apiErrorMessage(submitError, 'Could not amend this diagnosis.'));
@@ -41,15 +58,31 @@ function AmendForm({ diagnosisId, onDone }: { diagnosisId: string; onDone: () =>
       className="mt-3 flex flex-col gap-3 border-t border-line pt-3"
       noValidate
     >
-      <Field label="ICD code (optional)" htmlFor={`amend-icd-${diagnosisId}`}>
-        <Input id={`amend-icd-${diagnosisId}`} {...register('icdCode')} />
+      <Field
+        label="ICD code (optional)"
+        htmlFor={`amend-icd-${diagnosisId}`}
+        error={formState.errors.icdCode && 'ICD code can be at most 20 characters.'}
+      >
+        <Input
+          id={`amend-icd-${diagnosisId}`}
+          maxLength={20}
+          aria-invalid={formState.errors.icdCode ? true : undefined}
+          {...register('icdCode', { setValueAs: trimValue })}
+        />
       </Field>
       <Field
         label="Corrected description"
         htmlFor={`amend-desc-${diagnosisId}`}
-        error={formState.errors.description?.message}
+        error={descriptionError(formState.errors.description)}
       >
-        <Textarea id={`amend-desc-${diagnosisId}`} {...register('description')} />
+        <Textarea
+          id={`amend-desc-${diagnosisId}`}
+          required
+          aria-required="true"
+          maxLength={2000}
+          aria-invalid={formState.errors.description ? true : undefined}
+          {...register('description', { setValueAs: trimValue })}
+        />
       </Field>
       {error && (
         <p role="alert" className="text-[13px] text-danger-fg">
@@ -86,14 +119,18 @@ export function DiagnosesSection({
 
   const { register, handleSubmit, reset, formState } = useForm<CreateDiagnosisDraftInput>({
     resolver: zodResolver(createDiagnosisDraftSchema),
-    defaultValues: { encounterId },
+    defaultValues: { encounterId, icdCode: '', description: '' },
   });
 
   const onSubmit = async (data: CreateDiagnosisDraftInput) => {
     setFormError(null);
     try {
-      await apiClient.post('/diagnoses', { ...data, encounterId });
-      reset({ encounterId });
+      await apiClient.post('/diagnoses', {
+        encounterId,
+        description: data.description.trim(),
+        icdCode: trimmed(data.icdCode) || undefined,
+      });
+      reset({ encounterId, icdCode: '', description: '' });
       onChange();
     } catch (error) {
       setFormError(apiErrorMessage(error, 'Could not create the diagnosis.'));
@@ -184,15 +221,31 @@ export function DiagnosesSection({
         {can(role, 'diagnosis:write-draft') && (
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_1fr]">
-              <Field label="ICD code (optional)" htmlFor="dx-icd">
-                <Input id="dx-icd" {...register('icdCode')} />
+              <Field
+                label="ICD code (optional)"
+                htmlFor="dx-icd"
+                error={formState.errors.icdCode && 'ICD code can be at most 20 characters.'}
+              >
+                <Input
+                  id="dx-icd"
+                  maxLength={20}
+                  aria-invalid={formState.errors.icdCode ? true : undefined}
+                  {...register('icdCode', { setValueAs: trimValue })}
+                />
               </Field>
               <Field
                 label="Diagnosis description"
                 htmlFor="dx-description"
-                error={formState.errors.description?.message}
+                error={descriptionError(formState.errors.description)}
               >
-                <Input id="dx-description" {...register('description')} />
+                <Input
+                  id="dx-description"
+                  required
+                  aria-required="true"
+                  maxLength={DESCRIPTION_MAX}
+                  aria-invalid={formState.errors.description ? true : undefined}
+                  {...register('description', { setValueAs: trimValue })}
+                />
               </Field>
             </div>
             {formError && (

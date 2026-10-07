@@ -8,6 +8,14 @@ import { Field, Input, Select } from '../../../../components/ui/fields';
 import { Skeleton } from '../../../../components/ui/skeleton';
 import { apiClient } from '../../../../lib/api-client';
 import { formatMoney } from '../../../../lib/format';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { can } from '../../../../lib/permissions';
 import { useStaff } from '../../../../lib/staff-context';
 import { useApi } from '../../../../lib/use-api';
@@ -49,6 +57,7 @@ export function NewCaseDialog({
   const [invoiceId, setInvoiceId] = useState('');
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const policies = useApi<PolicyRow[]>(
     open && patient ? `/insurance/policies?patientId=${encodeURIComponent(patient.id)}` : null,
@@ -68,6 +77,7 @@ export function NewCaseDialog({
     setAmount('');
     setInvoiceId('');
     setError(undefined);
+    setErrors({});
   };
   const close = () => {
     reset();
@@ -75,15 +85,43 @@ export function NewCaseDialog({
   };
 
   const submit = async () => {
+    if (submitting) return;
     setError(undefined);
-    if (!patient) {
-      setError('Choose a patient first.');
-      return;
-    }
+    const next: FieldErrors = {};
+    if (!patient) next['case-patient'] = 'Choose a patient first.';
     const requested = amount.trim() === '' ? undefined : Number(amount);
     if (requested !== undefined && (!Number.isFinite(requested) || requested < 0)) {
-      setError('Enter the requested amount in rupees, for example 25000.');
-      return;
+      next['case-amount'] = 'Enter the requested amount in rupees, for example 25000.';
+    } else if (requested !== undefined && requested * 100 > 1_000_000_000) {
+      next['case-amount'] = 'That amount is too large.';
+    }
+    if (patient && !policies.loading) {
+      if (showPolicyForm) {
+        if (!draft.insurerName.trim()) next['policy-insurer'] = 'Enter the insurer name.';
+        else if (draft.insurerName.trim().length > 200) {
+          next['policy-insurer'] = 'Use 200 characters or fewer.';
+        }
+        if (!draft.policyNumber.trim()) next['policy-number'] = 'Enter the policy number.';
+        else if (draft.policyNumber.trim().length > 100) {
+          next['policy-number'] = 'Use 100 characters or fewer.';
+        }
+        if (draft.tpaName.trim().length > 200) next['policy-tpa'] = 'Use 200 characters or fewer.';
+        if (draft.memberId.trim().length > 100) {
+          next['policy-member'] = 'Use 100 characters or fewer.';
+        }
+      } else if (!(policyId || active[0]?.id))
+        next['policy-choice'] = 'Choose the policy this case is for.';
+    }
+    setErrors(next);
+    if (!isClean(next) || !patient) {
+      return focusFirst({ ...next, 'case-patient-search': next['case-patient'] }, [
+        'case-patient-search',
+        'policy-insurer',
+        'policy-number',
+        'policy-tpa',
+        'policy-member',
+        'case-amount',
+      ]);
     }
     setSubmitting(true);
     try {
@@ -137,7 +175,7 @@ export function NewCaseDialog({
           <Button variant="secondary" onClick={close}>
             Cancel
           </Button>
-          <Button loading={submitting} disabled={!patient} onClick={submit}>
+          <Button loading={submitting} onClick={submit}>
             Create case
           </Button>
         </>
@@ -152,6 +190,7 @@ export function NewCaseDialog({
         }}
       >
         <PatientPicker
+          error={errors['case-patient']}
           value={patient}
           onChange={(p) => {
             setPatient(p);
@@ -159,6 +198,7 @@ export function NewCaseDialog({
             setInvoiceId('');
             setAddingPolicy(false);
             setError(undefined);
+            setErrors({});
           }}
         />
 
@@ -172,7 +212,7 @@ export function NewCaseDialog({
               </p>
             ) : (
               <fieldset className="flex flex-col gap-3">
-                <legend className="mb-2 text-sm font-medium">Policy</legend>
+                <legend className="mb-2 text-sm font-medium">{req('Policy')}</legend>
                 {active.length > 0 && (
                   <ul className="divide-y divide-line rounded-control border border-line">
                     {active.map((p) => {
@@ -203,6 +243,11 @@ export function NewCaseDialog({
                     })}
                   </ul>
                 )}
+                {errors['policy-choice'] && (
+                  <p role="alert" className="text-[13px] text-danger-fg">
+                    {errors['policy-choice']}
+                  </p>
+                )}
                 {active.length === 0 && (
                   <p className="text-[13px] text-fg-subtle">
                     This patient has no active policy yet. Add one to continue.
@@ -210,24 +255,40 @@ export function NewCaseDialog({
                 )}
                 {showPolicyForm ? (
                   <div className="flex flex-col gap-4">
-                    <Field label="Insurer" htmlFor="policy-insurer">
+                    <Field
+                      label={req('Insurer')}
+                      htmlFor="policy-insurer"
+                      error={errors['policy-insurer']}
+                    >
                       <Input
                         id="policy-insurer"
                         maxLength={200}
+                        {...requiredProps}
+                        {...invalidProps(errors['policy-insurer'])}
                         value={draft.insurerName}
                         onChange={set('insurerName')}
                       />
                     </Field>
-                    <Field label="Policy number" htmlFor="policy-number">
+                    <Field
+                      label={req('Policy number')}
+                      htmlFor="policy-number"
+                      error={errors['policy-number']}
+                    >
                       <Input
                         id="policy-number"
                         maxLength={100}
+                        {...requiredProps}
+                        {...invalidProps(errors['policy-number'])}
                         value={draft.policyNumber}
                         onChange={set('policyNumber')}
                       />
                     </Field>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <Field label="TPA (optional)" htmlFor="policy-tpa">
+                      <Field
+                        label="TPA (optional)"
+                        htmlFor="policy-tpa"
+                        error={errors['policy-tpa']}
+                      >
                         <Input
                           id="policy-tpa"
                           maxLength={200}
@@ -235,7 +296,11 @@ export function NewCaseDialog({
                           onChange={set('tpaName')}
                         />
                       </Field>
-                      <Field label="Member ID (optional)" htmlFor="policy-member">
+                      <Field
+                        label="Member ID (optional)"
+                        htmlFor="policy-member"
+                        error={errors['policy-member']}
+                      >
                         <Input
                           id="policy-member"
                           maxLength={100}
@@ -270,6 +335,7 @@ export function NewCaseDialog({
               label="Requested amount in rupees (optional)"
               htmlFor="case-amount"
               helper="What the clinic expects to claim. It can be left blank for now."
+              error={errors['case-amount']}
             >
               <Input
                 id="case-amount"
@@ -279,6 +345,7 @@ export function NewCaseDialog({
                 inputMode="decimal"
                 className="tabular text-right"
                 value={amount}
+                {...invalidProps(errors['case-amount'])}
                 onChange={(e) => setAmount(e.target.value)}
               />
             </Field>

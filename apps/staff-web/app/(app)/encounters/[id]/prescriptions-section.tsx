@@ -18,6 +18,23 @@ import { apiErrorMessage, orderTone, type Prescription } from './types';
 
 const EMPTY_ITEM = { medicationName: '', dosage: '', frequency: '' };
 
+/** Whitespace alone is not an entry, so trim before the schema sees it. */
+const trimValue = (value: string) => (typeof value === 'string' ? value.trim() : value);
+
+function itemErrorsOf(errors: unknown, index: number) {
+  const list = (errors as { items?: unknown[] } | undefined)?.items;
+  return list?.[index] as
+    | Partial<Record<'medicationName' | 'dosage' | 'frequency' | 'durationDays', { type?: string }>>
+    | undefined;
+}
+
+function textError(error: { type?: string } | undefined, label: string, max: number) {
+  if (!error) return undefined;
+  return error.type === 'too_big'
+    ? `${label} can be at most ${max} characters.`
+    : `Enter the ${label.toLowerCase()}.`;
+}
+
 export function PrescriptionsSection({
   encounterId,
   prescriptions,
@@ -40,6 +57,7 @@ export function PrescriptionsSection({
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   const onSubmit = async (data: CreatePrescriptionInput) => {
+    if (formState.isSubmitting) return;
     setFormError(null);
     try {
       await apiClient.post('/prescriptions', { ...data, encounterId });
@@ -107,51 +125,95 @@ export function PrescriptionsSection({
 
         {can(role, 'prescription:write') && (
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-            {fields.map((field, index) => (
-              <div key={field.id} className="flex flex-wrap items-end gap-3">
-                <div className="min-w-[10rem] flex-1">
-                  <Field label="Medication" htmlFor={`rx-med-${index}`}>
-                    <Input id={`rx-med-${index}`} {...register(`items.${index}.medicationName`)} />
-                  </Field>
-                </div>
-                <div className="w-36">
-                  <Field label="Dosage" htmlFor={`rx-dose-${index}`} helper="For example 500mg">
-                    <Input id={`rx-dose-${index}`} {...register(`items.${index}.dosage`)} />
-                  </Field>
-                </div>
-                <div className="w-44">
-                  <Field
-                    label="Frequency"
-                    htmlFor={`rx-freq-${index}`}
-                    helper="For example twice daily"
-                  >
-                    <Input id={`rx-freq-${index}`} {...register(`items.${index}.frequency`)} />
-                  </Field>
-                </div>
-                <div className="w-24">
-                  <Field label="Days" htmlFor={`rx-days-${index}`}>
-                    <Input
-                      id={`rx-days-${index}`}
-                      type="number"
-                      {...register(`items.${index}.durationDays`, {
-                        // Same NaN-vs-undefined issue as the vitals form:
-                        // an empty number input must become undefined.
-                        setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
-                      })}
+            {fields.map((field, index) => {
+              const itemErrors = itemErrorsOf(formState.errors, index);
+              return (
+                <div key={field.id} className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-[10rem] flex-1">
+                    <Field
+                      label="Medication"
+                      htmlFor={`rx-med-${index}`}
+                      error={textError(itemErrors?.medicationName, 'Medication', 200)}
+                    >
+                      <Input
+                        id={`rx-med-${index}`}
+                        required
+                        aria-required="true"
+                        maxLength={200}
+                        aria-invalid={itemErrors?.medicationName ? true : undefined}
+                        {...register(`items.${index}.medicationName`, { setValueAs: trimValue })}
+                      />
+                    </Field>
+                  </div>
+                  <div className="w-36">
+                    <Field
+                      label="Dosage"
+                      htmlFor={`rx-dose-${index}`}
+                      helper="For example 500mg"
+                      error={textError(itemErrors?.dosage, 'Dosage', 100)}
+                    >
+                      <Input
+                        id={`rx-dose-${index}`}
+                        required
+                        aria-required="true"
+                        maxLength={100}
+                        aria-invalid={itemErrors?.dosage ? true : undefined}
+                        {...register(`items.${index}.dosage`, { setValueAs: trimValue })}
+                      />
+                    </Field>
+                  </div>
+                  <div className="w-44">
+                    <Field
+                      label="Frequency"
+                      htmlFor={`rx-freq-${index}`}
+                      helper="For example twice daily"
+                      error={textError(itemErrors?.frequency, 'Frequency', 100)}
+                    >
+                      <Input
+                        id={`rx-freq-${index}`}
+                        required
+                        aria-required="true"
+                        maxLength={100}
+                        aria-invalid={itemErrors?.frequency ? true : undefined}
+                        {...register(`items.${index}.frequency`, { setValueAs: trimValue })}
+                      />
+                    </Field>
+                  </div>
+                  <div className="w-28">
+                    <Field
+                      label="Days (optional)"
+                      htmlFor={`rx-days-${index}`}
+                      error={itemErrors?.durationDays ? 'Whole number from 1 to 365.' : undefined}
+                    >
+                      <Input
+                        id={`rx-days-${index}`}
+                        type="number"
+                        min={1}
+                        max={365}
+                        step={1}
+                        inputMode="numeric"
+                        aria-invalid={itemErrors?.durationDays ? true : undefined}
+                        {...register(`items.${index}.durationDays`, {
+                          // Same NaN-vs-undefined issue as the vitals form:
+                          // an empty number input must become undefined.
+                          setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
+                        })}
+                      />
+                    </Field>
+                  </div>
+                  {fields.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="sm:mt-[1.625rem]"
+                      aria-label={`Remove medication ${index + 1}`}
+                      icon={<Trash size={20} aria-hidden="true" />}
+                      onClick={() => remove(index)}
                     />
-                  </Field>
+                  )}
                 </div>
-                {fields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label={`Remove medication ${index + 1}`}
-                    icon={<Trash size={20} aria-hidden="true" />}
-                    onClick={() => remove(index)}
-                  />
-                )}
-              </div>
-            ))}
+              );
+            })}
             <Button
               type="button"
               variant="ghost"
@@ -162,9 +224,9 @@ export function PrescriptionsSection({
             >
               Add another medication
             </Button>
-            {formState.errors.items && (
+            {(formState.errors.items?.message || formState.errors.items?.root?.message) && (
               <p role="alert" className="text-[13px] text-danger-fg">
-                Check the medication fields above.
+                Add at least one medication.
               </p>
             )}
             {formError && (

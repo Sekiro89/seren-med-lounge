@@ -7,6 +7,14 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { fullName, humanize } from '../../../../lib/format';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { messageOf, localToIso, type DoctorOption, type FollowUpRow } from './helpers';
 import { PatientPicker, type PatientOption } from './patient-picker';
 
@@ -97,6 +105,7 @@ function NewFollowUpForm({
   const [dueAt, setDueAt] = useState('');
   const [notes, setNotes] = useState('');
   const [assignee, setAssignee] = useState('');
+  const [errors, setErrors] = useState<FieldErrors>({});
   const { busy, error, setError, run } = useSubmit(() => {
     onSaved();
     onClose();
@@ -104,8 +113,24 @@ function NewFollowUpForm({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!patient) return setError('Choose the patient this follow-up is for.');
-    if (!dueAt) return setError('Choose when it is due.');
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
+    if (!patient) next['fu-patient'] = 'Choose the patient this follow-up is for.';
+    if (!FOLLOW_UP_TYPES.includes(type as (typeof FOLLOW_UP_TYPES)[number])) {
+      next['fu-type'] = 'Choose a type.';
+    }
+    if (!dueAt) next['fu-due'] = 'Choose when it is due.';
+    else if (Number.isNaN(new Date(localToIso(dueAt)).getTime())) {
+      next['fu-due'] = 'Enter a valid date and time.';
+    } else if (new Date(localToIso(dueAt)).getTime() < Date.now() - 60_000) {
+      next['fu-due'] = 'Choose a due time that is not in the past.';
+    }
+    if (notes.length > 2000) next['fu-notes'] = 'Use 2000 characters or fewer.';
+    setErrors(next);
+    if (!isClean(next) || !patient) {
+      return focusFirst(next, ['fu-patient', 'fu-type', 'fu-due', 'fu-notes']);
+    }
     const parsed = createFollowUpSchema.safeParse({
       patientId: patient.id,
       type,
@@ -134,12 +159,18 @@ function NewFollowUpForm({
         </>
       }
     >
-      <form id="new-follow-up-form" onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Patient" htmlFor="fu-patient">
+      <form id="new-follow-up-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
+        <Field label={req('Patient')} htmlFor="fu-patient" error={errors['fu-patient']}>
           <PatientPicker id="fu-patient" value={patient} onChange={setPatient} />
         </Field>
-        <Field label="Type" htmlFor="fu-type">
-          <Select id="fu-type" value={type} onChange={(e) => setType(e.target.value)}>
+        <Field label={req('Type')} htmlFor="fu-type" error={errors['fu-type']}>
+          <Select
+            id="fu-type"
+            value={type}
+            {...requiredProps}
+            {...invalidProps(errors['fu-type'])}
+            onChange={(e) => setType(e.target.value)}
+          >
             {FOLLOW_UP_TYPES.map((t) => (
               <option key={t} value={t}>
                 {humanize(t)}
@@ -147,15 +178,17 @@ function NewFollowUpForm({
             ))}
           </Select>
         </Field>
-        <Field label="Due" htmlFor="fu-due">
+        <Field label={req('Due')} htmlFor="fu-due" error={errors['fu-due']}>
           <Input
             id="fu-due"
             type="datetime-local"
             value={dueAt}
+            {...requiredProps}
+            {...invalidProps(errors['fu-due'])}
             onChange={(e) => setDueAt(e.target.value)}
           />
         </Field>
-        <Field label="Notes (optional)" htmlFor="fu-notes">
+        <Field label="Notes (optional)" htmlFor="fu-notes" error={errors['fu-notes']}>
           <Textarea
             id="fu-notes"
             value={notes}
@@ -216,6 +249,7 @@ function RowActionForm({
   const [text, setText] = useState('');
   const [when, setWhen] = useState('');
   const [doctor, setDoctor] = useState('');
+  const [errors, setErrors] = useState<FieldErrors>({});
   const { busy, error, setError, run } = useSubmit(() => {
     onSaved();
     onClose();
@@ -226,14 +260,30 @@ function RowActionForm({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(undefined);
     const base = `/follow-ups/${row.id}`;
+    const next: FieldErrors = {};
+    if (action === 'escalate' && !text.trim()) {
+      next['fu-found'] = 'Write what you found so the next person can act on it.';
+    }
+    if (text.length > 2000) {
+      next[action === 'escalate' ? 'fu-found' : 'fu-outcome'] = 'Use 2000 characters or fewer.';
+    }
+    if (action === 'book') {
+      if (!when) next['fu-when'] = 'Choose the date and time of the review visit.';
+      else if (new Date(localToIso(when)).getTime() < Date.now() - 60_000) {
+        next['fu-when'] = 'Choose a review time that is not in the past.';
+      }
+    }
+    setErrors(next);
+    if (!isClean(next)) return focusFirst(next, ['fu-found', 'fu-outcome', 'fu-when']);
     if (action === 'done' || action === 'missed') {
       void run(
         () => apiClient.post(`${base}/${action}`, text.trim() ? { outcome: text.trim() } : {}),
         'That did not go through. Please try again.',
       );
     } else if (action === 'escalate') {
-      if (!text.trim()) return setError('Write what you found so the next person can act on it.');
       void run(
         () =>
           apiClient.post(`${base}/escalate`, {
@@ -243,7 +293,6 @@ function RowActionForm({
         'That did not go through. Please try again.',
       );
     } else {
-      if (!when) return setError('Choose the date and time of the review visit.');
       void run(
         () =>
           apiClient.post(`${base}/book`, {
@@ -295,9 +344,9 @@ function RowActionForm({
         </>
       }
     >
-      <form id="row-action-form" onSubmit={submit} className="flex flex-col gap-4">
+      <form id="row-action-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
         {(action === 'done' || action === 'missed') && (
-          <Field label="Outcome (optional)" htmlFor="fu-outcome">
+          <Field label="Outcome (optional)" htmlFor="fu-outcome" error={errors['fu-outcome']}>
             <Textarea
               id="fu-outcome"
               value={text}
@@ -308,11 +357,13 @@ function RowActionForm({
         )}
         {action === 'escalate' && (
           <>
-            <Field label="What was found" htmlFor="fu-found">
+            <Field label={req('What was found')} htmlFor="fu-found" error={errors['fu-found']}>
               <Textarea
                 id="fu-found"
                 value={text}
                 maxLength={2000}
+                {...requiredProps}
+                {...invalidProps(errors['fu-found'])}
                 onChange={(e) => setText(e.target.value)}
               />
             </Field>
@@ -339,11 +390,13 @@ function RowActionForm({
         )}
         {action === 'book' && (
           <>
-            <Field label="Review date and time" htmlFor="fu-when">
+            <Field label={req('Review date and time')} htmlFor="fu-when" error={errors['fu-when']}>
               <Input
                 id="fu-when"
                 type="datetime-local"
                 value={when}
+                {...requiredProps}
+                {...invalidProps(errors['fu-when'])}
                 onChange={(e) => setWhen(e.target.value)}
               />
             </Field>

@@ -23,6 +23,15 @@ import { apiErrorMessage, orderTone, type LabOrder, type LabOrderItem } from './
 
 const EMPTY_ITEM = { testName: '' };
 
+/** Whitespace alone is not an entry, so trim before the schema sees it. */
+const trimValue = (value: string) => (typeof value === 'string' ? value.trim() : value);
+
+function itemErrorsOf(errors: unknown, index: number) {
+  const list = (errors as { items?: unknown[] } | undefined)?.items;
+  return list?.[index] as
+    Partial<Record<'testName' | 'instructions', { type?: string }>> | undefined;
+}
+
 function RecordResultForm({ item, onDone }: { item: LabOrderItem; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const { register, handleSubmit, formState } = useForm<RecordLabResultInput>({
@@ -30,6 +39,7 @@ function RecordResultForm({ item, onDone }: { item: LabOrderItem; onDone: () => 
   });
 
   const onSubmit = async (data: RecordLabResultInput) => {
+    if (formState.isSubmitting) return;
     setError(null);
     try {
       await apiClient.post(`/lab-orders/items/${item.id}/results`, data);
@@ -42,29 +52,65 @@ function RecordResultForm({ item, onDone }: { item: LabOrderItem; onDone: () => 
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="mt-2 flex flex-wrap items-end gap-3"
+      className="mt-2 flex flex-wrap items-start gap-3"
       noValidate
     >
       <div className="w-32">
         <Field
           label="Result"
           htmlFor={`res-value-${item.id}`}
-          error={formState.errors.resultValue?.message}
+          error={
+            formState.errors.resultValue
+              ? formState.errors.resultValue.type === 'too_big'
+                ? 'Result can be at most 500 characters.'
+                : 'Enter the result value.'
+              : undefined
+          }
         >
-          <Input id={`res-value-${item.id}`} {...register('resultValue')} />
+          <Input
+            id={`res-value-${item.id}`}
+            required
+            aria-required="true"
+            maxLength={500}
+            aria-invalid={formState.errors.resultValue ? true : undefined}
+            {...register('resultValue', { setValueAs: trimValue })}
+          />
         </Field>
       </div>
       <div className="w-28">
-        <Field label="Unit (optional)" htmlFor={`res-unit-${item.id}`}>
-          <Input id={`res-unit-${item.id}`} {...register('unit')} />
+        <Field
+          label="Unit (optional)"
+          htmlFor={`res-unit-${item.id}`}
+          error={formState.errors.unit && 'Unit can be at most 50 characters.'}
+        >
+          <Input
+            id={`res-unit-${item.id}`}
+            maxLength={50}
+            {...register('unit', { setValueAs: (v: string) => trimValue(v) || undefined })}
+          />
         </Field>
       </div>
       <div className="w-40">
-        <Field label="Reference range (optional)" htmlFor={`res-range-${item.id}`}>
-          <Input id={`res-range-${item.id}`} {...register('referenceRange')} />
+        <Field
+          label="Reference range (optional)"
+          htmlFor={`res-range-${item.id}`}
+          error={formState.errors.referenceRange && 'Range can be at most 200 characters.'}
+        >
+          <Input
+            id={`res-range-${item.id}`}
+            maxLength={200}
+            {...register('referenceRange', {
+              setValueAs: (v: string) => trimValue(v) || undefined,
+            })}
+          />
         </Field>
       </div>
-      <Button type="submit" variant="secondary" loading={formState.isSubmitting}>
+      <Button
+        type="submit"
+        variant="secondary"
+        className="sm:mt-[1.625rem]"
+        loading={formState.isSubmitting}
+      >
         Record result
       </Button>
       {error && (
@@ -99,6 +145,7 @@ export function LabOrdersSection({
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   const onSubmit = async (data: CreateLabOrderInput) => {
+    if (formState.isSubmitting) return;
     setFormError(null);
     try {
       await apiClient.post('/lab-orders', { ...data, encounterId });
@@ -188,29 +235,63 @@ export function LabOrdersSection({
 
         {can(role, 'lab-order:write') && (
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-            {fields.map((field, index) => (
-              <div key={field.id} className="flex flex-wrap items-end gap-3">
-                <div className="w-56">
-                  <Field label="Test name" htmlFor={`lab-test-${index}`} helper="For example CBC">
-                    <Input id={`lab-test-${index}`} {...register(`items.${index}.testName`)} />
-                  </Field>
+            {fields.map((field, index) => {
+              const itemErrors = itemErrorsOf(formState.errors, index);
+              return (
+                <div key={field.id} className="flex flex-wrap items-start gap-3">
+                  <div className="w-56">
+                    <Field
+                      label="Test name"
+                      htmlFor={`lab-test-${index}`}
+                      helper="For example CBC"
+                      error={
+                        itemErrors?.testName
+                          ? itemErrors.testName.type === 'too_big'
+                            ? 'Test name can be at most 200 characters.'
+                            : 'Enter the test name.'
+                          : undefined
+                      }
+                    >
+                      <Input
+                        id={`lab-test-${index}`}
+                        required
+                        aria-required="true"
+                        maxLength={200}
+                        aria-invalid={itemErrors?.testName ? true : undefined}
+                        {...register(`items.${index}.testName`, { setValueAs: trimValue })}
+                      />
+                    </Field>
+                  </div>
+                  <div className="w-56">
+                    <Field
+                      label="Instructions (optional)"
+                      htmlFor={`lab-instr-${index}`}
+                      error={
+                        itemErrors?.instructions && 'Instructions can be at most 1000 characters.'
+                      }
+                    >
+                      <Input
+                        id={`lab-instr-${index}`}
+                        maxLength={1000}
+                        {...register(`items.${index}.instructions`, {
+                          setValueAs: (v: string) => trimValue(v) || undefined,
+                        })}
+                      />
+                    </Field>
+                  </div>
+                  {fields.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="sm:mt-[1.625rem]"
+                      aria-label={`Remove test ${index + 1}`}
+                      icon={<Trash size={20} aria-hidden="true" />}
+                      onClick={() => remove(index)}
+                    />
+                  )}
                 </div>
-                <div className="w-56">
-                  <Field label="Instructions (optional)" htmlFor={`lab-instr-${index}`}>
-                    <Input id={`lab-instr-${index}`} {...register(`items.${index}.instructions`)} />
-                  </Field>
-                </div>
-                {fields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label={`Remove test ${index + 1}`}
-                    icon={<Trash size={20} aria-hidden="true" />}
-                    onClick={() => remove(index)}
-                  />
-                )}
-              </div>
-            ))}
+              );
+            })}
             <Button
               type="button"
               variant="ghost"
@@ -221,9 +302,9 @@ export function LabOrdersSection({
             >
               Add another test
             </Button>
-            {formState.errors.items && (
+            {(formState.errors.items?.message || formState.errors.items?.root?.message) && (
               <p role="alert" className="text-[13px] text-danger-fg">
-                Check the test fields above.
+                Add at least one test.
               </p>
             )}
             {formError && (

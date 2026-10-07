@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'SereneMed Lounge — Staff',
+  robots: { index: false, follow: false },
   description: 'Role-based workspaces for the SereneMed clinic team.',
 };
 

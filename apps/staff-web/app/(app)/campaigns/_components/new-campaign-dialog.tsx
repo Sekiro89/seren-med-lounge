@@ -6,6 +6,16 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
+import { clinicToday } from '../../../../lib/format';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  rupeesError,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { FormError, messageOf } from '../../leads/_components/shared';
 import { CAMPAIGN_TYPES, TYPE_LABELS, dateToIso, type CampaignRow } from './shared';
 
@@ -36,15 +46,45 @@ function NewCampaignForm({
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const isCamp = type === 'HEALTH_CAMP';
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const rupees = budget.trim() === '' ? undefined : Number(budget);
-    if (rupees !== undefined && (!Number.isFinite(rupees) || rupees < 0)) {
-      return setError('Enter the budget as a number of rupees, or leave it empty.');
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
+    if (!name.trim()) next['camp-name'] = 'Give the campaign a name.';
+    else if (name.trim().length > 200) next['camp-name'] = 'Use 200 characters or fewer.';
+    if (isCamp && !location.trim()) next['camp-location'] = 'Enter where the camp will be held.';
+    else if (location.length > 300) next['camp-location'] = 'Use 300 characters or fewer.';
+    if (isCamp && !startsAt) next['camp-start'] = 'Choose the camp start date.';
+    else if (startsAt && startsAt < clinicToday()) {
+      next['camp-start'] = 'Choose a start date that is not in the past.';
     }
+    if (endsAt && startsAt && endsAt < startsAt) {
+      next['camp-end'] = 'The end date cannot be before the start date.';
+    } else if (endsAt && endsAt < clinicToday()) {
+      next['camp-end'] = 'Choose an end date that is not in the past.';
+    }
+    if (channel.length > 100) next['camp-channel'] = 'Use 100 characters or fewer.';
+    const budgetProblem = rupeesError(budget, { optional: true, maxMinor: 10_000_000_000 });
+    if (budgetProblem) next['camp-budget'] = budgetProblem;
+    if (notes.length > 2000) next['camp-notes'] = 'Use 2000 characters or fewer.';
+    setErrors(next);
+    if (!isClean(next)) {
+      return focusFirst(next, [
+        'camp-name',
+        'camp-location',
+        'camp-start',
+        'camp-end',
+        'camp-channel',
+        'camp-budget',
+        'camp-notes',
+      ]);
+    }
+    const rupees = budget.trim() === '' ? undefined : Number(budget);
     const parsed = createCampaignSchema.safeParse({
       name: name.trim(),
       type,
@@ -56,18 +96,9 @@ function NewCampaignForm({
       notes: notes.trim() || undefined,
     });
     if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      if (issue?.path[0] === 'name') return setError('Give the campaign a name.');
-      if (isCamp && (!location.trim() || !startsAt)) {
-        return setError('A health camp needs a location and a start date.');
-      }
-      if (endsAt && startsAt && endsAt < startsAt) {
-        return setError('The end date cannot be before the start date.');
-      }
-      return setError(issue?.message ?? 'Check the form.');
+      return setError(parsed.error.issues[0]?.message ?? 'Check the form.');
     }
     setBusy(true);
-    setError(undefined);
     try {
       const created = await apiClient.post<CampaignRow>('/campaigns', parsed.data);
       onSaved(created);
@@ -96,18 +127,25 @@ function NewCampaignForm({
         </>
       }
     >
-      <form id="new-campaign-form" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="Name" htmlFor="camp-name">
+      <form id="new-campaign-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <Field label={req('Name')} htmlFor="camp-name" error={errors['camp-name']}>
           <Input
             id="camp-name"
             value={name}
             maxLength={200}
+            {...requiredProps}
+            {...invalidProps(errors['camp-name'])}
             autoComplete="off"
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
-        <Field label="Type" htmlFor="camp-type">
-          <Select id="camp-type" value={type} onChange={(e) => setType(e.target.value)}>
+        <Field label={req('Type')} htmlFor="camp-type">
+          <Select
+            id="camp-type"
+            value={type}
+            {...requiredProps}
+            onChange={(e) => setType(e.target.value)}
+          >
             {CAMPAIGN_TYPES.map((t) => (
               <option key={t} value={t}>
                 {TYPE_LABELS[t]}
@@ -116,30 +154,45 @@ function NewCampaignForm({
           </Select>
         </Field>
         {isCamp && (
-          <Field label="Location" htmlFor="camp-location" helper="Where the camp will be held.">
+          <Field
+            label={req('Location')}
+            htmlFor="camp-location"
+            helper="Where the camp will be held."
+            error={errors['camp-location']}
+          >
             <Input
               id="camp-location"
               value={location}
               maxLength={300}
+              {...requiredProps}
+              {...invalidProps(errors['camp-location'])}
               onChange={(e) => setLocation(e.target.value)}
             />
           </Field>
         )}
         <div className="grid grid-cols-2 gap-4">
-          <Field label={isCamp ? 'Start date' : 'Start date (optional)'} htmlFor="camp-start">
+          <Field
+            label={isCamp ? req('Start date') : 'Start date (optional)'}
+            htmlFor="camp-start"
+            error={errors['camp-start']}
+          >
             <Input
               id="camp-start"
               type="date"
               value={startsAt}
+              min={clinicToday()}
+              {...(isCamp ? requiredProps : {})}
+              {...invalidProps(errors['camp-start'])}
               onChange={(e) => setStartsAt(e.target.value)}
             />
           </Field>
-          <Field label="End date (optional)" htmlFor="camp-end">
+          <Field label="End date (optional)" htmlFor="camp-end" error={errors['camp-end']}>
             <Input
               id="camp-end"
               type="date"
               value={endsAt}
-              min={startsAt || undefined}
+              min={startsAt || clinicToday()}
+              {...invalidProps(errors['camp-end'])}
               onChange={(e) => setEndsAt(e.target.value)}
             />
           </Field>
@@ -149,6 +202,7 @@ function NewCampaignForm({
             label="Channel (optional)"
             htmlFor="camp-channel"
             helper="For example Instagram, newspaper or WhatsApp."
+            error={errors['camp-channel']}
           >
             <Input
               id="camp-channel"
@@ -158,15 +212,20 @@ function NewCampaignForm({
             />
           </Field>
         )}
-        <Field label="Budget in rupees (optional)" htmlFor="camp-budget">
+        <Field
+          label="Budget in rupees (optional)"
+          htmlFor="camp-budget"
+          error={errors['camp-budget']}
+        >
           <Input
             id="camp-budget"
             inputMode="decimal"
             value={budget}
+            {...invalidProps(errors['camp-budget'])}
             onChange={(e) => setBudget(e.target.value)}
           />
         </Field>
-        <Field label="Notes (optional)" htmlFor="camp-notes">
+        <Field label="Notes (optional)" htmlFor="camp-notes" error={errors['camp-notes']}>
           <Textarea
             id="camp-notes"
             value={notes}

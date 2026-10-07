@@ -19,6 +19,13 @@ import { Field, Input, Select } from '../../../../components/ui/fields';
 import { NoAccess } from '../../../../components/ui/no-access';
 import { Skeleton } from '../../../../components/ui/skeleton';
 import { apiClient } from '../../../../lib/api-client';
+import {
+  focusFirst,
+  invalidProps,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { formatDate, formatMoney, formatTime, fullName, humanize } from '../../../../lib/format';
 import { homeFor } from '../../../../lib/nav';
 import { can } from '../../../../lib/permissions';
@@ -72,6 +79,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
   const [error, setError] = useState<string>();
   const [newItem, setNewItem] = useState('');
   const [documentId, setDocumentId] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   if (!allowed) {
     return (
@@ -120,13 +128,25 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
   const addItem = async (event: FormEvent) => {
     event.preventDefault();
     const label = newItem.trim();
-    if (!label) return setError('Write the checklist item first.');
+    if (busy) return;
+    const next: FieldErrors = {};
+    if (!label) next['new-item'] = 'Write the checklist item first.';
+    else if (label.length > 300) next['new-item'] = 'Use 300 characters or fewer.';
+    setFieldErrors((prev) => ({ ...prev, 'new-item': next['new-item'] }));
+    if (next['new-item']) return focusFirst(next, ['new-item']);
     if (await act('add', 'checklist', { label }, 'The item was not added.')) setNewItem('');
   };
 
   const attach = async (event: FormEvent) => {
     event.preventDefault();
-    if (!documentId.trim()) return setError('Choose the consent form to attach.');
+    if (busy) return;
+    const missingDoc = documentId.trim()
+      ? undefined
+      : canDocuments
+        ? 'Choose the consent form to attach.'
+        : 'Enter the consent form document ID.';
+    setFieldErrors((prev) => ({ ...prev, 'consent-doc': missingDoc }));
+    if (missingDoc) return focusFirst({ 'consent-doc': missingDoc }, ['consent-doc']);
     if (
       await act(
         'consent',
@@ -368,12 +388,17 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                   )}
                 </p>
                 {editable && (
-                  <form onSubmit={attach} className="mt-4 flex max-w-lg flex-wrap items-end gap-3">
+                  <form
+                    onSubmit={attach}
+                    noValidate
+                    className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
+                  >
                     <div className="min-w-56 flex-1">
                       {canDocuments ? (
                         <Field
-                          label="Consent form"
+                          label={req('Consent form')}
                           htmlFor="consent-doc"
+                          error={fieldErrors['consent-doc']}
                           helper={
                             documents.loading
                               ? 'Loading this patient’s documents.'
@@ -386,6 +411,8 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                             id="consent-doc"
                             value={documentId}
                             disabled={consentDocs.length === 0}
+                            {...requiredProps}
+                            {...invalidProps(fieldErrors['consent-doc'])}
                             onChange={(e) => setDocumentId(e.target.value)}
                           >
                             <option value="">Choose a form</option>
@@ -398,24 +425,22 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                         </Field>
                       ) : (
                         <Field
-                          label="Consent form document ID"
+                          label={req('Consent form document ID')}
                           htmlFor="consent-doc"
+                          error={fieldErrors['consent-doc']}
                           helper="Your role cannot list patient documents, so enter the ID of the patient's consent form."
                         >
                           <Input
                             id="consent-doc"
                             value={documentId}
+                            {...requiredProps}
+                            {...invalidProps(fieldErrors['consent-doc'])}
                             onChange={(e) => setDocumentId(e.target.value)}
                           />
                         </Field>
                       )}
                     </div>
-                    <Button
-                      type="submit"
-                      variant="secondary"
-                      loading={busy === 'consent'}
-                      disabled={!documentId}
-                    >
+                    <Button type="submit" variant="secondary" loading={busy === 'consent'}>
                       Attach form
                     </Button>
                   </form>
@@ -459,13 +484,23 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                   </ul>
                 )}
                 {editable && (
-                  <form onSubmit={addItem} className="mt-4 flex max-w-lg flex-wrap items-end gap-3">
+                  <form
+                    onSubmit={addItem}
+                    noValidate
+                    className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
+                  >
                     <div className="min-w-56 flex-1">
-                      <Field label="New checklist item" htmlFor="new-item">
+                      <Field
+                        label={req('New checklist item')}
+                        htmlFor="new-item"
+                        error={fieldErrors['new-item']}
+                      >
                         <Input
                           id="new-item"
                           value={newItem}
                           maxLength={300}
+                          {...requiredProps}
+                          {...invalidProps(fieldErrors['new-item'])}
                           onChange={(e) => setNewItem(e.target.value)}
                         />
                       </Field>

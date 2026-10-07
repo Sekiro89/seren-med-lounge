@@ -34,6 +34,18 @@ interface FormValues {
   notes: string;
 }
 
+/** The schema caps an amount at 1,000,000,000 paise. */
+const MAX_RUPEES = 10_000_000;
+
+/** Returns an error message, or undefined when the amount is acceptable. */
+function validMoney(value: string, requiredField: boolean): string | undefined {
+  if (value === '') return requiredField ? 'Enter a price.' : undefined;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return 'Enter an amount of 0 or more.';
+  if (amount > MAX_RUPEES) return 'Amount is too large.';
+  return undefined;
+}
+
 const blankItem = (): ItemValues => ({
   itemType: 'CONSULTATION',
   description: '',
@@ -78,6 +90,8 @@ export function NewInvoiceDialog({
   };
 
   const submit = handleSubmit(async (values) => {
+    // Enter key and the footer button share this handler; never send twice.
+    if (submitting) return;
     setServerError(undefined);
     if (!values.patient) {
       setError('patient', { message: 'Choose a patient.' });
@@ -119,10 +133,10 @@ export function NewInvoiceDialog({
       description="Invoices cannot be edited once issued. A wrong invoice is voided and reissued."
       footer={
         <>
-          <Button variant="secondary" onClick={close}>
+          <Button variant="secondary" onClick={close} disabled={submitting}>
             Cancel
           </Button>
-          <Button loading={submitting} onClick={submit}>
+          <Button type="button" loading={submitting} onClick={submit}>
             Issue invoice
           </Button>
         </>
@@ -132,6 +146,7 @@ export function NewInvoiceDialog({
         <Controller
           control={control}
           name="patient"
+          rules={{ validate: (value) => value !== null || 'Choose a patient.' }}
           render={({ field }) => (
             <PatientPicker
               value={field.value}
@@ -168,6 +183,9 @@ export function NewInvoiceDialog({
                     <Input
                       id={`item-desc-${index}`}
                       maxLength={300}
+                      required
+                      aria-required="true"
+                      aria-invalid={itemErrors?.description ? true : undefined}
                       {...register(`items.${index}.description`, {
                         validate: (v) => v.trim().length > 0 || 'Describe this line.',
                       })}
@@ -184,13 +202,20 @@ export function NewInvoiceDialog({
                       id={`item-qty-${index}`}
                       type="number"
                       min={1}
+                      max={10000}
                       step={1}
+                      required
+                      aria-required="true"
+                      aria-invalid={itemErrors?.quantity ? true : undefined}
                       inputMode="numeric"
                       className="tabular text-right"
                       {...register(`items.${index}.quantity`, {
                         validate: (v) =>
-                          (Number.isInteger(Number(v)) && Number(v) > 0) ||
-                          'Whole number, 1 or more.',
+                          (v !== '' &&
+                            Number.isInteger(Number(v)) &&
+                            Number(v) >= 1 &&
+                            Number(v) <= 10000) ||
+                          'Whole number from 1 to 10,000.',
                       })}
                     />
                   </Field>
@@ -203,23 +228,35 @@ export function NewInvoiceDialog({
                       id={`item-price-${index}`}
                       type="number"
                       min={0}
+                      max={MAX_RUPEES}
                       step="0.01"
                       inputMode="decimal"
+                      required
+                      aria-required="true"
+                      aria-invalid={itemErrors?.unitPrice ? true : undefined}
                       className="tabular text-right"
                       {...register(`items.${index}.unitPrice`, {
-                        validate: (v) => (v !== '' && Number(v) >= 0) || 'Enter a price.',
+                        validate: (v) => validMoney(v, true) ?? true,
                       })}
                     />
                   </Field>
-                  <Field label="Tax (INR)" htmlFor={`item-tax-${index}`}>
+                  <Field
+                    label="Tax (INR, optional)"
+                    htmlFor={`item-tax-${index}`}
+                    error={itemErrors?.tax?.message}
+                  >
                     <Input
                       id={`item-tax-${index}`}
                       type="number"
+                      aria-invalid={itemErrors?.tax ? true : undefined}
                       min={0}
+                      max={MAX_RUPEES}
                       step="0.01"
                       inputMode="decimal"
                       className="tabular text-right"
-                      {...register(`items.${index}.tax`)}
+                      {...register(`items.${index}.tax`, {
+                        validate: (v) => validMoney(v, false) ?? true,
+                      })}
                     />
                   </Field>
                 </div>

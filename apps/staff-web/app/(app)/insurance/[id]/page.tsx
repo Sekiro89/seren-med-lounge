@@ -13,6 +13,7 @@ import { PageHeader } from '../../../../components/ui/page-header';
 import { Skeleton } from '../../../../components/ui/skeleton';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, formatMoney, fullName } from '../../../../lib/format';
+import { invalidProps, req, requiredProps } from '../../../../lib/forms';
 import { homeFor } from '../../../../lib/nav';
 import { can } from '../../../../lib/permissions';
 import { useStaff } from '../../../../lib/staff-context';
@@ -120,9 +121,16 @@ export default function InsuranceCasePage({ params }: { params: Promise<{ id: st
   const hasActions = steps.length > 0 || settleable;
 
   const addNote = async () => {
+    if (noteBusy) return;
     const text = note.trim();
     if (!text) {
       setNoteError('Write the note first.');
+      document.getElementById('case-note')?.focus();
+      return;
+    }
+    if (text.length > 4000) {
+      setNoteError('Use 4000 characters or fewer.');
+      document.getElementById('case-note')?.focus();
       return;
     }
     setNoteError(undefined);
@@ -203,7 +211,7 @@ export default function InsuranceCasePage({ params }: { params: Promise<{ id: st
               }}
             >
               <Field
-                label="Add a note"
+                label={req('Add a note')}
                 htmlFor="case-note"
                 error={noteError}
                 helper="Steps here are recorded by hand. No insurer system is connected."
@@ -211,6 +219,8 @@ export default function InsuranceCasePage({ params }: { params: Promise<{ id: st
                 <Textarea
                   id="case-note"
                   maxLength={4000}
+                  {...requiredProps}
+                  {...invalidProps(noteError)}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />

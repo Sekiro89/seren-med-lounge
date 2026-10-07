@@ -6,6 +6,15 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  rupeesError,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { formatDate, formatTime } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
 import { useStaff } from '../../../../lib/staff-context';
@@ -49,6 +58,7 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
   const [checklist, setChecklist] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const visits = useApi<VisitRow[]>(patient ? '/appointments' : null);
   const patientVisits = useMemo(
@@ -64,16 +74,38 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!patient) return setError('Choose the patient first.');
+    if (busy) return;
+    setError(undefined);
+    const next: FieldErrors = {};
     const chosen =
       encounterId || (patientVisits.length === 1 ? patientVisits[0]!.encounter!.id : '');
-    if (!chosen) return setError('Choose the visit this procedure belongs to.');
+    if (!patient) next['pp-patient'] = 'Choose the patient first.';
+    else if (!chosen) next['pp-visit'] = 'Choose the visit this procedure belongs to.';
+    if (!name.trim()) next['pp-name'] = 'Enter the procedure name.';
+    else if (name.trim().length > 300) next['pp-name'] = 'Use 300 characters or fewer.';
+    const amountError = rupeesError(estimate, { optional: true, maxMinor: 1_000_000_000 });
+    if (amountError) next['pp-estimate'] = amountError;
     const estimateMinor = rupeesToPaise(estimate);
-    if (Number.isNaN(estimateMinor)) return setError('Enter the estimate as a number of rupees.');
     const items = checklist
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
+    if (items.length > 50) next['pp-checklist'] = 'Use 50 items or fewer.';
+    else if (items.some((i) => i.length > 300)) {
+      next['pp-checklist'] = 'Each item must be 300 characters or fewer.';
+    }
+    if (notes.length > 2000) next['pp-notes'] = 'Use 2000 characters or fewer.';
+    setErrors(next);
+    if (!isClean(next)) {
+      return focusFirst(next, [
+        'pp-patient',
+        'pp-visit',
+        'pp-name',
+        'pp-estimate',
+        'pp-checklist',
+        'pp-notes',
+      ]);
+    }
     const parsed = createProcedureSchema.safeParse({
       encounterId: chosen,
       kind,
@@ -113,14 +145,15 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
         </>
       }
     >
-      <form id="plan-procedure-form" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="Patient" htmlFor="pp-patient">
+      <form id="plan-procedure-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+        <Field label={req('Patient')} htmlFor="pp-patient" error={errors['pp-patient']}>
           <PatientPicker id="pp-patient" value={patient} onChange={choosePatient} />
         </Field>
         {patient && (
           <Field
-            label="Visit"
+            label={req('Visit')}
             htmlFor="pp-visit"
+            error={errors['pp-visit']}
             helper={
               visits.loading
                 ? 'Looking for this patient’s visits.'
@@ -138,6 +171,8 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
               }
               onChange={(e) => setEncounterId(e.target.value)}
               disabled={patientVisits.length === 0}
+              {...requiredProps}
+              {...invalidProps(errors['pp-visit'])}
             >
               <option value="">Choose a visit</option>
               {patientVisits.map((v) => (
@@ -155,19 +190,26 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
             {canSurgery && <option value="SURGERY">Surgery</option>}
           </Select>
         </Field>
-        <Field label="Name" htmlFor="pp-name">
+        <Field label={req('Name')} htmlFor="pp-name" error={errors['pp-name']}>
           <Input
             id="pp-name"
             value={name}
             maxLength={300}
+            {...requiredProps}
+            {...invalidProps(errors['pp-name'])}
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
-        <Field label="Estimate in rupees (optional)" htmlFor="pp-estimate">
+        <Field
+          label="Estimate in rupees (optional)"
+          htmlFor="pp-estimate"
+          error={errors['pp-estimate']}
+        >
           <Input
             id="pp-estimate"
             inputMode="decimal"
             value={estimate}
+            {...invalidProps(errors['pp-estimate'])}
             onChange={(e) => setEstimate(e.target.value)}
           />
         </Field>
@@ -175,6 +217,7 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
           label="Pre-op checklist (optional)"
           htmlFor="pp-checklist"
           helper="One item per line. You can add more later."
+          error={errors['pp-checklist']}
         >
           <Textarea
             id="pp-checklist"
@@ -182,7 +225,7 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
             onChange={(e) => setChecklist(e.target.value)}
           />
         </Field>
-        <Field label="Notes (optional)" htmlFor="pp-notes">
+        <Field label="Notes (optional)" htmlFor="pp-notes" error={errors['pp-notes']}>
           <Textarea
             id="pp-notes"
             value={notes}

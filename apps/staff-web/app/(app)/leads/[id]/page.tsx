@@ -25,6 +25,14 @@ import { Skeleton } from '../../../../components/ui/skeleton';
 import { Badge } from '../../../../components/ui/badge';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, formatTime, fullName } from '../../../../lib/format';
+import {
+  focusFirst,
+  invalidProps,
+  isClean,
+  req,
+  requiredProps,
+  type FieldErrors,
+} from '../../../../lib/forms';
 import { homeFor } from '../../../../lib/nav';
 import { can } from '../../../../lib/permissions';
 import { useStaff } from '../../../../lib/staff-context';
@@ -352,12 +360,31 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [blocked, setBlocked] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const outreach = ACTIVITY_TYPES.find((t) => t.value === type)?.outreach ?? false;
   const noConsent = !lead.consentToContact;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
+    setError(undefined);
+    const next_: FieldErrors = {};
+    if (!ACTIVITY_TYPES.some((t) => t.value === type)) next_['act-type'] = 'Choose what happened.';
+    else if (noConsent && outreach) {
+      next_['act-type'] =
+        'This lead has not agreed to be contacted. Log a note or meeting instead.';
+    }
+    if (type === 'NOTE' && !notes.trim()) next_['act-notes'] = 'Write the note.';
+    else if (notes.length > 2000) next_['act-notes'] = 'Use 2000 characters or fewer.';
+    if (next) {
+      const at = new Date(localToIso(next)).getTime();
+      if (Number.isNaN(at)) next_['act-next'] = 'Enter a valid date and time.';
+      else if (at < Date.now() - 60_000)
+        next_['act-next'] = 'Choose a follow-up time in the future.';
+    }
+    setErrors(next_);
+    if (!isClean(next_)) return focusFirst(next_, ['act-type', 'act-next', 'act-notes']);
     const parsed = leadActivitySchema.safeParse({
       type,
       notes: notes.trim() || undefined,
@@ -365,7 +392,6 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
     });
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Check the form.');
     setBusy(true);
-    setError(undefined);
     setBlocked(false);
     try {
       await apiClient.post(`/leads/${lead.id}/activities`, parsed.data);
@@ -386,10 +412,16 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
         title="Log activity"
         description="Record what you did, and when to follow up next."
       />
-      <form onSubmit={submit} className="flex flex-col gap-5 px-6 py-6">
+      <form onSubmit={submit} noValidate className="flex flex-col gap-5 px-6 py-6">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label="What happened" htmlFor="act-type">
-            <Select id="act-type" value={type} onChange={(e) => setType(e.target.value)}>
+          <Field label={req('What happened')} htmlFor="act-type" error={errors['act-type']}>
+            <Select
+              id="act-type"
+              value={type}
+              {...requiredProps}
+              {...invalidProps(errors['act-type'])}
+              onChange={(e) => setType(e.target.value)}
+            >
               {ACTIVITY_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -397,11 +429,12 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
               ))}
             </Select>
           </Field>
-          <Field label="Next follow-up (optional)" htmlFor="act-next">
+          <Field label="Next follow-up (optional)" htmlFor="act-next" error={errors['act-next']}>
             <Input
               id="act-next"
               type="datetime-local"
               value={next}
+              {...invalidProps(errors['act-next'])}
               onChange={(e) => setNext(e.target.value)}
             />
           </Field>
@@ -412,11 +445,17 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
             will be refused. Log a note or meeting instead.
           </p>
         )}
-        <Field label="Notes (optional)" htmlFor="act-notes">
+        <Field
+          label={type === 'NOTE' ? req('Notes') : 'Notes (optional)'}
+          htmlFor="act-notes"
+          error={errors['act-notes']}
+        >
           <Textarea
             id="act-notes"
             value={notes}
             maxLength={2000}
+            {...(type === 'NOTE' ? requiredProps : {})}
+            {...invalidProps(errors['act-notes'])}
             onChange={(e) => setNotes(e.target.value)}
           />
         </Field>
