@@ -112,6 +112,44 @@ pnpm dev:patient             # http://localhost:3000
 pnpm dev:staff                # http://localhost:3001
 ```
 
+### Try the demo (UI review)
+
+After the setup above, load the demo clinic. It plays one evening clinic
+day, the same one as the approved Clinical Ink prototype, with data for
+every role:
+
+```bash
+pnpm --filter api exec ts-node -O '{"module":"commonjs"}' scripts/seed-demo.ts
+```
+
+- Already have a database from an earlier pull? Run
+  `pnpm --filter api exec prisma migrate deploy` and
+  `pnpm --filter "./packages/*" build` first, then re-run the seed (it
+  wipes and rebuilds only the `demo-clinic` organization).
+- `apps/api/.env` must have `DEFAULT_ORGANIZATION_ID=demo-clinic` (the
+  default in `.env.example`), so the sign-in pages find the demo clinic.
+
+Every login uses the password `dev-password-123`. In development the staff
+sign-in page also has one-click buttons for each role.
+
+| Where                          | Login                                                                                                               | Start here                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Staff, http://localhost:3001   | `senior@demo.local` (Dr. Meera Iyer, senior doctor)                                                                 | Today: select Pooja Deshpande (token 012), then Open consultation |
+|                                | `junior@demo.local` (Dr. Rohan Kulkarni)                                                                            | His own desk and the drafts waiting for a senior signature        |
+|                                | `arvind@demo.local` (Dr. Arvind Shetty, senior doctor)                                                              | Kavya Rao and Karthik Subramanian                                 |
+|                                | `reception@`, `nurse@`, `lab@`, `pharmacy@`, `billing@`, `insurance@`, `marketing@`, `surgery@`, `admin@demo.local` | Each role's Today, then its tabs                                  |
+| Patient, http://localhost:3000 | `patient@demo.local` (Pooja Deshpande)                                                                              | Home shows her live token 012 and the visit ruler                 |
+|                                | `kavya@demo.local` (Kavya Rao)                                                                                      | Results with low ferritin and a trend                             |
+
+A suggested path: sign in as the senior doctor, open Pooja's consultation
+(note the allergy check, the margin notes and the right rail), Sign and
+send to Lab, then sign in as Pooja on the patient app and watch the token
+move to Lab.
+
+The demo day uses fixed clock times (Pooja checks in at 18:44), so wait
+times and "Clinic open" are computed against the real clock: seen in the
+morning, the evening visits look like they are still to come.
+
 **If port 5432 is already taken** (a native/Homebrew Postgres is a common
 culprit — check with `lsof -nP -iTCP:5432 -sTCP:LISTEN`), set
 `POSTGRES_HOST_PORT` before bringing containers up and match it in both
@@ -162,8 +200,8 @@ curl http://localhost:4000/users -H "Authorization: Bearer <accessToken>"
 ```
 
 `staff-web`'s `/login` page (`apps/staff-web/app/login`) is a real,
-working form against the same endpoint — sign in with the seeded
-`admin@dev.local` credentials above and it lands on `/dashboard`. From
+working form against the same endpoint — with `DEFAULT_ORGANIZATION_ID=seed-org`,
+sign in with the seeded `admin@dev.local` credentials above and it lands on `/dashboard`. From
 there: book an appointment (registering a new patient inline if needed),
 check it in, and the resulting `/encounters/[id]` workspace has real
 forms for vitals, diagnoses (draft → sign-off → amend), prescriptions,
