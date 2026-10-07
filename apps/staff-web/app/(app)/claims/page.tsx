@@ -9,8 +9,8 @@ import { Card } from '../../../components/ui/card';
 import { Dialog } from '../../../components/ui/dialog';
 import { EmptyState } from '../../../components/ui/empty-state';
 import { Input } from '../../../components/ui/fields';
+import { Figures, InkSection, InkSheet, SheetHead } from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { apiClient } from '../../../lib/api-client';
 import { formatDate, formatTime, fullName } from '../../../lib/format';
@@ -65,11 +65,40 @@ function errorMessage(error: unknown, fallback: string): string {
   return 'Could not reach the server. Please try again.';
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">{children}</h3>
-  );
-}
+type Person = Pick<CandidatePatient, 'firstName' | 'lastName' | 'dateOfBirth' | 'phone' | 'email'>;
+
+const digits = (v: string) => v.replace(/\D/g, '').slice(-10);
+
+/** The identifiers compared side by side, with how to tell if two values agree. */
+const FIELDS: Array<{
+  label: string;
+  value: (p: Person) => string;
+  same: (a: Person, b: Person) => boolean;
+  mono?: boolean;
+}> = [
+  {
+    label: 'Name',
+    value: (p) => fullName(p),
+    same: (a, b) => fullName(a).trim().toLowerCase() === fullName(b).trim().toLowerCase(),
+  },
+  {
+    label: 'Date of birth',
+    value: (p) => formatDate(p.dateOfBirth),
+    same: (a, b) => a.dateOfBirth.slice(0, 10) === b.dateOfBirth.slice(0, 10),
+    mono: true,
+  },
+  {
+    label: 'Phone',
+    value: (p) => p.phone,
+    same: (a, b) => digits(a.phone) === digits(b.phone),
+    mono: true,
+  },
+  {
+    label: 'Email',
+    value: (p) => p.email ?? 'None',
+    same: (a, b) => (a.email ?? '').toLowerCase() === (b.email ?? '').toLowerCase(),
+  },
+];
 
 /**
  * Patient Record Claim Rules (docs/architecture/open-questions.md#3):
@@ -147,152 +176,220 @@ export default function ClaimsPage() {
     );
   }
 
+  const escalated = claims?.filter((c) => c.status === 'ESCALATED').length;
+
   return (
     <>
-      <PageHeader
-        title="Patient claims"
-        description="Patient signups and Reception intake attempts that could not be confidently matched to an existing record on their own."
-      />
-
       {actionError && (
-        <p
-          role="alert"
-          className="mb-4 rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
-        >
+        <p role="alert" className="mb-4 bg-danger-bg px-4 py-2.5 text-sm text-danger-fg">
           {actionError}
         </p>
       )}
 
-      <div className="flex flex-col gap-6">
-        {loading && (
-          <Card className="p-5">
-            <Skeleton className="mb-3 h-5 w-48" />
-            <Skeleton className="mb-2 h-4 w-full max-w-md" />
-            <Skeleton className="h-4 w-full max-w-sm" />
-          </Card>
-        )}
+      <InkSheet>
+        <SheetHead
+          title="Patient claims"
+          description="Signups and Reception intake attempts that could not be matched to an existing record on their own."
+          figures={
+            <Figures
+              loading={loading && !claims}
+              items={[
+                { label: 'To review', value: claims?.length },
+                {
+                  label: 'Escalated',
+                  value: escalated,
+                  tone: escalated ? 'warning' : undefined,
+                },
+                {
+                  label: 'From signup',
+                  value: claims?.filter((c) => c.source === 'SELF_SIGNUP').length,
+                },
+              ]}
+            />
+          }
+        />
 
-        {!loading && errorStatus !== undefined && !claims && (
-          <Card>
-            <div role="alert" className="flex items-center justify-between gap-4 p-5">
+        <div className="flex flex-col gap-10 px-5 pb-8 pt-6 sm:px-8">
+          {loading && (
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-full max-w-md" />
+              <Skeleton className="h-4 w-full max-w-sm" />
+            </div>
+          )}
+
+          {!loading && errorStatus !== undefined && !claims && (
+            <div role="alert" className="flex items-center justify-between gap-4">
               <p className="text-sm text-danger-fg">Could not load pending claims.</p>
               <Button variant="secondary" size="sm" onClick={reload}>
                 Retry
               </Button>
             </div>
-          </Card>
-        )}
+          )}
 
-        {claims && claims.length === 0 && (
-          <Card>
+          {claims && claims.length === 0 && (
             <EmptyState
               icon={IdentificationCard}
               title="No pending claims"
               description="Signups that need a human decision will appear here."
             />
-          </Card>
-        )}
+          )}
 
-        {claims?.map((claim) => {
-          const busy = busyClaimId === claim.id;
-          return (
-            <Card key={claim.id} className="p-5">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Badge>
-                  {claim.source === 'SELF_SIGNUP' ? 'Patient signup' : 'Reception intake'}
-                </Badge>
-                {claim.status === 'ESCALATED' && <Badge tone="warning">Escalated</Badge>}
-                <span className="text-[13px] text-fg-muted">
-                  {MATCH_REASON_LABEL[claim.matchReason] ?? claim.matchReason}
-                </span>
-              </div>
-              <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <SectionLabel>
-                    {claim.source === 'SELF_SIGNUP'
-                      ? 'Submitted at signup'
-                      : 'Submitted by Reception'}
-                  </SectionLabel>
-                  <p className="text-sm font-medium text-fg">{fullName(claim)}</p>
-                  <p className="text-sm text-fg-muted">
-                    Date of birth {formatDate(claim.dateOfBirth)}
-                  </p>
-                  <p className="text-sm text-fg-muted">{claim.phone}</p>
-                  <p className="text-sm text-fg-muted">{claim.email ?? 'No email provided'}</p>
-                  <p className="mt-1 text-xs text-fg-subtle">
-                    Requested {formatDate(claim.createdAt)} {formatTime(claim.createdAt)}
-                  </p>
-                </div>
-                <div>
-                  <SectionLabel>
-                    Candidate record{claim.candidates.length === 1 ? '' : 's'}
-                  </SectionLabel>
-                  {claim.candidates.length === 0 ? (
-                    <p className="text-sm text-fg-muted">No candidates flagged.</p>
-                  ) : (
-                    <ul className="flex flex-col gap-3">
-                      {claim.candidates.map((candidate) => (
-                        <li
-                          key={candidate.id}
-                          className="rounded-control border border-line p-3 text-sm"
-                        >
-                          <p className="font-medium text-fg">{fullName(candidate)}</p>
-                          <p className="text-fg-muted">
-                            Date of birth {formatDate(candidate.dateOfBirth)}
-                          </p>
-                          <p className="text-fg-muted">{candidate.phone}</p>
-                          <p className="text-fg-muted">{candidate.email ?? 'No email on file'}</p>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="mt-2"
-                            disabled={busy}
-                            onClick={() => handleLink(claim.id, candidate.id)}
+          {claims?.map((claim, index) => {
+            const busy = busyClaimId === claim.id;
+            return (
+              <InkSection
+                key={claim.id}
+                id={`claim-${claim.id}`}
+                number={index + 1}
+                title={fullName(claim)}
+                meta={
+                  <>
+                    {claim.source === 'SELF_SIGNUP' ? 'Patient signup' : 'Reception intake'} ·{' '}
+                    <span className="tabular font-mono">
+                      {formatDate(claim.createdAt)} {formatTime(claim.createdAt)}
+                    </span>
+                  </>
+                }
+                action={
+                  claim.status === 'ESCALATED' ? <Badge tone="warning">Escalated</Badge> : undefined
+                }
+              >
+                <p className="mt-1 text-[13px] text-fg-muted">
+                  {MATCH_REASON_LABEL[claim.matchReason] ?? claim.matchReason}. Values that differ
+                  from what was submitted are marked.
+                </p>
+
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
+                    <caption className="sr-only">
+                      Submitted details compared with candidate records
+                    </caption>
+                    <thead>
+                      <tr className="h-9 border-b border-line text-[11px] text-fg-muted">
+                        <th scope="col" className="w-[120px] pr-3 font-medium">
+                          <span className="sr-only">Field</span>
+                        </th>
+                        <th scope="col" className="pr-3 font-medium">
+                          {claim.source === 'SELF_SIGNUP'
+                            ? 'Submitted at signup'
+                            : 'Submitted by Reception'}
+                        </th>
+                        {claim.candidates.map((c, i) => (
+                          <th
+                            key={c.id}
+                            scope="col"
+                            className="border-l border-line px-3 font-medium"
                           >
-                            {claim.source === 'SELF_SIGNUP'
-                              ? 'Link to this record'
-                              : 'Confirm same patient'}
-                          </Button>
-                        </li>
+                            Candidate record {claim.candidates.length > 1 ? i + 1 : ''}
+                          </th>
+                        ))}
+                        {claim.candidates.length === 0 && (
+                          <th scope="col" className="border-l border-line px-3 font-medium">
+                            Candidates
+                          </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {FIELDS.map((f) => (
+                        <tr key={f.label} className="h-10 border-b border-line">
+                          <th scope="row" className="pr-3 font-normal text-fg-muted">
+                            {f.label}
+                          </th>
+                          <td className={`pr-3 text-fg ${f.mono ? 'tabular font-mono' : ''}`}>
+                            {f.value(claim)}
+                          </td>
+                          {claim.candidates.map((c) => {
+                            const same = f.same(claim, c);
+                            return (
+                              <td
+                                key={c.id}
+                                className={`border-l border-line px-3 ${
+                                  same ? 'text-fg' : 'bg-warning-bg font-medium text-warning-fg'
+                                } ${f.mono ? 'tabular font-mono' : ''}`}
+                              >
+                                {f.value(c)}
+                                {!same && <span className="sr-only"> (differs)</span>}
+                              </td>
+                            );
+                          })}
+                          {claim.candidates.length === 0 && (
+                            <td className="border-l border-line px-3 text-fg-muted">
+                              {f.label === 'Name' ? 'No candidates flagged.' : ''}
+                            </td>
+                          )}
+                        </tr>
                       ))}
-                    </ul>
-                  )}
+                      {claim.candidates.length > 0 && (
+                        <tr>
+                          <td />
+                          <td />
+                          {claim.candidates.map((candidate) => (
+                            <td key={candidate.id} className="border-l border-line px-3 py-3">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={busy}
+                                onClick={() => handleLink(claim.id, candidate.id)}
+                              >
+                                {claim.source === 'SELF_SIGNUP'
+                                  ? 'Link to this record'
+                                  : 'Confirm same patient'}
+                              </Button>
+                            </td>
+                          ))}
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => handleCreateNew(claim.id)}
-                >
-                  None of these, create new record
-                </Button>
-                <label htmlFor={`reason-${claim.id}`} className="sr-only">
-                  Reason (optional)
-                </label>
-                <Input
-                  id={`reason-${claim.id}`}
-                  className="min-w-[12rem] flex-1"
-                  placeholder="Reason, optional"
-                  value={reasonByClaim[claim.id] ?? ''}
-                  onChange={(event) =>
-                    setReasonByClaim((prev) => ({ ...prev, [claim.id]: event.target.value }))
-                  }
-                />
-                <Button variant="danger" disabled={busy} onClick={() => setRejecting(claim)}>
-                  Reject
-                </Button>
-                {claim.status === 'PENDING' && (
-                  <Button variant="ghost" loading={busy} onClick={() => handleEscalate(claim.id)}>
-                    Escalate
+                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => handleCreateNew(claim.id)}
+                  >
+                    None of these, create new record
                   </Button>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+                  <label htmlFor={`reason-${claim.id}`} className="sr-only">
+                    Reason (optional)
+                  </label>
+                  <Input
+                    id={`reason-${claim.id}`}
+                    className="min-w-[12rem] flex-1"
+                    placeholder="Reason, optional"
+                    value={reasonByClaim[claim.id] ?? ''}
+                    onChange={(event) =>
+                      setReasonByClaim((prev) => ({ ...prev, [claim.id]: event.target.value }))
+                    }
+                  />
+                  {claim.status === 'PENDING' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busy}
+                      onClick={() => handleEscalate(claim.id)}
+                    >
+                      Escalate
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => setRejecting(claim)}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </InkSection>
+            );
+          })}
+        </div>
+      </InkSheet>
 
       <Dialog
         open={rejecting !== null}

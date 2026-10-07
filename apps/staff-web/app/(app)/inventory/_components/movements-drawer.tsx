@@ -43,21 +43,19 @@ export function MovementsDrawer({
       ) : data && data.length === 0 ? (
         <EmptyState icon={ClockCounterClockwise} title="No movements yet" />
       ) : (
-        <ul className="divide-y divide-line">
+        <ul className="divide-y divide-line border-y border-line">
           {data?.map((m) => (
             <li key={m.id} className="flex items-start justify-between gap-4 py-3">
               <div>
                 <p className="text-sm font-medium text-fg">{humanize(m.type)}</p>
                 {m.reason && <p className="text-[13px] text-fg-muted">{m.reason}</p>}
-                <p className="text-xs text-fg-subtle">
+                <p className="tabular font-mono text-[11px] text-fg-subtle">
                   {formatDate(m.createdAt)}, {formatTime(m.createdAt)}
                 </p>
               </div>
               <span
-                className={`tabular rounded-control px-2 py-0.5 font-mono text-sm font-semibold ${
-                  m.quantityDelta >= 0
-                    ? 'bg-success-bg text-success-fg'
-                    : 'bg-danger-bg text-danger-fg'
+                className={`tabular font-mono text-sm font-medium ${
+                  m.quantityDelta >= 0 ? 'text-success-fg' : 'text-danger-fg'
                 }`}
               >
                 {m.quantityDelta >= 0 ? '+' : '-'}

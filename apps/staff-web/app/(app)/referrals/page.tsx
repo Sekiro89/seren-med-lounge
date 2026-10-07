@@ -1,18 +1,24 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ArrowsLeftRight, WarningCircle } from '@phosphor-icons/react';
-import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { PersonCell } from '../../../components/ui/avatar';
-import { DataTable, type Column } from '../../../components/ui/data-table';
+import { type Column } from '../../../components/ui/data-table';
 import { Dialog } from '../../../components/ui/dialog';
 import { EmptyState } from '../../../components/ui/empty-state';
+import {
+  Figures,
+  InkFilters,
+  InkSheet,
+  SheetBar,
+  SheetHead,
+  StatusWord,
+} from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
-import { Tabs } from '../../../components/ui/tabs';
-import { formatDate, fullName, humanize } from '../../../lib/format';
+import { RuledTable } from '../../../components/ui/ruled-table';
+import { formatDate, formatTime, fullName, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
@@ -92,33 +98,42 @@ export default function ReferralsPage() {
   };
 
   const columns: Column<ReferralRow>[] = [
-    { header: 'Patient', render: (r) => <PersonCell name={fullName(r.patient)} /> },
     {
-      header: 'From',
+      header: 'Sent',
       render: (r) => (
-        <span>
-          {r.referredBy.fullName}
-          <span className="tabular font-mono block text-xs text-fg-subtle">
-            {formatDate(r.createdAt)}
-          </span>
+        <span className="tabular block whitespace-nowrap font-mono leading-tight">
+          {formatDate(r.createdAt)}
+          <span className="block text-[12px] text-fg-muted">{formatTime(r.createdAt)}</span>
         </span>
       ),
+    },
+    {
+      header: 'Patient',
+      render: (r) => (
+        <Link href={`/patients/${r.patient.id}`} className="font-medium text-fg hover:text-primary">
+          {fullName(r.patient)}
+        </Link>
+      ),
+    },
+    {
+      header: 'From',
+      render: (r) => <span className="text-fg-muted">{r.referredBy.fullName}</span>,
     },
     {
       header: 'To',
       render: (r) => {
         const to = destination(r);
         return (
-          <span>
+          <span className="block leading-tight">
             {to.main}
-            {to.sub && <span className="block text-xs text-fg-subtle">{to.sub}</span>}
+            {to.sub && <span className="block text-[12px] text-fg-muted">{to.sub}</span>}
           </span>
         );
       },
     },
     {
       header: 'Urgency',
-      render: (r) => <Badge tone={URGENCY_TONE[r.urgency]}>{humanize(r.urgency)}</Badge>,
+      render: (r) => <StatusWord tone={URGENCY_TONE[r.urgency]}>{humanize(r.urgency)}</StatusWord>,
     },
     {
       header: 'Reason',
@@ -127,7 +142,7 @@ export default function ReferralsPage() {
           type="button"
           onClick={() => setReading(r)}
           aria-label={`Read the full reason for ${fullName(r.patient)}`}
-          className="block max-w-[240px] cursor-pointer truncate rounded-control text-left text-fg-muted hover:text-primary"
+          className="block max-w-[260px] cursor-pointer truncate rounded-control text-left text-fg-muted hover:text-primary"
         >
           {r.reason}
         </button>
@@ -135,12 +150,17 @@ export default function ReferralsPage() {
     },
     {
       header: 'Status',
+      align: 'right',
       render: (r) => (
-        <div className="flex flex-wrap items-center gap-2 py-1">
-          <Badge tone={STATUS_TONE[r.status]}>{humanize(r.status)}</Badge>
+        <div className="flex flex-wrap items-center justify-end gap-2 py-1">
+          <StatusWord tone={STATUS_TONE[r.status]}>{humanize(r.status)}</StatusWord>
           {canAct && r.status === 'OPEN' && (
             <>
-              <Button size="sm" onClick={() => setActing({ action: 'complete', row: r })}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setActing({ action: 'complete', row: r })}
+              >
                 Complete
               </Button>
               <Button
@@ -157,28 +177,46 @@ export default function ReferralsPage() {
     },
   ];
 
+  const urgentOpen = open.data?.filter((r) => r.urgency !== 'ROUTINE').length;
+  const emergencyOpen = open.data?.some((r) => r.urgency === 'EMERGENCY');
+
   const empty = EMPTY_COPY[tab];
 
   return (
     <>
-      <PageHeader
-        title="Referrals"
-        description="Patients sent between doctors, or on to another facility."
-      />
-
-      <Card>
-        <div className="px-6">
-          <Tabs<TabKey>
+      <InkSheet>
+        <SheetHead
+          eyebrow="Clinical"
+          title="Referrals"
+          description="Patients sent between doctors, or on to another facility."
+          figures={
+            <Figures
+              loading={mine.loading && !mine.data}
+              items={[
+                { label: 'Sent to me', value: mine.data?.length },
+                { label: 'Open', value: open.data?.length },
+                {
+                  label: 'Urgent and open',
+                  value: urgentOpen,
+                  tone: urgentOpen ? (emergencyOpen ? 'danger' : 'warning') : undefined,
+                },
+                { label: 'Closed', value: closedRows?.length },
+              ]}
+            />
+          }
+        />
+        <SheetBar>
+          <InkFilters<TabKey>
             label="Referral lists"
             value={tab}
             onChange={setTab}
-            tabs={[
+            options={[
               { key: 'mine', label: 'Sent to me', count: mine.data?.length },
               { key: 'open', label: 'Open', count: open.data?.length },
               { key: 'closed', label: 'Closed', count: closedRows?.length },
             ]}
           />
-        </div>
+        </SheetBar>
 
         {active.errorStatus !== undefined && !active.loading ? (
           <div role="alert" className="flex flex-col items-center gap-3 px-6 py-14 text-center">
@@ -193,11 +231,13 @@ export default function ReferralsPage() {
             </Button>
           </div>
         ) : (
-          <DataTable
+          <RuledTable
             columns={columns}
             rows={active.data}
             getRowKey={(r) => r.id}
             loading={active.loading}
+            minWidth={980}
+            isMuted={(r) => r.status === 'CANCELLED'}
             empty={
               <EmptyState
                 icon={ArrowsLeftRight}
@@ -207,7 +247,7 @@ export default function ReferralsPage() {
             }
           />
         )}
-      </Card>
+      </InkSheet>
 
       <Dialog
         open={Boolean(reading)}

@@ -207,15 +207,13 @@ export function useNoteDraft({
   const templates = useApi<TemplateSummary[]>(
     canWrite && !note ? '/clinical-templates?noteType=CONSULTATION&active=true' : null,
   );
-  const usedTemplates = useApi<TemplateSummary[]>(
-    can(role, 'clinical-note:write-draft') && note?.templateVersionId
-      ? '/clinical-templates?noteType=' + note.noteType
-      : null,
-  );
   const templateOptions = templates.data ?? [];
-  const templateName = note?.templateVersionId
-    ? usedTemplates.data?.find((t) => t.currentVersionId === note.templateVersionId)?.name
-    : templateOptions.find((t) => t.id === templateId)?.name;
+  // The API sends the template a note was started from, version included.
+  const templateName = note?.templateVersion
+    ? `${note.templateVersion.template.name} v${note.templateVersion.version}`
+    : note
+      ? undefined
+      : templateOptions.find((t) => t.id === templateId)?.name;
 
   const edit = (key: SoapKey, value: string) => {
     setText((t) => ({ ...t, [key]: value }));

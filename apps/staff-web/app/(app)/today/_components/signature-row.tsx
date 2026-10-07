@@ -20,12 +20,15 @@ export function SignatureRow({
   loading,
   failed,
   signs,
+  me,
 }: {
   inbox: Inbox | undefined;
   loading: boolean;
   failed: boolean;
   /** Senior doctors sign others' drafts; juniors see their own drafts waiting for sign-off. */
   signs: boolean;
+  /** The signed-in doctor, so their own drafts are counted apart from others'. */
+  me?: string;
 }) {
   const total = inbox
     ? inbox.counts.drafts + inbox.counts.abnormalResults + inbox.counts.referrals
@@ -33,10 +36,15 @@ export function SignatureRow({
 
   const cells: ReactNode[] = [];
   if (inbox && inbox.drafts.length > 0) {
-    const first = inbox.drafts[0]!;
-    const authors = [...new Set(inbox.drafts.map((d) => d.author.fullName))];
-    const patients = [...new Set(inbox.drafts.map((d) => short(d.patient)))];
-    const n = inbox.counts.drafts;
+    // A senior signs others' work first; their own drafts are counted on the side.
+    const others = signs && me ? inbox.drafts.filter((d) => d.author.fullName !== me) : [];
+    const own = inbox.drafts.length - others.length;
+    const list = others.length > 0 ? others : inbox.drafts;
+    const first = list[0]!;
+    const authors = [...new Set(list.map((d) => d.author.fullName))];
+    const patients = [...new Set(list.map((d) => short(d.patient)))];
+    const n = others.length > 0 ? others.length : inbox.counts.drafts;
+    const allNotes = list.every((d) => d.kind === 'note');
     cells.push(
       <Cell
         key="drafts"
@@ -44,11 +52,15 @@ export function SignatureRow({
         title={
           n === 1
             ? `${first.kind === 'note' ? `${humanize(first.label)} note` : `Diagnosis: ${first.label}`}`
-            : `${n} drafts${signs && authors.length === 1 ? ` from ${authors[0]}` : ''}`
+            : `${n} draft${allNotes ? ' notes' : 's'}${signs && authors.length === 1 ? ` from ${authors[0]}` : ''}`
         }
         sub={`${patients.slice(0, 3).join(', ')}${patients.length > 3 ? ' …' : ''}${
           signs
-            ? ` · ${authors.length === 1 ? authors[0] : `${authors.length} authors`}`
+            ? others.length > 0
+              ? own > 0
+                ? ` · and ${own} of yours`
+                : ''
+              : ` · ${authors.length === 1 ? authors[0] : `${authors.length} authors`}`
             : ' · waiting for sign-off'
         }`}
         href={`/encounters/${first.encounterId}`}

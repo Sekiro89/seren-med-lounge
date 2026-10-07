@@ -19,7 +19,8 @@ function FormError({ message }: { message: string | undefined }) {
 }
 
 export function describeResult(r: { resultValue: string; unit: string | null }): string {
-  return r.unit ? `${r.resultValue} ${r.unit}` : r.resultValue;
+  if (!r.unit) return r.resultValue;
+  return r.unit === '%' ? `${r.resultValue}%` : `${r.resultValue} ${r.unit}`;
 }
 
 export function EnterResultDialog(props: {

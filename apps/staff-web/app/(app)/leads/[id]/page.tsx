@@ -17,7 +17,16 @@ import {
   type Icon,
 } from '@phosphor-icons/react';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
+import { Card } from '../../../../components/ui/card';
+import {
+  Figures,
+  InkSection,
+  InkSheet,
+  MarginNote,
+  SheetHead,
+  SheetRail,
+} from '../../../../components/ui/ink';
+import { StageRuler, type Stage } from '../../../../components/ui/stage-ruler';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { Field, Select, Textarea, Input } from '../../../../components/ui/fields';
 import { NoAccess } from '../../../../components/ui/no-access';
@@ -110,9 +119,54 @@ const MOVES: Record<
   CONVERTED: [],
 };
 
+/** The lead's journey on the Ruler. Lost stops the line where the lead was. */
+const JOURNEY: { status: LeadStatus; label: string }[] = [
+  { status: 'NEW', label: 'New' },
+  { status: 'CONTACTED', label: 'Contacted' },
+  { status: 'NURTURING', label: 'Nurturing' },
+  { status: 'APPOINTMENT_BOOKED', label: 'Booked' },
+  { status: 'CONVERTED', label: 'Patient' },
+];
+
+function journey(lead: LeadDetail): Stage[] {
+  const order = JOURNEY.map((j) => j.status);
+  let at: number;
+  if (lead.status === 'LOST') {
+    // "NURTURING -> LOST: reason" on the latest stage change tells where it stopped.
+    const change = [...lead.activities]
+      .reverse()
+      .find((a) => a.type === 'STATUS_CHANGE' && a.notes?.includes('-> LOST'));
+    const from = change?.notes?.split(' -> ')[0]?.trim() as LeadStatus | undefined;
+    at = Math.max(0, from ? order.indexOf(from) : 0);
+  } else {
+    at = order.indexOf(lead.status);
+  }
+  return JOURNEY.map((j, i) => ({
+    label: j.label,
+    state:
+      i < at || (lead.status === 'CONVERTED' && i === at)
+        ? 'done'
+        : i === at
+          ? lead.status === 'LOST'
+            ? 'stopped'
+            : 'current'
+          : 'todo',
+    note:
+      i === at && lead.status === 'LOST'
+        ? 'lost'
+        : i === at && lead.status !== 'CONVERTED'
+          ? 'now'
+          : i === 0
+            ? formatDate(lead.createdAt).slice(0, 6)
+            : j.status === 'CONVERTED' && lead.convertedAt
+              ? formatDate(lead.convertedAt).slice(0, 6)
+              : undefined,
+  }));
+}
+
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[9rem_1fr] gap-4 py-4 text-sm">
+    <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 text-[13px]">
       <dt className="text-fg-muted">{label}</dt>
       <dd className="min-w-0 text-fg">{children}</dd>
     </div>
@@ -156,13 +210,13 @@ export default function LeadPage({ params }: { params: Promise<{ id: string }> }
   const closed = lead?.status === 'CONVERTED' || lead?.status === 'LOST';
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-3">
       <Link
         href="/leads"
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-fg-muted hover:text-fg"
+        className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-primary hover:text-primary-hover"
       >
         <ArrowLeft size={16} aria-hidden="true" />
-        All leads
+        Leads
       </Link>
 
       {detail.loading && (
@@ -195,147 +249,170 @@ export default function LeadPage({ params }: { params: Promise<{ id: string }> }
 
       {lead && (
         <>
-          <div className="flex flex-wrap items-end justify-between gap-6">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-semibold leading-8 tracking-tight text-fg">
-                  {leadName(lead)}
-                </h1>
-                <LeadStatusBadge status={lead.status} />
-              </div>
-              <p className="tabular font-mono mt-2 text-sm text-fg-muted">
-                {lead.phone}
-                {lead.email ? `, ${lead.email}` : ''}
-              </p>
-            </div>
-            {canConvert && lead.status !== 'CONVERTED' && (
-              <Button
-                icon={<UserPlus size={18} aria-hidden="true" />}
-                onClick={() => setConvertOpen(true)}
-              >
-                Convert to patient
-              </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="flex min-w-0 flex-col gap-8">
-              {canWrite && !closed && <Composer lead={lead} onSaved={detail.reload} />}
-              {canWrite && closed && (
-                <p className="rounded-panel bg-surface-muted px-6 py-4 text-sm text-fg-muted">
-                  {lead.status === 'CONVERTED'
-                    ? 'This lead is now a patient, so new activity is recorded on the patient record.'
-                    : 'This lead is marked lost. Reopen it as nurturing to log more activity.'}
-                </p>
-              )}
-              <Card>
-                <CardHeader
-                  title="Activity"
-                  description="Everything done with this lead, newest first."
+          <InkSheet>
+            <SheetHead
+              eyebrow={`Lead · ${SOURCE_LABELS[lead.source] ?? lead.source} · added ${formatDate(lead.createdAt)}`}
+              title={leadName(lead)}
+              description={
+                <span className="tabular font-mono">
+                  {lead.phone}
+                  {lead.email ? <span className="font-sans"> · {lead.email}</span> : ''}
+                </span>
+              }
+              figures={
+                <Figures
+                  className="items-start!"
+                  items={[
+                    {
+                      label: 'Activities',
+                      value: lead.activities.filter((a) => a.type !== 'STATUS_CHANGE').length,
+                    },
+                    {
+                      label: 'Next follow-up',
+                      value:
+                        lead.nextFollowUpAt && !closed
+                          ? formatDate(lead.nextFollowUpAt).slice(0, 6)
+                          : '-',
+                      hint:
+                        lead.nextFollowUpAt && !closed
+                          ? formatTime(lead.nextFollowUpAt)
+                          : undefined,
+                    },
+                  ]}
                 />
-                <Timeline activities={lead.activities} />
-              </Card>
+              }
+              action={
+                <>
+                  <LeadStatusBadge status={lead.status} />
+                  {canConvert && lead.status !== 'CONVERTED' && (
+                    <Button
+                      icon={<UserPlus size={18} aria-hidden="true" />}
+                      onClick={() => setConvertOpen(true)}
+                    >
+                      Convert to patient
+                    </Button>
+                  )}
+                </>
+              }
+            />
+
+            <div className="border-b border-line px-5 pb-4 pt-6 sm:px-10">
+              <StageRuler label="Lead journey" stages={journey(lead)} />
             </div>
 
-            <div className="flex min-w-0 flex-col gap-8">
-              <Card>
-                <CardHeader title="Enquiry" />
-                <dl className="divide-y divide-line px-6">
-                  <Detail label="Asked about">
-                    {lead.enquiry ?? <span className="text-fg-subtle">Nothing written down</span>}
-                  </Detail>
-                  <Detail label="Source">{SOURCE_LABELS[lead.source] ?? lead.source}</Detail>
-                  {lead.campaign && (
-                    <Detail label="Campaign">
-                      <Link
-                        href={`/campaigns/${lead.campaign.id}`}
-                        className="text-primary-subtle-fg hover:underline"
-                      >
-                        {lead.campaign.name}
-                      </Link>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="flex min-w-0 flex-col gap-8 px-5 pb-8 pt-6 sm:px-8">
+                {canWrite && !closed && <Composer lead={lead} onSaved={detail.reload} />}
+                {canWrite && closed && (
+                  <p className="bg-surface-muted px-4 py-3 text-[13px] text-fg-muted">
+                    {lead.status === 'CONVERTED'
+                      ? 'This lead is now a patient, so new activity is recorded on the patient record.'
+                      : 'This lead is marked lost. Reopen it as nurturing to log more activity.'}
+                  </p>
+                )}
+                <InkSection
+                  number={canWrite && !closed ? 2 : 1}
+                  title="Activity"
+                  meta="Newest first"
+                >
+                  <Timeline activities={lead.activities} />
+                </InkSection>
+              </div>
+
+              <SheetRail label="Lead details and stage">
+                {canWrite && MOVES[lead.status].length > 0 && (
+                  <InkSection title="Stage">
+                    <div className="mt-3 flex flex-col gap-2">
+                      {MOVES[lead.status].map((m) => (
+                        <Button
+                          key={m.to}
+                          variant={m.to === 'LOST' ? 'ghost' : 'secondary'}
+                          loading={moving === m.to}
+                          onClick={() => (m.to === 'LOST' ? setLostOpen(true) : void move(m.to))}
+                          className="w-full"
+                        >
+                          {m.label}
+                        </Button>
+                      ))}
+                      <FormError message={moveError} />
+                    </div>
+                  </InkSection>
+                )}
+
+                <InkSection title="Enquiry">
+                  <dl className="divide-y divide-line">
+                    <Detail label="Asked about">
+                      {lead.enquiry ?? <span className="text-fg-subtle">Nothing written down</span>}
                     </Detail>
-                  )}
-                  {lead.referredByPatient && (
-                    <Detail label="Referred by">
-                      <Link
-                        href={`/patients/${lead.referredByPatient.id}`}
-                        className="text-primary-subtle-fg hover:underline"
-                      >
-                        {fullName(lead.referredByPatient)}
-                      </Link>
+                    <Detail label="Source">{SOURCE_LABELS[lead.source] ?? lead.source}</Detail>
+                    {lead.campaign && (
+                      <Detail label="Campaign">
+                        <Link
+                          href={`/campaigns/${lead.campaign.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {lead.campaign.name}
+                        </Link>
+                      </Detail>
+                    )}
+                    {lead.referredByPatient && (
+                      <Detail label="Referred by">
+                        <Link
+                          href={`/patients/${lead.referredByPatient.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {fullName(lead.referredByPatient)}
+                        </Link>
+                      </Detail>
+                    )}
+                    <Detail label="Owner">
+                      {lead.owner?.fullName ?? <span className="text-fg-subtle">Unassigned</span>}
                     </Detail>
-                  )}
-                  <Detail label="Owner">
-                    {lead.owner?.fullName ?? <span className="text-fg-subtle">Unassigned</span>}
-                  </Detail>
-                  <Detail label="Contact consent">
-                    {lead.consentToContact ? (
-                      <span className="flex flex-col gap-1">
-                        <Badge tone="success">Agreed to be contacted</Badge>
-                        {lead.consentRecordedAt && (
-                          <span className="text-[13px] text-fg-subtle">
-                            Recorded {formatDate(lead.consentRecordedAt)}
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="flex flex-col gap-1">
-                        <Badge tone="warning">Has not agreed to be contacted</Badge>
-                        <span className="text-[13px] text-fg-subtle">
-                          Calls, messages and emails are blocked. Notes and meetings are allowed.
+                    <Detail label="Consent">
+                      {lead.consentToContact ? (
+                        <span className="flex flex-col items-start gap-1">
+                          <Badge tone="success">Agreed to be contacted</Badge>
+                          {lead.consentRecordedAt && (
+                            <span className="text-[12px] text-fg-subtle">
+                              Recorded{' '}
+                              <span className="font-mono">
+                                {formatDate(lead.consentRecordedAt)}
+                              </span>
+                            </span>
+                          )}
                         </span>
-                      </span>
-                    )}
-                  </Detail>
-                  <Detail label="Next follow-up">
-                    {lead.nextFollowUpAt && !closed ? (
-                      <span className="tabular font-mono">
-                        {formatDate(lead.nextFollowUpAt)} {formatTime(lead.nextFollowUpAt)}
-                      </span>
-                    ) : (
-                      <span className="text-fg-subtle">Not set</span>
-                    )}
-                  </Detail>
-                  {lead.status === 'LOST' && (
-                    <Detail label="Lost because">
-                      {lead.lostReason ?? <span className="text-fg-subtle">No reason given</span>}
+                      ) : (
+                        <span className="flex flex-col items-start gap-1">
+                          <Badge tone="warning">Not agreed</Badge>
+                          <MarginNote>
+                            Calls, messages and emails are blocked. Notes and meetings are allowed.
+                          </MarginNote>
+                        </span>
+                      )}
                     </Detail>
-                  )}
-                  {lead.convertedPatient && (
-                    <Detail label="Patient record">
-                      <Link
-                        href={`/patients/${lead.convertedPatient.id}`}
-                        className="text-primary-subtle-fg hover:underline"
-                      >
-                        {fullName(lead.convertedPatient)}
-                      </Link>
+                    {lead.status === 'LOST' && (
+                      <Detail label="Lost because">
+                        {lead.lostReason ?? <span className="text-fg-subtle">No reason given</span>}
+                      </Detail>
+                    )}
+                    {lead.convertedPatient && (
+                      <Detail label="Patient record">
+                        <Link
+                          href={`/patients/${lead.convertedPatient.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {fullName(lead.convertedPatient)}
+                        </Link>
+                      </Detail>
+                    )}
+                    <Detail label="Added">
+                      <span className="tabular font-mono">{formatDate(lead.createdAt)}</span>
                     </Detail>
-                  )}
-                  <Detail label="Added">{formatDate(lead.createdAt)}</Detail>
-                </dl>
-              </Card>
-
-              {canWrite && MOVES[lead.status].length > 0 && (
-                <Card>
-                  <CardHeader title="Stage" description="Move this lead along its journey." />
-                  <div className="flex flex-col gap-3 px-6 py-6">
-                    {MOVES[lead.status].map((m) => (
-                      <Button
-                        key={m.to}
-                        variant={m.to === 'LOST' ? 'ghost' : 'secondary'}
-                        loading={moving === m.to}
-                        onClick={() => (m.to === 'LOST' ? setLostOpen(true) : void move(m.to))}
-                        className="w-full"
-                      >
-                        {m.label}
-                      </Button>
-                    ))}
-                    <FormError message={moveError} />
-                  </div>
-                </Card>
-              )}
+                  </dl>
+                </InkSection>
+              </SheetRail>
             </div>
-          </div>
+          </InkSheet>
 
           <LostDialog
             lead={lead}
@@ -410,16 +487,12 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
   };
 
   return (
-    <Card>
-      <CardHeader
-        title="Log activity"
-        description="Record what you did, and when to follow up next."
-      />
+    <InkSection number={1} title="Log activity" meta="What you did, and when to follow up next">
       <form
         onSubmit={submit}
         noValidate
         onChange={clearOnEdit(clearError, { 'act-type': ['act-notes'] })}
-        className="flex flex-col gap-5 px-6 py-6"
+        className="flex flex-col gap-4 pt-3"
       >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={req('What happened')} htmlFor="act-type" error={errors['act-type']}>
@@ -480,7 +553,7 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
           </Button>
         </div>
       </form>
-    </Card>
+    </InkSection>
   );
 }
 
@@ -496,25 +569,29 @@ function Timeline({ activities }: { activities: LeadActivity[] }) {
   }
   const ordered = [...activities].reverse();
   return (
-    <ol className="divide-y divide-line px-6">
+    <ol className="divide-y divide-line">
       {ordered.map((a) => {
         const TypeIcon = TIMELINE_ICONS[a.type] ?? NotePencil;
         return (
-          <li key={a.id} className="flex gap-4 py-5">
-            <TypeIcon size={20} aria-hidden="true" className="mt-px shrink-0 text-fg-muted" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-fg">
-                {TIMELINE_LABELS[a.type] ?? a.type}
-                <span className="ml-2 font-mono text-xs font-normal text-fg-subtle">
-                  {formatDate(a.createdAt)} {formatTime(a.createdAt)}
-                </span>
-              </p>
+          <li key={a.id} className="grid grid-cols-[88px_20px_minmax(0,1fr)] gap-x-3 py-3">
+            <time
+              dateTime={a.createdAt}
+              className="tabular pt-px font-mono text-[12px] text-fg-muted"
+            >
+              {formatDate(a.createdAt).slice(0, 6)}
+              <span className="block">{formatTime(a.createdAt)}</span>
+            </time>
+            <TypeIcon size={18} aria-hidden="true" className="mt-px shrink-0 text-fg-subtle" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-fg">{TIMELINE_LABELS[a.type] ?? a.type}</p>
               {a.notes && (
-                <p className="mt-1 whitespace-pre-wrap text-sm text-fg-muted">
+                <p className="mt-0.5 max-w-[72ch] whitespace-pre-wrap text-[13px] text-fg-muted">
                   {a.type === 'STATUS_CHANGE' ? prettyStatusNote(a.notes) : a.notes}
                 </p>
               )}
-              {a.actor && <p className="mt-1 text-[13px] text-fg-subtle">by {a.actor.fullName}</p>}
+              {a.actor && (
+                <p className="mt-0.5 text-[12px] text-fg-subtle">By {a.actor.fullName}</p>
+              )}
             </div>
           </li>
         );

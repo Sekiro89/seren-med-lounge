@@ -3,19 +3,24 @@
 import { useState } from 'react';
 import { Pill, Package } from '@phosphor-icons/react';
 import { ApiError } from '@serenemed/api-client';
-import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { PersonCell } from '../../../components/ui/avatar';
-import { DataTable, type Column } from '../../../components/ui/data-table';
 import { Dialog } from '../../../components/ui/dialog';
 import { EmptyState } from '../../../components/ui/empty-state';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
-import { Tabs } from '../../../components/ui/tabs';
+import {
+  Figures,
+  InkFilters,
+  InkSheet,
+  SheetBar,
+  SheetHead,
+  StatusWord,
+} from '../../../components/ui/ink';
+import { LedgerTable, type LedgerColumn } from '../../../components/ui/ledger-table';
+import { Skeleton } from '../../../components/ui/skeleton';
 import type { Tone } from '../../../lib/status';
 import { apiClient } from '../../../lib/api-client';
-import { formatDate, fullName, humanize } from '../../../lib/format';
+import { formatDate, formatTime, fullName, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
@@ -54,14 +59,12 @@ function medLabel(m: DispensingRow['medication']): string {
 
 function ErrorPanel({ onRetry }: { onRetry: () => void }) {
   return (
-    <Card>
-      <div role="alert" className="flex items-center justify-between gap-4 p-6">
-        <p className="text-sm text-danger-fg">The dispensing list could not be loaded.</p>
-        <Button variant="secondary" onClick={onRetry}>
-          Try again
-        </Button>
-      </div>
-    </Card>
+    <div role="alert" className="flex items-center justify-between gap-4 px-8 py-6">
+      <p className="text-sm text-danger-fg">The dispensing list could not be loaded.</p>
+      <Button variant="secondary" onClick={onRetry}>
+        Try again
+      </Button>
+    </div>
   );
 }
 
@@ -127,47 +130,21 @@ export default function DispensingPage() {
   const inProgress = all.filter((d) => IN_PROGRESS.includes(d.status));
   const completed = all.filter((d) => !IN_PROGRESS.includes(d.status));
 
-  const pendingColumns: Column<PendingItem>[] = [
-    {
-      header: 'Patient',
-      render: (r) => <PersonCell name={fullName(r.prescription.patient)} />,
-    },
+  const baseColumns: LedgerColumn<DispensingRow>[] = [
+    { header: 'Patient', render: (r) => <span className="font-medium">{patientOf(r)}</span> },
     {
       header: 'Medicine',
-      render: (r) => <span className="font-medium">{r.medicationName}</span>,
-    },
-    { header: 'Dosage', render: (r) => r.dosage },
-    { header: 'Frequency', render: (r) => r.frequency },
-    {
-      header: 'Duration',
-      render: (r) => (r.durationDays ? `${r.durationDays} days` : 'Not set'),
+      render: (r) => <span className="font-medium">{medLabel(r.medication)}</span>,
     },
     {
-      header: 'Issued',
+      header: 'Qty',
+      align: 'right',
+      numeric: true,
+      width: 'w-[96px]',
       render: (r) => (
-        <span className="font-mono text-fg-muted">{timeAgo(r.prescription.createdAt)}</span>
-      ),
-    },
-    {
-      header: 'Action',
-      render: (r) => (
-        <Button size="sm" onClick={() => setPreparing(r)}>
-          Prepare
-        </Button>
-      ),
-    },
-  ];
-
-  const baseColumns: Column<DispensingRow>[] = [
-    { header: 'Patient', render: (r) => <PersonCell name={patientOf(r)} /> },
-    {
-      header: 'Medicine',
-      render: (r) => (
-        <span className="leading-tight">
-          <span className="block font-medium">{medLabel(r.medication)}</span>
-          <span className="block text-xs text-fg-subtle">
-            {r.quantity} {r.medication.unit}
-          </span>
+        <span className="whitespace-nowrap">
+          {r.quantity}{' '}
+          <span className="font-sans text-[12px] text-fg-subtle">{r.medication.unit}</span>
         </span>
       ),
     },
@@ -186,22 +163,26 @@ export default function DispensingPage() {
     },
     {
       header: 'Status',
-      render: (r) => <Badge tone={STATUS_TONE[r.status]}>{humanize(r.status)}</Badge>,
+      width: 'w-[140px]',
+      render: (r) => <StatusWord tone={STATUS_TONE[r.status]}>{humanize(r.status)}</StatusWord>,
     },
     {
       header: 'Prepared',
+      numeric: true,
+      width: 'w-[112px]',
       render: (r) => <span className="text-fg-muted">{formatDate(r.createdAt)}</span>,
     },
   ];
 
-  const progressColumns: Column<DispensingRow>[] = [
+  const progressColumns: LedgerColumn<DispensingRow>[] = [
     ...baseColumns,
     {
       header: 'Action',
+      align: 'right',
       render: (r) => {
         const loading = busyId === r.id;
         return (
-          <span className="flex flex-wrap gap-2">
+          <span className="flex flex-wrap justify-end gap-2">
             {r.status === 'PREPARED' && r.mode === 'PICKUP' && (
               <Button size="sm" loading={loading} onClick={() => request(r, 'hand-over')}>
                 Hand over
@@ -236,87 +217,120 @@ export default function DispensingPage() {
   const listLoading = dispensings.loading;
   const failed = (tab === 'prepare' ? pending.errorStatus : dispensings.errorStatus) !== undefined;
 
+  const slips = groupSlips(pending.data ?? []);
+  const outForDelivery = inProgress.filter((d) => d.status === 'OUT_FOR_DELIVERY').length;
+
   return (
     <>
-      <PageHeader
-        title="Dispensing"
-        description="Prepare prescribed medicines, then hand them over or send them out."
-      />
+      <InkSheet>
+        <SheetHead
+          eyebrow="Pharmacy"
+          title="Dispensing"
+          description="Prepare prescribed medicines, then hand them over or send them out."
+          figures={
+            <Figures
+              loading={pending.loading && !pending.data}
+              items={[
+                { label: 'Prescriptions waiting', value: pending.data ? slips.length : undefined },
+                { label: 'Lines to prepare', value: pending.data?.length },
+                {
+                  label: 'Ready to hand over',
+                  value: dispensings.data ? inProgress.length - outForDelivery : undefined,
+                },
+                {
+                  label: 'Out for delivery',
+                  value: dispensings.data ? outForDelivery : undefined,
+                },
+              ]}
+            />
+          }
+        />
 
-      {error && (
-        <p
-          role="alert"
-          className="mb-4 rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
-        >
-          {error}
-        </p>
-      )}
-      {notice && !error && (
-        <p
-          role="status"
-          className="mb-4 rounded-control bg-success-bg px-3 py-2 text-sm text-success-fg"
-        >
-          {notice}
-        </p>
-      )}
-
-      <Card>
-        <div className="px-6">
-          <Tabs
+        <SheetBar>
+          <InkFilters
             label="Dispensing stages"
             value={tab}
             onChange={setTab}
-            tabs={[
+            options={[
               { key: 'prepare', label: 'To prepare', count: pending.data?.length },
               {
                 key: 'progress',
                 label: 'In progress',
                 count: dispensings.data ? inProgress.length : undefined,
               },
-              { key: 'completed', label: 'Completed' },
+              {
+                key: 'completed',
+                label: 'Completed',
+                count: dispensings.data ? completed.length : undefined,
+              },
             ]}
           />
-        </div>
+        </SheetBar>
+
+        {error && (
+          <p
+            role="alert"
+            className="border-b border-line bg-danger-bg px-8 py-2.5 text-sm text-danger-fg"
+          >
+            {error}
+          </p>
+        )}
+        {notice && !error && (
+          <p
+            role="status"
+            className="border-b border-line bg-success-bg px-8 py-2.5 text-sm text-success-fg"
+          >
+            {notice}
+          </p>
+        )}
 
         {failed ? (
-          <div className="p-4">
-            <ErrorPanel onRetry={reloadAll} />
-          </div>
+          <ErrorPanel onRetry={reloadAll} />
         ) : tab === 'prepare' ? (
-          <DataTable
-            columns={pendingColumns}
-            rows={pending.data}
-            getRowKey={(r) => r.id}
-            loading={pending.loading}
-            empty={
-              <EmptyState
-                icon={Pill}
-                title="Nothing waiting to be prepared"
-                description="Prescribed medicines appear here as soon as a doctor issues a prescription."
-              />
-            }
-          />
+          pending.loading && !pending.data ? (
+            <div className="space-y-3 px-8 py-6">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : slips.length === 0 ? (
+            <EmptyState
+              icon={Pill}
+              title="Nothing waiting to be prepared"
+              description="Prescribed medicines appear here as soon as a doctor issues a prescription."
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-x-10 gap-y-8 px-5 pb-10 pt-6 sm:px-8 xl:grid-cols-2">
+              {slips.map((slip) => (
+                <PrescriptionSlip key={slip.id} slip={slip} onPrepare={setPreparing} />
+              ))}
+            </div>
+          )
         ) : tab === 'progress' ? (
-          <DataTable
+          <LedgerTable
             columns={progressColumns}
             rows={dispensings.data ? inProgress : undefined}
             getRowKey={(r) => r.id}
             loading={listLoading}
+            minWidth={880}
+            caption="Dispensings in progress"
             empty={
               <EmptyState
                 icon={Package}
                 title="No work in progress"
-                description="Prepare a prescribed medicine from the To prepare tab to start one."
+                description="Prepare a prescribed medicine from the To prepare list to start one."
                 action={<Button onClick={() => setTab('prepare')}>Open to prepare</Button>}
               />
             }
           />
         ) : (
-          <DataTable
+          <LedgerTable
             columns={baseColumns}
             rows={dispensings.data ? completed : undefined}
             getRowKey={(r) => r.id}
             loading={listLoading}
+            muted={(r) => r.status === 'CANCELLED'}
+            minWidth={780}
+            caption="Completed dispensings"
             empty={
               <EmptyState
                 icon={Package}
@@ -326,7 +340,7 @@ export default function DispensingPage() {
             }
           />
         )}
-      </Card>
+      </InkSheet>
 
       <PrepareDialog
         item={preparing}
@@ -367,5 +381,91 @@ export default function DispensingPage() {
         )}
       </Dialog>
     </>
+  );
+}
+
+interface Slip {
+  id: string;
+  createdAt: string;
+  patient: PendingItem['prescription']['patient'];
+  lines: PendingItem[];
+}
+
+/** Pending lines grouped back into the prescriptions they came from, oldest first. */
+function groupSlips(items: PendingItem[]): Slip[] {
+  const map = new Map<string, Slip>();
+  for (const item of items) {
+    const p = item.prescription;
+    const slip = map.get(p.id) ?? {
+      id: p.id,
+      createdAt: p.createdAt,
+      patient: p.patient,
+      lines: [],
+    };
+    slip.lines.push(item);
+    map.set(p.id, slip);
+  }
+  return [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/**
+ * A prescription as a ruled slip: the Rx mark and the patient above an ink
+ * rule, one hairline row per medicine with dosage, frequency and days in
+ * Plex Mono, and Prepare on each line.
+ */
+function PrescriptionSlip({
+  slip,
+  onPrepare,
+}: {
+  slip: Slip;
+  onPrepare: (item: PendingItem) => void;
+}) {
+  return (
+    <article aria-label={`Prescription for ${fullName(slip.patient)}`} className="min-w-0">
+      <header className="flex items-end justify-between gap-4 border-b border-fg pb-2">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <span
+            aria-hidden="true"
+            className="font-mono text-[18px] font-semibold leading-none text-fg"
+          >
+            Rx
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-semibold text-fg">{fullName(slip.patient)}</p>
+            <p className="tabular font-mono text-[11px] text-fg-subtle">
+              {formatDate(slip.createdAt)}, {formatTime(slip.createdAt)} · {timeAgo(slip.createdAt)}
+            </p>
+          </div>
+        </div>
+        <span className="tabular shrink-0 font-mono text-[12px] text-fg-muted">
+          {slip.lines.length} line{slip.lines.length === 1 ? '' : 's'}
+        </span>
+      </header>
+      <ol>
+        {slip.lines.map((line, i) => (
+          <li
+            key={line.id}
+            className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-x-3 border-b border-line py-2.5"
+          >
+            <span className="tabular pt-0.5 font-mono text-[11px] text-fg-subtle">
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            <div className="min-w-0">
+              <p className="text-[14px] font-medium text-fg">{line.medicationName}</p>
+              <p className="tabular mt-0.5 font-mono text-[12px] text-fg-muted">
+                {line.dosage} · {line.frequency} ·{' '}
+                {line.durationDays ? `${line.durationDays} days` : 'duration not set'}
+              </p>
+              {line.instructions && (
+                <p className="mt-0.5 text-[12px] text-fg-subtle">{line.instructions}</p>
+              )}
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => onPrepare(line)}>
+              Prepare
+            </Button>
+          </li>
+        ))}
+      </ol>
+    </article>
   );
 }

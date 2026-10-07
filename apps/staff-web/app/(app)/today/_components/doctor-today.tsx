@@ -275,6 +275,7 @@ export function DoctorToday() {
         loading={inbox.loading}
         failed={inbox.errorStatus !== undefined && !inbox.data}
         signs={can(role, 'clinical-note:sign-off')}
+        me={user.fullName}
       />
     </div>
   );
@@ -331,6 +332,7 @@ function AgendaLine({
       <td className={`truncate pr-3 ${done ? 'text-fg-subtle' : 'font-medium text-fg'}`}>
         {fullName(a.patient)}
         <span className="tabular ml-1.5 text-[12px] font-normal text-fg-muted">
+          {a.patient.sex ? `${a.patient.sex.charAt(0)} ` : ''}
           {ageYears(a.patient.dateOfBirth, now)}
           {showDoctor && a.doctor ? ` · ${a.doctor.fullName}` : ''}
         </span>

@@ -2,23 +2,10 @@
 
 import { Plus, CheckCircle } from '@phosphor-icons/react';
 import { Button } from '../../../../components/ui/button';
-import { DataTable, type Column } from '../../../../components/ui/data-table';
+import { LevelRuler, StatusWord } from '../../../../components/ui/ink';
+import { LedgerTable, type LedgerColumn } from '../../../../components/ui/ledger-table';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { ErrorPanel, medicineLabel, type LowStockRow } from './shared';
-
-function LevelBar({ usable, reorder }: { usable: number; reorder: number }) {
-  const pct = reorder <= 0 ? 0 : Math.min(100, Math.round((usable / reorder) * 100));
-  const fill = usable === 0 ? 'bg-danger' : 'bg-warning-fg';
-  return (
-    <div
-      role="img"
-      aria-label={`${usable} of ${reorder} units at the reorder level`}
-      className="h-2 w-28 overflow-hidden bg-neutral-bg"
-    >
-      <div className={`h-full ${fill}`} style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
 
 export function LowStockTab({
   rows,
@@ -35,7 +22,7 @@ export function LowStockTab({
 }) {
   if (failed) return <ErrorPanel message="Low stock could not be loaded." onRetry={onRetry} />;
 
-  const columns: Column<LowStockRow>[] = [
+  const columns: LedgerColumn<LowStockRow>[] = [
     {
       header: 'Medicine',
       render: (m) => <span className="font-medium">{medicineLabel(m)}</span>,
@@ -53,7 +40,21 @@ export function LowStockTab({
     { header: 'Reorder level', align: 'right', numeric: true, render: (m) => m.reorderLevel ?? 0 },
     {
       header: 'Level',
-      render: (m) => <LevelBar usable={m.usableOnHand} reorder={m.reorderLevel ?? 0} />,
+      width: 'w-[200px]',
+      render: (m) => (
+        <span
+          className="flex items-center gap-3"
+          role="img"
+          aria-label={`${m.usableOnHand} usable against a reorder level of ${m.reorderLevel ?? 0}`}
+        >
+          <LevelRuler value={m.usableOnHand} reorder={m.reorderLevel} className="w-28" />
+          {m.usableOnHand === 0 ? (
+            <StatusWord tone="danger">Out</StatusWord>
+          ) : (
+            <StatusWord tone="warning">Low</StatusWord>
+          )}
+        </span>
+      ),
     },
     {
       header: 'Action',
@@ -72,7 +73,8 @@ export function LowStockTab({
   ];
 
   return (
-    <DataTable
+    <LedgerTable
+      caption="Medicines at or below their reorder level"
       columns={columns}
       rows={rows}
       getRowKey={(m) => m.id}

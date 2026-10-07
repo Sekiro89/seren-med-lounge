@@ -2,10 +2,18 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Megaphone, Plus, UsersThree } from '@phosphor-icons/react';
-import { Badge } from '../../../../components/ui/badge';
+import { ArrowLeft, Megaphone, Plus, UsersThree } from '@phosphor-icons/react';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
+import { Card } from '../../../../components/ui/card';
+import {
+  Figures,
+  InkSection,
+  InkSheet,
+  LedgerLine,
+  MarginNote,
+  SheetHead,
+  SheetRail,
+} from '../../../../components/ui/ink';
 import { Dialog } from '../../../../components/ui/dialog';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { NoAccess } from '../../../../components/ui/no-access';
@@ -33,15 +41,6 @@ import {
   dateRange,
   type CampaignDetail,
 } from '../_components/shared';
-
-function Detail({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[13px] text-fg-muted">{label}</dt>
-      <dd className="mt-1 text-sm text-fg">{children}</dd>
-    </div>
-  );
-}
 
 export default function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -90,13 +89,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   const cancel = moves.find((m) => m.to === 'CANCELLED');
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-3">
       <Link
         href="/campaigns"
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-fg-muted hover:text-fg"
+        className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-primary hover:text-primary-hover"
       >
         <ArrowLeft size={16} aria-hidden="true" />
-        All campaigns
+        Campaigns
       </Link>
 
       {detail.loading && (
@@ -129,119 +128,163 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
       {c && (
         <>
-          <div className="flex flex-wrap items-end justify-between gap-6">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-semibold leading-8 tracking-tight text-fg">
-                  {c.name}
-                </h1>
-                <CampaignStatusBadge status={c.status} />
-              </div>
-              <p className="mt-2 flex flex-wrap items-center gap-3 text-sm text-fg-muted">
-                <Badge tone="neutral">{TYPE_LABELS[c.type] ?? c.type}</Badge>
-                <span className="tabular font-mono">{dateRange(c)}</span>
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {cancel && (
-                <Button variant="ghost" onClick={() => setConfirmCancel(true)}>
-                  {cancel.label}
-                </Button>
-              )}
-              {forward && (
-                <Button loading={moving === forward.to} onClick={() => void move(forward.to)}>
-                  {forward.label}
-                </Button>
-              )}
-            </div>
-          </div>
-          <FormError message={error && !confirmCancel ? error : undefined} />
-
-          <Card>
-            <CardHeader
-              title="Funnel"
-              description={`${c.totalLeads} ${c.totalLeads === 1 ? 'lead' : 'leads'} so far, counted by where they are now.`}
-            />
-            <div className="px-6 py-6">
-              {c.totalLeads === 0 ? (
-                <p className="text-sm text-fg-muted">
-                  No leads are tagged with this campaign yet. Add a lead and choose this campaign as
-                  the source.
-                </p>
-              ) : (
-                <FunnelBar funnel={c.funnel} total={c.totalLeads} />
-              )}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Details" />
-            <dl className="grid grid-cols-1 gap-6 px-6 py-6 sm:grid-cols-2 lg:grid-cols-4">
-              <Detail label="Type">{TYPE_LABELS[c.type] ?? c.type}</Detail>
-              {c.location && (
-                <Detail label="Location">
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin size={14} aria-hidden="true" />
-                    {c.location}
-                  </span>
-                </Detail>
-              )}
-              {c.channel && <Detail label="Channel">{c.channel}</Detail>}
-              <Detail label="Budget">
-                {c.budgetMinor !== null ? (
-                  <span className="tabular font-mono">{formatMoney(c.budgetMinor)}</span>
-                ) : (
-                  <span className="text-fg-subtle">Not set</span>
-                )}
-              </Detail>
-              <Detail label="Created by">
-                {c.createdBy?.fullName ?? <span className="text-fg-subtle">Unknown</span>}
-              </Detail>
-              {c.notes && (
-                <div className="sm:col-span-2 lg:col-span-4">
-                  <Detail label="Notes">
-                    <span className="whitespace-pre-wrap">{c.notes}</span>
-                  </Detail>
-                </div>
-              )}
-            </dl>
-          </Card>
-
-          {canLeads && (
-            <Card>
-              <CardHeader
-                title="Leads from this campaign"
-                action={
-                  canAddLead ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<Plus size={16} aria-hidden="true" />}
-                      onClick={() => setAdding(true)}
-                    >
-                      Add lead
-                    </Button>
-                  ) : undefined
-                }
-              />
-              {leads.errorStatus !== undefined && !leads.loading ? (
-                <ErrorPanel message={leads.errorMessage} onRetry={leads.reload} />
-              ) : (
-                <LeadsTable
-                  showCampaign={false}
-                  rows={leads.data}
-                  loading={leads.loading}
-                  empty={
-                    <EmptyState
-                      icon={UsersThree}
-                      title="No leads yet"
-                      description="Leads added with this campaign as their source appear here."
-                    />
-                  }
+          <InkSheet>
+            <SheetHead
+              eyebrow={`${TYPE_LABELS[c.type] ?? c.type} · ${dateRange(c)}`}
+              title={c.name}
+              description={[c.location, c.channel].filter(Boolean).join(' · ') || undefined}
+              figures={
+                <Figures
+                  items={[
+                    { label: 'Leads', value: c.totalLeads },
+                    { label: 'Booked', value: c.funnel.APPOINTMENT_BOOKED },
+                    { label: 'Converted', value: c.funnel.CONVERTED },
+                    {
+                      label: 'Conversion',
+                      value:
+                        c.totalLeads > 0
+                          ? Math.round((c.funnel.CONVERTED / c.totalLeads) * 100)
+                          : undefined,
+                      unit: '%',
+                    },
+                  ]}
                 />
-              )}
-            </Card>
-          )}
+              }
+              action={<CampaignStatusBadge status={c.status} />}
+            />
+
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="flex min-w-0 flex-col gap-8 px-5 pb-8 pt-6 sm:px-8">
+                <InkSection
+                  number={1}
+                  title="Funnel"
+                  meta={`${c.totalLeads} ${c.totalLeads === 1 ? 'lead' : 'leads'}, counted by where they are now`}
+                >
+                  {c.totalLeads === 0 ? (
+                    <p className="py-3 text-[13px] text-fg-muted">
+                      No leads are tagged with this campaign yet. Add a lead and choose this
+                      campaign as the source.
+                    </p>
+                  ) : (
+                    <FunnelBar funnel={c.funnel} total={c.totalLeads} />
+                  )}
+                </InkSection>
+
+                {canLeads && (
+                  <InkSection
+                    number={2}
+                    title="Leads from this campaign"
+                    meta={leads.data ? `${leads.data.length}` : undefined}
+                    action={
+                      canAddLead ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<Plus size={16} aria-hidden="true" />}
+                          onClick={() => setAdding(true)}
+                        >
+                          Add lead
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    <div className="-mx-5 sm:-mx-8">
+                      {leads.errorStatus !== undefined && !leads.loading ? (
+                        <ErrorPanel message={leads.errorMessage} onRetry={leads.reload} />
+                      ) : (
+                        <LeadsTable
+                          showCampaign={false}
+                          rows={leads.data}
+                          loading={leads.loading}
+                          empty={
+                            <EmptyState
+                              icon={UsersThree}
+                              title="No leads yet"
+                              description="Leads added with this campaign as their source appear here."
+                            />
+                          }
+                        />
+                      )}
+                    </div>
+                  </InkSection>
+                )}
+              </div>
+
+              <SheetRail label="Campaign status and details">
+                {(forward || cancel) && (
+                  <InkSection title="Status">
+                    <div className="mt-3 flex flex-col gap-2">
+                      {forward && (
+                        <Button
+                          className="w-full"
+                          loading={moving === forward.to}
+                          onClick={() => void move(forward.to)}
+                        >
+                          {forward.label}
+                        </Button>
+                      )}
+                      {cancel && (
+                        <Button
+                          className="w-full"
+                          variant="ghost"
+                          onClick={() => setConfirmCancel(true)}
+                        >
+                          {cancel.label}
+                        </Button>
+                      )}
+                      <FormError message={error && !confirmCancel ? error : undefined} />
+                    </div>
+                  </InkSection>
+                )}
+                <InkSection title="Details">
+                  <dl className="divide-y divide-line">
+                    <LedgerLine
+                      label="Type"
+                      value={<span className="font-sans">{TYPE_LABELS[c.type] ?? c.type}</span>}
+                    />
+                    {c.location && (
+                      <LedgerLine
+                        label="Location"
+                        value={<span className="font-sans">{c.location}</span>}
+                      />
+                    )}
+                    {c.channel && (
+                      <LedgerLine
+                        label="Channel"
+                        value={<span className="font-sans">{c.channel}</span>}
+                      />
+                    )}
+                    <LedgerLine label="Dates" value={dateRange(c)} />
+                    <LedgerLine
+                      label="Budget"
+                      value={c.budgetMinor !== null ? formatMoney(c.budgetMinor) : 'Not set'}
+                      tone={c.budgetMinor !== null ? undefined : 'muted'}
+                    />
+                    {c.budgetMinor !== null && c.funnel.CONVERTED > 0 && (
+                      <LedgerLine
+                        label="Per patient"
+                        value={formatMoney(Math.round(c.budgetMinor / c.funnel.CONVERTED))}
+                        tone="muted"
+                      />
+                    )}
+                    <LedgerLine
+                      label="Created by"
+                      value={
+                        <span className="font-sans">{c.createdBy?.fullName ?? 'Unknown'}</span>
+                      }
+                    />
+                  </dl>
+                </InkSection>
+                {c.notes && (
+                  <InkSection title="Notes">
+                    <MarginNote className="mt-2 whitespace-pre-wrap text-[13px] text-fg">
+                      {c.notes}
+                    </MarginNote>
+                  </InkSection>
+                )}
+              </SheetRail>
+            </div>
+          </InkSheet>
 
           <Dialog
             open={confirmCancel}

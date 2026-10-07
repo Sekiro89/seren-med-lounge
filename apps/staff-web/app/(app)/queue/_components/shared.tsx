@@ -80,13 +80,24 @@ export function minutesWaiting(row: QueueRow, now: number): number {
   return Math.max(0, Math.floor((now - new Date(row.waitingSince).getTime()) / 60_000));
 }
 
+/** "4 min", "1 h 05 min". */
+export function formatWait(minutes: number): string {
+  return minutes < 60
+    ? `${minutes} min`
+    : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
+}
+
+/** Amber after 20 minutes, red after 40 (always beside the word "Waiting" or "Longest wait"). */
+export function waitTone(minutes: number): string {
+  return minutes >= 40 ? 'text-danger-fg' : minutes >= 20 ? 'text-warning-fg' : 'text-fg';
+}
+
 /** "4 min", "1 h 05 min"; amber after 20 minutes, red after 40. */
 export function WaitTime({ minutes }: { minutes: number }) {
-  const text =
-    minutes < 60
-      ? `${minutes} min`
-      : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
-  const tone =
-    minutes >= 40 ? 'text-danger-fg' : minutes >= 20 ? 'text-warning-fg' : 'text-fg-muted';
-  return <span className={`tabular font-mono text-[13px] font-medium ${tone}`}>{text}</span>;
+  const tone = minutes < 20 ? 'text-fg-muted' : waitTone(minutes);
+  return (
+    <span className={`tabular font-mono text-[13px] font-medium ${tone}`}>
+      {formatWait(minutes)}
+    </span>
+  );
 }

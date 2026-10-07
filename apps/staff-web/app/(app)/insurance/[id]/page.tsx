@@ -5,14 +5,22 @@ import Link from 'next/link';
 import { ArrowLeft, FileX, Warning } from '@phosphor-icons/react';
 import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
+import { Card } from '../../../../components/ui/card';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { Field, Textarea } from '../../../../components/ui/fields';
 import { NoAccess } from '../../../../components/ui/no-access';
-import { PageHeader } from '../../../../components/ui/page-header';
+import {
+  Figures,
+  InkSection,
+  InkSheet,
+  LedgerLine,
+  MarginNote,
+  SheetHead,
+  SheetRail,
+} from '../../../../components/ui/ink';
 import { Skeleton } from '../../../../components/ui/skeleton';
 import { apiClient } from '../../../../lib/api-client';
-import { formatDate, formatMoney, fullName } from '../../../../lib/format';
+import { formatDate, fullName } from '../../../../lib/format';
 import { invalidProps, req, requiredProps } from '../../../../lib/forms';
 import { homeFor } from '../../../../lib/nav';
 import { can } from '../../../../lib/permissions';
@@ -24,23 +32,12 @@ import {
   canSettle,
   errorText,
   NEXT_STEPS,
+  rupeeFigure,
   STATUS_LABEL,
   STATUS_TONE,
   type CaseDetail,
   type NextStep,
 } from '../_components/insurance-types';
-
-function Amount({ label, value, hint }: { label: string; value: number | null; hint?: string }) {
-  return (
-    <div>
-      <dt className="text-[13px] text-fg-muted">{label}</dt>
-      <dd className="tabular font-mono mt-1 text-xl font-semibold">
-        {value === null ? <span className="text-fg-subtle">Not recorded</span> : formatMoney(value)}
-      </dd>
-      {hint && <p className="mt-1 text-[13px] text-fg-subtle">{hint}</p>}
-    </div>
-  );
-}
 
 export default function InsuranceCasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -66,10 +63,10 @@ export default function InsuranceCasePage({ params }: { params: Promise<{ id: st
   const back = (
     <Link
       href="/insurance"
-      className="mb-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-fg-muted hover:text-fg"
+      className="mb-3 inline-flex items-center gap-1 text-[13px] font-medium text-primary hover:text-primary-hover"
     >
       <ArrowLeft size={16} aria-hidden="true" />
-      All cases
+      Insurance cases
     </Link>
   );
 
@@ -107,11 +104,11 @@ export default function InsuranceCasePage({ params }: { params: Promise<{ id: st
     return (
       <>
         {back}
-        <div className="flex flex-col gap-8">
+        <InkSheet className="flex flex-col gap-6 p-8">
           <Skeleton className="h-10 w-72" />
-          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-16 w-full" />
           <Skeleton className="h-40 w-full" />
-        </div>
+        </InkSheet>
       </>
     );
   }
@@ -146,100 +143,142 @@ export default function InsuranceCasePage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const amount = (value: number | null) => (value === null ? undefined : rupeeFigure(value));
+  const references = [
+    data.preAuthReference && { label: 'Pre-auth reference', value: data.preAuthReference },
+    data.claimReference && { label: 'Claim reference', value: data.claimReference },
+  ].filter(Boolean) as { label: string; value: string }[];
+
   return (
     <>
       {back}
-      <PageHeader
-        title={fullName(data.patient)}
-        description={`${data.policy.insurerName}${data.policy.tpaName ? `, TPA ${data.policy.tpaName}` : ''}. Policy ${data.policy.policyNumber}. Opened ${formatDate(data.createdAt)}.`}
-        action={<Badge tone={STATUS_TONE[data.status]}>{STATUS_LABEL[data.status]}</Badge>}
-      />
+      <InkSheet>
+        <SheetHead
+          eyebrow={`Insurance case · opened ${formatDate(data.createdAt)}`}
+          title={fullName(data.patient)}
+          description={
+            <>
+              {data.policy.insurerName}
+              {data.policy.tpaName ? `, TPA ${data.policy.tpaName}` : ''} · policy{' '}
+              <span className="tabular font-mono">{data.policy.policyNumber}</span>
+            </>
+          }
+          figures={
+            <Figures
+              items={[
+                { label: 'Requested', value: amount(data.requestedAmountMinor) },
+                { label: 'Approved', value: amount(data.approvedAmountMinor) },
+                { label: 'Settled', value: amount(data.settledAmountMinor) },
+              ]}
+            />
+          }
+          action={<Badge tone={STATUS_TONE[data.status]}>{STATUS_LABEL[data.status]}</Badge>}
+        />
 
-      <div className="flex flex-col gap-8">
-        <Card>
-          <div className="flex flex-col gap-8 px-6 py-6">
-            <StageTracker detail={data} />
-            <dl className="grid gap-6 border-t border-line pt-6 sm:grid-cols-3">
-              <Amount label="Requested" value={data.requestedAmountMinor} />
-              <Amount
-                label="Approved"
-                value={data.approvedAmountMinor}
-                hint={
-                  data.preAuthReference || data.claimReference
-                    ? [
-                        data.preAuthReference && `Pre-auth ${data.preAuthReference}`,
-                        data.claimReference && `Claim ${data.claimReference}`,
-                      ]
-                        .filter(Boolean)
-                        .join(', ')
-                    : undefined
-                }
-              />
-              <Amount label="Settled" value={data.settledAmountMinor} />
-            </dl>
-            {hasActions && (
-              <div className="flex flex-wrap items-center gap-3 border-t border-line pt-6">
-                {settleable && <Button onClick={() => setSettling(true)}>Settle case</Button>}
-                {steps.map((s) => (
-                  <Button
-                    key={s.to}
-                    variant={s.primary ? 'primary' : 'secondary'}
-                    onClick={() => setStep(s)}
-                  >
-                    {s.label}
-                  </Button>
-                ))}
-              </div>
-            )}
-            {!data.invoiceId && settleable && (
-              <p className="text-[13px] text-fg-subtle">
-                No invoice is linked to this case, so it cannot be settled yet.
-              </p>
-            )}
-          </div>
-        </Card>
+        <div className="border-b border-line px-5 pb-4 pt-6 sm:px-10">
+          <StageTracker detail={data} />
+        </div>
 
-        <Card>
-          <CardHeader title="Notes and history" />
-          <div className="flex flex-col gap-8 px-6 py-6">
-            <form
-              className="flex flex-col gap-4"
-              noValidate
-              onSubmit={(e) => {
-                e.preventDefault();
-                void addNote();
-              }}
-            >
-              <Field
-                label={req('Add a note')}
-                htmlFor="case-note"
-                error={noteError}
-                helper="Steps here are recorded by hand. No insurer system is connected."
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 px-5 pb-8 pt-6 sm:px-8">
+            <InkSection number={1} title="Notes and history" meta={`${data.events.length} entries`}>
+              <form
+                className="mt-3 flex flex-col gap-3"
+                noValidate
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void addNote();
+                }}
               >
-                <Textarea
-                  id="case-note"
-                  maxLength={4000}
-                  {...requiredProps}
-                  {...invalidProps(noteError)}
-                  value={note}
-                  onChange={(e) => {
-                    setNote(e.target.value);
-                    setNoteError(undefined);
-                  }}
-                />
-              </Field>
-              <div>
-                <Button type="submit" variant="secondary" loading={noteBusy}>
-                  Add note
-                </Button>
+                <Field
+                  label={req('Add a note')}
+                  htmlFor="case-note"
+                  error={noteError}
+                  helper="Steps here are recorded by hand. No insurer system is connected."
+                >
+                  <Textarea
+                    id="case-note"
+                    maxLength={4000}
+                    {...requiredProps}
+                    {...invalidProps(noteError)}
+                    value={note}
+                    onChange={(e) => {
+                      setNote(e.target.value);
+                      setNoteError(undefined);
+                    }}
+                  />
+                </Field>
+                <div>
+                  <Button type="submit" variant="secondary" size="sm" loading={noteBusy}>
+                    Add note
+                  </Button>
+                </div>
+              </form>
+              <div className="mt-6 border-t border-line">
+                <CaseTimeline events={data.events} />
               </div>
-            </form>
-            <div className="border-t border-line pt-8">
-              <CaseTimeline events={data.events} />
-            </div>
+            </InkSection>
           </div>
-        </Card>
-      </div>
+
+          <SheetRail label="Case actions">
+            <InkSection title="Next step">
+              {hasActions ? (
+                <div className="mt-3 flex flex-col gap-2">
+                  {settleable && (
+                    <Button className="w-full" onClick={() => setSettling(true)}>
+                      Settle case
+                    </Button>
+                  )}
+                  {steps.map((s) => (
+                    <Button
+                      key={s.to}
+                      className="w-full"
+                      variant={s.primary && !settleable ? 'primary' : 'secondary'}
+                      onClick={() => setStep(s)}
+                    >
+                      {s.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <MarginNote className="mt-2">
+                  Nothing left to do on this case. It stays here for the record.
+                </MarginNote>
+              )}
+              {!data.invoiceId && settleable && (
+                <MarginNote className="mt-2">
+                  No invoice is linked to this case, so it cannot be settled yet.
+                </MarginNote>
+              )}
+            </InkSection>
+
+            <InkSection title="Policy">
+              <dl className="mt-1 divide-y divide-line">
+                <LedgerLine
+                  label="Insurer"
+                  value={<span className="font-sans">{data.policy.insurerName}</span>}
+                />
+                {data.policy.tpaName && (
+                  <LedgerLine
+                    label="TPA"
+                    value={<span className="font-sans">{data.policy.tpaName}</span>}
+                  />
+                )}
+                <LedgerLine label="Policy number" value={data.policy.policyNumber} />
+                {references.map((r) => (
+                  <LedgerLine key={r.label} label={r.label} value={r.value} />
+                ))}
+                <LedgerLine
+                  label="Invoice"
+                  value={data.invoiceId ? 'Linked' : 'Not linked'}
+                  tone={data.invoiceId ? undefined : 'muted'}
+                />
+                <LedgerLine label="Last updated" value={formatDate(data.updatedAt)} tone="muted" />
+              </dl>
+            </InkSection>
+          </SheetRail>
+        </div>
+      </InkSheet>
 
       <TransitionDialog detail={data} step={step} onClose={() => setStep(null)} onDone={reload} />
       <SettleDialog

@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { ApiError } from '@serenemed/api-client';
 import { Button } from '../../../../components/ui/button';
-import { Badge } from '../../../../components/ui/badge';
+import { HATCH_STYLE, StatusWord } from '../../../../components/ui/ink';
 import { clinicToday } from '../../../../lib/format';
 
 export interface Medication {
@@ -56,7 +56,9 @@ export function formatExpiry(iso: string): string {
     month: 'short',
     year: 'numeric',
     timeZone: 'UTC',
-  }).format(new Date(iso.slice(0, 10) + 'T00:00:00Z'));
+  })
+    .format(new Date(iso.slice(0, 10) + 'T00:00:00Z'))
+    .replace(/\bSept\b/, 'Sep');
 }
 
 export function medicineLabel(m: { name: string; strength: string | null }): string {
@@ -69,9 +71,9 @@ export function ExpiryCell({ iso }: { iso: string }) {
     <span className="flex items-center gap-2 whitespace-nowrap">
       <span className="tabular font-mono">{formatExpiry(iso)}</span>
       {days < 0 ? (
-        <Badge tone="danger">Expired</Badge>
+        <StatusWord tone="danger">Expired</StatusWord>
       ) : days < EXPIRY_WARNING_DAYS ? (
-        <Badge tone="warning">{days === 0 ? 'Today' : `${days}d left`}</Badge>
+        <StatusWord tone="warning">{days === 0 ? 'Expires today' : `${days}d left`}</StatusWord>
       ) : null}
     </span>
   );
@@ -95,7 +97,7 @@ export function ErrorPanel({
   onRetry: () => void;
 }): ReactNode {
   return (
-    <div role="alert" className="flex items-center justify-between gap-4 px-5 py-6">
+    <div role="alert" className="flex items-center justify-between gap-4 px-5 py-6 sm:px-8">
       <p className="text-sm text-danger-fg">{message}</p>
       <Button variant="secondary" size="sm" onClick={onRetry}>
         Try again
@@ -107,7 +109,7 @@ export function ErrorPanel({
 export function FormError({ message }: { message?: string }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg">
+    <p role="alert" className="bg-danger-bg px-3 py-2 text-sm text-danger-fg">
       {message}
     </p>
   );
@@ -118,4 +120,32 @@ export function rupeesToPaise(value: string): number | undefined {
   if (value.trim() === '') return undefined;
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : Number.NaN;
+}
+
+/** Days shown on the expiry ruler: half a year ahead. */
+const EXPIRY_AXIS_DAYS = 180;
+
+/**
+ * Shelf life as a ruler (design system 4): a hairline axis from today to
+ * six months out, the first 30 days hatched as the warning zone, and a
+ * tick where the batch expires (red at the left edge once expired).
+ * Decorative; the date and the word sit beside it.
+ */
+export function ExpiryRuler({ iso }: { iso: string }) {
+  const days = daysUntil(iso);
+  const pos = (d: number) => `${Math.min(100, Math.max(0, (d / EXPIRY_AXIS_DAYS) * 100))}%`;
+  const tone = days < 0 ? 'bg-danger' : days < EXPIRY_WARNING_DAYS ? 'bg-warning-fg' : 'bg-fg';
+  return (
+    <div aria-hidden="true" className="relative h-3 w-28">
+      <div
+        className="absolute top-[2px] h-[7px]"
+        style={{ left: 0, width: pos(EXPIRY_WARNING_DAYS), ...HATCH_STYLE }}
+      />
+      <div className="absolute inset-x-0 top-[5px] h-px bg-control" />
+      <div
+        className={`absolute top-0 h-3 w-[2px] ${tone}`}
+        style={{ left: `calc(${pos(days)} - ${days >= EXPIRY_AXIS_DAYS ? 2 : 1}px)` }}
+      />
+    </div>
+  );
 }

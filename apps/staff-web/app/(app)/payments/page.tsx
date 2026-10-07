@@ -4,11 +4,8 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CurrencyInr, Warning } from '@phosphor-icons/react';
-import { PersonCell } from '../../../components/ui/avatar';
-import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { DataTable, type Column } from '../../../components/ui/data-table';
 import {
   DateRangePicker,
   presetRange,
@@ -17,11 +14,20 @@ import {
   type RangePreset,
 } from '../../../components/ui/date-range';
 import { EmptyState } from '../../../components/ui/empty-state';
-import { Select } from '../../../components/ui/fields';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
-import { KPI_STRIP } from '../../../components/ui/kpi-tile';
+import {
+  Figures,
+  InkFilters,
+  InkSection,
+  InkSheet,
+  LedgerLine,
+  MarginNote,
+  RuledBar,
+  SheetHead,
+  SheetRail,
+} from '../../../components/ui/ink';
+import { LedgerTable, type LedgerColumn } from '../../../components/ui/ledger-table';
 import { formatDate, formatMoney, formatTime, fullName, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
@@ -105,44 +111,75 @@ function PaymentsLedger() {
   const rows = data?.filter((p) => !method || p.method === method);
   const collected = rows?.reduce((sum, p) => sum + p.amountMinor, 0);
   const refunded = rows?.reduce((sum, p) => sum + refundedOf(p), 0);
-  const byMethod = METHODS.map((m) => ({
-    method: m,
-    amount: data?.filter((p) => p.method === m).reduce((sum, p) => sum + p.amountMinor, 0) ?? 0,
-  })).filter((m) => m.amount > 0);
+  const byMethod = METHODS.map((m) => {
+    const set = data?.filter((p) => p.method === m) ?? [];
+    return { method: m, n: set.length, amount: set.reduce((sum, p) => sum + p.amountMinor, 0) };
+  });
+  const maxMethod = Math.max(1, ...byMethod.map((m) => m.amount));
+  const takers = new Map<string, { n: number; amount: number }>();
+  for (const p of rows ?? []) {
+    const key = p.receivedBy?.fullName ?? 'Unknown';
+    const t = takers.get(key) ?? { n: 0, amount: 0 };
+    takers.set(key, { n: t.n + 1, amount: t.amount + p.amountMinor });
+  }
+  const byTaker = [...takers.entries()].sort((a, b) => b[1].amount - a[1].amount);
   const showsMultipleDays = range.from !== range.to;
 
-  const columns: Column<PaymentRow>[] = [
+  const columns: LedgerColumn<PaymentRow>[] = [
     {
       header: showsMultipleDays ? 'When' : 'Time',
+      width: showsMultipleDays ? 'w-[150px]' : 'w-[72px]',
+      numeric: true,
       render: (p) => (
-        <span className="tabular whitespace-nowrap font-mono">
-          {showsMultipleDays ? `${formatDate(p.createdAt)}, ` : ''}
+        <span className="whitespace-nowrap">
+          {showsMultipleDays && <span className="text-fg-muted">{formatDate(p.createdAt)} </span>}
           {formatTime(p.createdAt)}
         </span>
       ),
     },
-    { header: 'Patient', render: (p) => <PersonCell name={fullName(p.invoice.patient)} /> },
     {
       header: 'Bill',
+      width: 'w-[116px]',
       render: (p) => (
         <Link
           href={`/billing?invoice=${p.invoice.id}`}
-          className="font-mono font-medium text-primary hover:text-primary-hover"
+          className="tabular whitespace-nowrap font-mono font-medium text-primary hover:text-primary-hover"
           title="Open this bill"
         >
           {invoiceLabel(p.invoice.number)}
         </Link>
       ),
     },
-    { header: 'Method', render: (p) => methodLabel(p.method) },
+    {
+      header: 'Patient',
+      render: (p) => <span className="font-medium">{fullName(p.invoice.patient)}</span>,
+    },
+    { header: 'Method', width: 'w-[96px]', render: (p) => methodLabel(p.method) },
     {
       header: 'Reference',
       render: (p) =>
         p.reference ? (
-          <span className="tabular font-mono text-fg-muted">{p.reference}</span>
+          <span className="tabular font-mono text-[12px] text-fg-muted">{p.reference}</span>
         ) : (
           <span className="text-fg-subtle">None</span>
         ),
+    },
+    {
+      header: 'Taken by',
+      render: (p) => p.receivedBy?.fullName ?? <span className="text-fg-subtle">Unknown</span>,
+    },
+    {
+      header: 'Refunded',
+      align: 'right',
+      numeric: true,
+      render: (p) => {
+        const amount = refundedOf(p);
+        return amount > 0 ? (
+          <span className="text-danger-fg">-{formatMoney(amount)}</span>
+        ) : (
+          <span className="text-fg-subtle">-</span>
+        );
+      },
     },
     {
       header: 'Amount',
@@ -150,148 +187,185 @@ function PaymentsLedger() {
       numeric: true,
       render: (p) => <span className="font-medium">{formatMoney(p.amountMinor)}</span>,
     },
-    {
-      header: 'Taken by',
-      render: (p) => p.receivedBy?.fullName ?? <span className="text-fg-subtle">Unknown</span>,
-    },
-    {
-      header: 'Refunds',
-      render: (p) => {
-        const amount = refundedOf(p);
-        return amount > 0 ? (
-          <Badge tone="warning">Refunded {formatMoney(amount)}</Badge>
-        ) : (
-          <span className="text-fg-subtle">None</span>
-        );
-      },
-    },
   ];
 
   return (
-    <>
-      <PageHeader
+    <InkSheet>
+      <SheetHead
         eyebrow={rangeLabel(range)}
         title="Payments"
         description="Every payment taken, newest first, with any refunds against it."
+        figures={
+          <Figures
+            size="sm"
+            loading={loading && !data}
+            items={[
+              {
+                label: 'Collected',
+                value: collected === undefined ? undefined : formatMoney(collected),
+                hint: rows ? `${rows.length} payment${rows.length === 1 ? '' : 's'}` : undefined,
+              },
+              {
+                label: 'Refunded',
+                value: refunded === undefined ? undefined : formatMoney(refunded),
+                tone: refunded ? 'danger' : undefined,
+              },
+              {
+                label: 'Net',
+                value:
+                  collected === undefined || refunded === undefined
+                    ? undefined
+                    : formatMoney(collected - refunded),
+                hint: method ? `${METHOD_LABEL[method]} only` : 'All methods',
+              },
+            ]}
+          />
+        }
       />
 
-      <Card className="mb-6">
-        <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-start lg:justify-between">
-          <DateRangePicker
-            value={range}
-            preset={preset}
-            onChange={(next, key) => {
-              setRange(next);
-              setPreset(key);
-            }}
-          />
-          <div className="w-48">
-            <label htmlFor="pay-method" className="sr-only">
-              Method
-            </label>
-            <Select
-              id="pay-method"
-              value={method}
-              onChange={(e) => setMethod(e.target.value as '' | Method)}
-              className="h-9"
-            >
-              <option value="">All methods</option>
-              {METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {METHOD_LABEL[m]}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
-      </Card>
-
-      <div className={`mb-6 sm:grid-cols-3 ${KPI_STRIP}`}>
-        <Total label="Collected" value={collected} loading={loading} />
-        <Total label="Refunded" value={refunded} loading={loading} />
-        <Total
-          label="Net"
-          value={
-            collected === undefined || refunded === undefined ? undefined : collected - refunded
-          }
-          loading={loading}
-          strong
+      <div className="border-b border-line px-5 py-4 sm:px-8">
+        <DateRangePicker
+          value={range}
+          preset={preset}
+          onChange={(next, key) => {
+            setRange(next);
+            setPreset(key);
+          }}
         />
       </div>
 
-      {!loading && byMethod.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {byMethod.map((m) => (
-            <Badge key={m.method} tone={method === m.method ? 'info' : 'neutral'}>
-              {METHOD_LABEL[m.method]} {formatMoney(m.amount)}
-            </Badge>
-          ))}
-        </div>
-      )}
-
-      <Card>
-        {errorStatus !== undefined && !data ? (
-          <div role="alert" className="flex items-center gap-3 px-6 py-6 text-sm text-danger-fg">
-            <Warning size={20} aria-hidden="true" />
-            <span>The payments could not be loaded.</span>
-            <Button size="sm" variant="secondary" onClick={reload}>
-              Retry
-            </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section aria-label="Payments ledger" className="min-w-0">
+          <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-line px-5 py-2 sm:px-8">
+            <h2 className="text-[14px] font-semibold text-fg">Ledger</h2>
+            <InkFilters
+              label="Method"
+              value={method}
+              onChange={setMethod}
+              options={[
+                { key: '', label: 'All methods', count: data?.length },
+                ...METHODS.map((m) => ({
+                  key: m,
+                  label: METHOD_LABEL[m],
+                  count: data ? byMethod.find((b) => b.method === m)?.n : undefined,
+                })),
+              ]}
+            />
           </div>
-        ) : (
-          <DataTable
-            columns={columns}
-            rows={rows}
-            getRowKey={(p) => p.id}
-            loading={loading}
-            empty={
-              <EmptyState
-                icon={CurrencyInr}
-                title={method ? `No  payments` : 'No payments'}
-                description={
-                  method
-                    ? 'Choose another method or a wider period.'
-                    : 'Payments recorded against invoices in this period appear here.'
-                }
-                action={
-                  method ? (
-                    <Button variant="secondary" onClick={() => setMethod('')}>
-                      Show all methods
-                    </Button>
-                  ) : undefined
+          {errorStatus !== undefined && !data ? (
+            <div role="alert" className="flex items-center gap-3 px-8 py-6 text-sm text-danger-fg">
+              <Warning size={20} aria-hidden="true" />
+              <span>The payments could not be loaded.</span>
+              <Button size="sm" variant="secondary" onClick={reload}>
+                Retry
+              </Button>
+            </div>
+          ) : (
+            <>
+              <LedgerTable
+                columns={columns}
+                rows={rows}
+                getRowKey={(p) => p.id}
+                loading={loading}
+                minWidth={860}
+                caption="Payments"
+                empty={
+                  <EmptyState
+                    icon={CurrencyInr}
+                    title={method ? `No ${METHOD_LABEL[method]} payments` : 'No payments'}
+                    description={
+                      method
+                        ? 'Choose another method or a wider period.'
+                        : 'Payments recorded against invoices in this period appear here.'
+                    }
+                    action={
+                      method ? (
+                        <Button variant="secondary" onClick={() => setMethod('')}>
+                          Show all methods
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 }
               />
-            }
-          />
-        )}
-      </Card>
-    </>
-  );
-}
+              {rows && rows.length > 0 && collected !== undefined && refunded !== undefined && (
+                <dl className="ml-auto max-w-[320px] px-5 pb-6 pt-2 sm:px-8">
+                  <LedgerLine label="Collected" value={formatMoney(collected)} />
+                  <LedgerLine
+                    label="Refunded"
+                    value={refunded > 0 ? `-${formatMoney(refunded)}` : formatMoney(0)}
+                    tone={refunded > 0 ? 'danger' : 'muted'}
+                  />
+                  <div className="border-y-2 border-double border-fg">
+                    <LedgerLine label="Net" value={formatMoney(collected - refunded)} strong />
+                  </div>
+                </dl>
+              )}
+            </>
+          )}
+        </section>
 
-function Total({
-  label,
-  value,
-  loading,
-  strong,
-}: {
-  label: string;
-  value: number | undefined;
-  loading: boolean;
-  strong?: boolean;
-}) {
-  return (
-    <div className="bg-surface px-6 py-5">
-      <p className="text-[13px] font-medium text-fg-muted">{label}</p>
-      {loading ? (
-        <Skeleton className="mt-2 h-8 w-32" />
-      ) : (
-        <p
-          className={`tabular mt-2 font-mono text-2xl leading-8 tracking-tight text-fg ${strong ? 'font-semibold' : 'font-medium'}`}
-        >
-          {value === undefined ? '-' : formatMoney(value)}
-        </p>
-      )}
-    </div>
+        <SheetRail label="Payments by method and by staff">
+          <InkSection title="By method" meta={data ? 'All methods, this period' : undefined}>
+            {loading && !data ? (
+              <Skeleton className="mt-2 h-24 w-full" />
+            ) : (
+              <ul className="divide-y divide-line">
+                {byMethod.map((m) => (
+                  <li key={m.method} className="py-2 text-[13px]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className={method === m.method ? 'font-medium text-fg' : 'text-fg'}>
+                        {METHOD_LABEL[m.method]}
+                        <span className="tabular ml-1.5 font-mono text-[12px] text-fg-subtle">
+                          {m.n}
+                        </span>
+                      </span>
+                      <span className="tabular font-mono text-fg">{formatMoney(m.amount)}</span>
+                    </div>
+                    <RuledBar
+                      value={m.amount}
+                      max={maxMethod}
+                      tone={method === m.method ? 'primary' : 'ink'}
+                      className="mt-1.5"
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </InkSection>
+
+          <InkSection title="Taken by">
+            {loading && !data ? (
+              <Skeleton className="mt-2 h-16 w-full" />
+            ) : byTaker.length === 0 ? (
+              <MarginNote className="pt-2">No payments in this period.</MarginNote>
+            ) : (
+              <ul className="divide-y divide-line">
+                {byTaker.map(([name, t]) => (
+                  <li
+                    key={name}
+                    className="flex items-baseline justify-between gap-3 py-2 text-[13px]"
+                  >
+                    <span className="truncate text-fg">
+                      {name}
+                      <span className="tabular ml-1.5 font-mono text-[12px] text-fg-subtle">
+                        {t.n}
+                      </span>
+                    </span>
+                    <span className="tabular shrink-0 font-mono text-fg">
+                      {formatMoney(t.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </InkSection>
+
+          <MarginNote>
+            Refunds are issued from the bill. Open a bill number to see it as the printed invoice.
+          </MarginNote>
+        </SheetRail>
+      </div>
+    </InkSheet>
   );
 }

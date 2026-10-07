@@ -21,7 +21,9 @@ const shortDay = (date: string) =>
     timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
-  }).format(new Date(`${date}T12:00:00+05:30`));
+  })
+    .format(new Date(`${date}T12:00:00+05:30`))
+    .replace(/\bSept\b/, 'Sep');
 
 const compactMoney = (minor: number) => {
   const rupees = minor / 100;
@@ -75,10 +77,10 @@ export function DayChart({ points }: { points: DayPoint[] }) {
   const hasMoney = points.some((p) => p.collectedMinor > 0);
 
   return (
-    <div ref={wrap} className="px-4 pb-4 pt-2">
-      <div className="mb-2 flex flex-wrap items-center gap-5 px-2 text-[13px] text-fg-muted">
+    <div ref={wrap} className="pb-2 pt-2">
+      <div className="mb-2 flex flex-wrap items-center gap-5 text-[12px] text-fg-muted">
         <span className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block h-3 w-3 bg-primary" />
+          <span aria-hidden="true" className="inline-block h-3 w-3 bg-fg" />
           Visits
         </span>
         <span className="flex items-center gap-2">
@@ -88,8 +90,8 @@ export function DayChart({ points }: { points: DayPoint[] }) {
               y1="5"
               x2="22"
               y2="5"
-              stroke="var(--control)"
-              strokeWidth="2"
+              stroke="var(--primary)"
+              strokeWidth="1.5"
               strokeDasharray="4 3"
             />
             <circle
@@ -97,8 +99,8 @@ export function DayChart({ points }: { points: DayPoint[] }) {
               cy="5"
               r="3"
               fill="var(--surface)"
-              stroke="var(--control)"
-              strokeWidth="2"
+              stroke="var(--primary)"
+              strokeWidth="1.5"
             />
           </svg>
           Collected
@@ -127,6 +129,7 @@ export function DayChart({ points }: { points: DayPoint[] }) {
               y={PAD.top + innerH * (1 - t) + 4}
               textAnchor="end"
               fontSize="11"
+              fontFamily="var(--font-plex-mono)"
               fill="var(--fg-subtle)"
             >
               {Math.round(maxVisits * t)}
@@ -137,6 +140,7 @@ export function DayChart({ points }: { points: DayPoint[] }) {
                 y={PAD.top + innerH * (1 - t) + 4}
                 textAnchor="start"
                 fontSize="11"
+                fontFamily="var(--font-plex-mono)"
                 fill="var(--fg-subtle)"
               >
                 {compactMoney(maxMoney * t)}
@@ -155,8 +159,7 @@ export function DayChart({ points }: { points: DayPoint[] }) {
               y={yVisits(p.visits)}
               width={barW}
               height={Math.max(0, PAD.top + innerH - yVisits(p.visits))}
-              rx={Math.min(3, barW / 2)}
-              fill="var(--primary)"
+              fill="var(--fg)"
             />
             {i % labelEvery === 0 && (
               <text
@@ -164,6 +167,7 @@ export function DayChart({ points }: { points: DayPoint[] }) {
                 y={HEIGHT - PAD.bottom + 18}
                 textAnchor="middle"
                 fontSize="11"
+                fontFamily="var(--font-plex-mono)"
                 fill="var(--fg-subtle)"
               >
                 {shortDay(p.date)}
@@ -176,8 +180,8 @@ export function DayChart({ points }: { points: DayPoint[] }) {
           <path
             d={linePath}
             fill="none"
-            stroke="var(--control)"
-            strokeWidth="2"
+            stroke="var(--primary)"
+            strokeWidth="1.5"
             strokeDasharray="5 4"
             strokeLinejoin="round"
           />
@@ -191,8 +195,8 @@ export function DayChart({ points }: { points: DayPoint[] }) {
                 cy={yMoney(p.collectedMinor)}
                 r="3.5"
                 fill="var(--surface)"
-                stroke="var(--control)"
-                strokeWidth="2"
+                stroke="var(--primary)"
+                strokeWidth="1.5"
               >
                 <title>{`${formatDate(`${p.date}T12:00:00+05:30`)}: ${formatMoney(p.collectedMinor)} collected`}</title>
               </circle>

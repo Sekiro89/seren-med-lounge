@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowFatLineUp,
   CalendarCheck,
@@ -15,14 +16,20 @@ import {
 } from '@phosphor-icons/react';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { PersonCell } from '../../../components/ui/avatar';
-import { StatusBadge } from '../../../components/ui/badge';
-import { DataTable, type Column } from '../../../components/ui/data-table';
+import { type Column } from '../../../components/ui/data-table';
 import { EmptyState } from '../../../components/ui/empty-state';
+import {
+  Figures,
+  InkFilters,
+  InkSheet,
+  InkStatus,
+  SheetBar,
+  SheetHead,
+} from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
-import { Tabs } from '../../../components/ui/tabs';
+import { RuledTable } from '../../../components/ui/ruled-table';
 import { formatDate, formatTime, fullName, humanize } from '../../../lib/format';
+import { formatPhone } from '../patients/_components/patient-shared';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
@@ -114,18 +121,41 @@ export default function FollowUpsPage() {
 
   const columns: Column<FollowUpRow>[] = [
     {
+      header: 'Due',
+      render: (r) => {
+        const late = isOpen(r) && new Date(r.dueAt).getTime() < now;
+        return (
+          <span className="tabular block whitespace-nowrap font-mono leading-tight">
+            <span className={late ? 'font-medium text-danger-fg' : 'text-fg'}>
+              {formatDate(r.dueAt)}
+            </span>
+            <span className="block text-[12px] text-fg-muted">
+              {formatTime(r.dueAt)}
+              {late && <span className="ml-1.5 font-sans text-danger-fg">Overdue</span>}
+            </span>
+          </span>
+        );
+      },
+    },
+    {
       header: 'Patient',
       render: (r) => (
-        <div>
-          <PersonCell name={fullName(r.patient)} />
+        <span className="block leading-tight">
+          <Link
+            href={`/patients/${r.patient.id}`}
+            className="block font-medium text-fg hover:text-primary"
+          >
+            {fullName(r.patient)}
+          </Link>
           <a
             href={`tel:${r.patient.phone}`}
-            className="tabular font-mono mt-1 ml-11 inline-flex items-center gap-1 text-xs text-primary-subtle-fg hover:underline"
+            aria-label={`Call ${fullName(r.patient)}`}
+            className="tabular mt-0.5 inline-flex items-center gap-1 font-mono text-[12px] text-fg-muted hover:text-primary"
           >
             <Phone size={12} aria-hidden="true" />
-            {r.patient.phone}
+            {formatPhone(r.patient.phone)}
           </a>
-        </div>
+        </span>
       ),
     },
     {
@@ -134,20 +164,8 @@ export default function FollowUpsPage() {
         const TypeIcon = TYPE_ICONS[r.type] ?? ChatCircleText;
         return (
           <span className="inline-flex items-center gap-2">
-            <TypeIcon size={18} aria-hidden="true" className="text-fg-muted" />
+            <TypeIcon size={16} aria-hidden="true" className="text-fg-muted" />
             {humanize(r.type)}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Due',
-      render: (r) => {
-        const late = isOpen(r) && new Date(r.dueAt).getTime() < now;
-        return (
-          <span className={`tabular font-mono ${late ? 'font-medium text-danger-fg' : ''}`}>
-            {formatDate(r.dueAt)} {formatTime(r.dueAt)}
-            {late && <span className="ml-1.5 text-xs">Overdue</span>}
           </span>
         );
       },
@@ -156,13 +174,18 @@ export default function FollowUpsPage() {
       header: 'Assignee',
       render: (r) => r.assignedTo?.fullName ?? <span className="text-fg-subtle">Unassigned</span>,
     },
-    { header: 'Status', render: (r) => <StatusBadge domain="followUp" status={r.status} /> },
+    { header: 'Status', render: (r) => <InkStatus domain="followUp" status={r.status} /> },
     {
       header: 'Actions',
+      align: 'right',
       render: (r) => (
-        <div className="flex flex-wrap gap-1.5 py-1">
+        <div className="flex flex-wrap justify-end gap-1.5 py-1">
           {isOpen(r) && (
-            <Button size="sm" onClick={() => setActing({ action: 'done', row: r })}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setActing({ action: 'done', row: r })}
+            >
               Mark done
             </Button>
           )}
@@ -179,7 +202,7 @@ export default function FollowUpsPage() {
               )}
               <Button
                 size="sm"
-                variant="secondary"
+                variant="ghost"
                 icon={<ArrowFatLineUp size={16} aria-hidden="true" />}
                 onClick={() => setActing({ action: 'escalate', row: r })}
               >
@@ -204,32 +227,54 @@ export default function FollowUpsPage() {
 
   const empty = EMPTY_COPY[tab];
 
+  const overdueCount = count(overdue);
+  const escalatedCount = count(escalated);
+
   return (
     <>
-      <PageHeader
-        title="Follow-ups"
-        description="Check-ins and reviews to do for patients after treatment."
-        action={
-          <Button icon={<Plus size={18} aria-hidden="true" />} onClick={() => setCreating(true)}>
-            New follow-up
-          </Button>
-        }
-      />
-
-      <Card>
-        <div className="px-5">
-          <Tabs<TabKey>
+      <InkSheet>
+        <SheetHead
+          eyebrow="Aftercare"
+          title="Follow-ups"
+          description="Check-ins and reviews to do for patients after treatment."
+          figures={
+            <Figures
+              loading={today.loading && !today.data}
+              items={[
+                { label: 'Due today', value: count(today) },
+                {
+                  label: 'Overdue',
+                  value: overdueCount,
+                  tone: overdueCount ? 'danger' : undefined,
+                },
+                {
+                  label: 'Escalated',
+                  value: escalatedCount,
+                  tone: escalatedCount ? 'warning' : undefined,
+                },
+                { label: 'Assigned to me', value: count(mine, isOpen) },
+              ]}
+            />
+          }
+          action={
+            <Button icon={<Plus size={18} aria-hidden="true" />} onClick={() => setCreating(true)}>
+              New follow-up
+            </Button>
+          }
+        />
+        <SheetBar>
+          <InkFilters<TabKey>
             label="Follow-up lists"
             value={tab}
             onChange={setTab}
-            tabs={[
+            options={[
               { key: 'today', label: 'Today', count: count(today) },
-              { key: 'overdue', label: 'Overdue', count: count(overdue) },
-              { key: 'escalated', label: 'Escalated', count: count(escalated) },
+              { key: 'overdue', label: 'Overdue', count: overdueCount },
+              { key: 'escalated', label: 'Escalated', count: escalatedCount },
               { key: 'mine', label: 'Mine', count: count(mine, isOpen) },
             ]}
           />
-        </div>
+        </SheetBar>
 
         {active.errorStatus !== undefined && !active.loading ? (
           <div role="alert" className="flex flex-col items-center gap-3 px-6 py-14 text-center">
@@ -244,11 +289,13 @@ export default function FollowUpsPage() {
             </Button>
           </div>
         ) : (
-          <DataTable
+          <RuledTable
             columns={columns}
             rows={rows}
             getRowKey={(r) => r.id}
             loading={active.loading}
+            minWidth={960}
+            isMuted={(r) => !isOpen(r)}
             empty={
               <EmptyState
                 icon={CalendarCheck}
@@ -267,7 +314,7 @@ export default function FollowUpsPage() {
             }
           />
         )}
-      </Card>
+      </InkSheet>
 
       <NewFollowUpDialog
         open={creating}

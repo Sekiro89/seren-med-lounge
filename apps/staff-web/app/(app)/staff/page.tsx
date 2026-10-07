@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Info } from '@phosphor-icons/react';
 import { Card } from '../../../components/ui/card';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
-import { Tabs } from '../../../components/ui/tabs';
+import { StaffRole } from '@serenemed/types';
+import { Figures, InkFilters, InkSheet, SheetBar, SheetHead } from '../../../components/ui/ink';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
@@ -30,38 +30,56 @@ export default function StaffPage() {
   }
 
   return (
-    <>
-      <PageHeader
+    <InkSheet>
+      <SheetHead
+        eyebrow="Administration"
         title="Staff and roles"
         description="Who is on the team, and exactly what each role can see and do."
+        figures={
+          <Figures
+            items={[
+              { label: 'Roles', value: Object.values(StaffRole).length },
+              ...(team.data
+                ? [
+                    {
+                      label: 'Team',
+                      value: team.data.length,
+                      hint: `${team.data.filter((u) => u.isActive).length} active`,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        }
       />
+      <SheetBar>
+        <InkFilters
+          label="Staff and roles"
+          value={view}
+          onChange={setView}
+          options={[
+            { key: 'access', label: 'Roles and access' },
+            { key: 'team', label: 'Team', count: team.data?.length },
+          ]}
+        />
+      </SheetBar>
 
-      <div className="mb-6 flex items-start gap-3 rounded-panel border border-info-fg/20 bg-info-bg px-4 py-3 text-sm text-info-fg">
-        <Info size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
-        <p>
+      <div className="flex items-start gap-3 border-b border-line px-5 py-3 text-[13px] text-fg-muted sm:px-8">
+        <Info size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+        <p className="max-w-[90ch]">
           This is the proposed access plan, shown for the clinic&apos;s confirmation. The rules on
           this screen are the same rules the system enforces on every request, so what you see here
           is exactly how it behaves.
         </p>
       </div>
 
-      <Tabs
-        label="Staff and roles"
-        value={view}
-        onChange={setView}
-        tabs={[
-          { key: 'access', label: 'Roles and access' },
-          { key: 'team', label: 'Team', count: team.data?.length },
-        ]}
-      />
-
-      <div className="mt-6">
-        {view === 'access' ? (
+      {view === 'access' ? (
+        <div className="px-5 pb-10 pt-8 sm:px-8">
           <AccessMatrix currentRole={user.role} />
-        ) : (
-          <TeamTab team={team} currentUserId={user.id} />
-        )}
-      </div>
-    </>
+        </div>
+      ) : (
+        <TeamTab team={team} currentUserId={user.id} />
+      )}
+    </InkSheet>
   );
 }

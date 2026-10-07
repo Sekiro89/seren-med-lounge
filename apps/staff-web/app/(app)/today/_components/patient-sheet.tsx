@@ -35,6 +35,7 @@ interface EncounterDetail {
     temperatureCelsius: number | null;
     bmi: number | null;
     recordedAt: string;
+    recordedBy?: { fullName: string; role: string } | null;
   }>;
   labOrders: Array<{
     items: Array<{
@@ -171,6 +172,7 @@ export function PatientSheet({
             <Badge tone={PHASE[phase].tone}>{tag}</Badge>
           </div>
           <p className="mt-1.5 text-[13px] text-fg">
+            {patient.sex ? `${patient.sex.charAt(0)} · ` : ''}
             {ageYears(patient.dateOfBirth, now)} yrs · born {formatDate(patient.dateOfBirth)}
             {patient.mrn && (
               <>
@@ -235,7 +237,8 @@ export function PatientSheet({
             <h3 className="text-[13px] font-semibold text-fg">Vitals</h3>
             {vitals && (
               <p className="text-[12px] text-fg-muted">
-                Taken at <span className="tabular font-mono">{formatTime(vitals.recordedAt)}</span>
+                Taken{vitals.recordedBy ? ` by ${vitals.recordedBy.fullName}` : ''} at{' '}
+                <span className="tabular font-mono">{formatTime(vitals.recordedAt)}</span>
               </p>
             )}
           </div>

@@ -1,14 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  CheckCircle,
-  Clock,
-  ListNumbers,
-  Megaphone,
-  PersonSimpleWalk,
-  Users,
-} from '@phosphor-icons/react';
+import { ListNumbers, Megaphone } from '@phosphor-icons/react';
 import { ApiError } from '@serenemed/api-client';
 import {
   QUEUE_STATIONS,
@@ -21,21 +14,19 @@ import {
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
 import { EmptyState } from '../../../components/ui/empty-state';
-import { KPI_STRIP, KpiTile } from '../../../components/ui/kpi-tile';
+import { Figures, InkFilters, InkSheet, SheetBar, SheetHead } from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
-import { Tabs } from '../../../components/ui/tabs';
 import { apiClient } from '../../../lib/api-client';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
 import {
-  STATION_ICON,
   STATION_LABEL,
-  WaitTime,
   formatToken,
+  formatWait,
+  waitTone,
   minutesWaiting,
   useNow,
   type QueueRow,
@@ -136,90 +127,85 @@ export default function QueuePage() {
     />
   );
 
+  const waitingCount = active.filter((r) => r.status === 'WAITING').length;
+  const steppedAway = rows.filter((r) => r.status === 'SKIPPED');
+  const finished = rows.filter((r) => r.status === 'COMPLETED').length;
+
   return (
-    <>
-      <PageHeader
+    <InkSheet>
+      <SheetHead
+        eyebrow="Today"
         title="Queue"
         description={
           view === 'desk'
             ? 'Patients waiting for you, next one first. Hand them on with "Send to" when you are done.'
             : 'Every patient in the clinic today and the desk they are waiting at.'
         }
-      />
-
-      {manages && hasDesk && (
-        <div className="mb-6">
-          <Tabs
-            label="Queue view"
-            value={view}
-            onChange={setView}
-            tabs={[
-              { key: 'desk', label: 'My desk' },
-              { key: 'board', label: 'Whole clinic', count: active.length },
+        figures={
+          <Figures
+            loading={loading && !data}
+            items={[
+              { label: 'In the clinic', value: active.length },
+              { label: 'Waiting', value: waitingCount },
+              {
+                label: 'Longest wait',
+                value: !longest
+                  ? 'None'
+                  : longest < 60
+                    ? longest
+                    : `${Math.floor(longest / 60)} h ${String(longest % 60).padStart(2, '0')}`,
+                unit: longest ? 'min' : undefined,
+                tone: longest >= 40 ? 'danger' : longest >= 20 ? 'warning' : undefined,
+              },
+              { label: 'Stepped away', value: steppedAway.length },
+              { label: 'Finished', value: finished },
             ]}
           />
-        </div>
+        }
+      />
+
+      {((manages && hasDesk) || (view === 'desk' && servesDoctorDesk)) && (
+        <SheetBar
+          actions={
+            view === 'desk' && servesDoctorDesk ? (
+              <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-fg">
+                <input
+                  type="checkbox"
+                  checked={mineOnly}
+                  onChange={(e) => setMineOnly(e.target.checked)}
+                  className="size-4 cursor-pointer accent-primary"
+                />
+                Only patients booked with me (and unassigned ones)
+              </label>
+            ) : undefined
+          }
+        >
+          {manages && hasDesk && (
+            <InkFilters<View>
+              label="Queue view"
+              value={view}
+              onChange={setView}
+              options={[
+                { key: 'desk', label: 'My desk' },
+                { key: 'board', label: 'Whole clinic', count: active.length },
+              ]}
+            />
+          )}
+        </SheetBar>
       )}
 
       {error && (
         <p
           role="alert"
-          className="mb-6 rounded-control bg-danger-bg px-4 py-3 text-sm text-danger-fg"
+          className="mx-5 mt-5 rounded-control bg-danger-bg px-4 py-3 text-sm text-danger-fg sm:mx-8"
         >
           {error}
         </p>
       )}
 
-      {view === 'board' && (
-        <div className={`mb-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 ${KPI_STRIP}`}>
-          <KpiTile
-            label="In the clinic now"
-            value={active.length}
-            hint="Waiting or being seen"
-            icon={Users}
-            loading={loading}
-          />
-          <KpiTile
-            label="Longest wait"
-            value={longest ? `${longest} min` : 'None'}
-            hint="At their current desk"
-            icon={Clock}
-            tone={longest >= 40 ? 'danger' : longest >= 20 ? 'warning' : 'info'}
-            loading={loading}
-          />
-          <KpiTile
-            label="Stepped away"
-            value={rows.filter((r) => r.status === 'SKIPPED').length}
-            hint="Put back in line when they return"
-            icon={PersonSimpleWalk}
-            tone="warning"
-            loading={loading}
-          />
-          <KpiTile
-            label="Finished today"
-            value={rows.filter((r) => r.status === 'COMPLETED').length}
-            hint="Visits completed"
-            icon={CheckCircle}
-            tone="success"
-            loading={loading}
-          />
-        </div>
-      )}
-
       {view === 'desk' ? (
-        <div className="flex flex-col gap-8">
-          {servesDoctorDesk && (
-            <label className="flex w-fit cursor-pointer items-center gap-3 text-sm text-fg">
-              <input
-                type="checkbox"
-                checked={mineOnly}
-                onChange={(e) => setMineOnly(e.target.checked)}
-                className="size-5 cursor-pointer accent-primary"
-              />
-              Only patients booked with me (and unassigned ones)
-            </label>
-          )}
-          {served.map((station) => {
+        <div className="flex flex-col gap-10 px-5 pb-8 pt-6 sm:px-8">
+          {served.map((station, i) => {
             const mine = (r: QueueRow) => {
               if (!mineOnly || !DOCTOR_STATIONS.includes(station)) return true;
               const doctorId = r.encounter?.appointment?.doctor?.id;
@@ -229,6 +215,7 @@ export default function QueuePage() {
             return (
               <DeskSection
                 key={station}
+                number={served.length > 1 ? i + 1 : undefined}
                 station={station}
                 rows={here}
                 now={now}
@@ -241,53 +228,76 @@ export default function QueuePage() {
           })}
         </div>
       ) : !loading && rows.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={ListNumbers}
-            title="Nobody in the queue yet"
-            description="Patients get a token when the front desk checks them in from Appointments."
-          />
-        </Card>
+        <EmptyState
+          icon={ListNumbers}
+          title="Nobody in the queue yet"
+          description="Patients get a token when the front desk checks them in from Appointments."
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {QUEUE_STATIONS.map((station) => {
-            const here = active.filter((r) => r.station === station).sort(byNextUp);
-            const StationIcon = STATION_ICON[station];
-            return (
-              <section
-                key={station}
-                aria-label={STATION_LABEL[station]}
-                className="rounded-panel border border-line bg-surface-muted/60 p-4"
-              >
-                <div className="mb-4 flex items-center justify-between px-1">
-                  <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
-                    <StationIcon size={18} className="text-primary" aria-hidden="true" />
-                    {STATION_LABEL[station]}
-                  </h2>
-                  <span className="tabular rounded-control bg-surface px-2.5 py-0.5 font-mono text-xs font-medium text-fg-muted">
-                    {here.length}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-3">
-                  {loading && <Skeleton className="h-28 w-full" />}
-                  {!loading && here.length === 0 && (
-                    <p className="px-1 py-8 text-center text-[13px] text-fg-subtle">
-                      Nobody waiting
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+            {QUEUE_STATIONS.map((station) => {
+              const here = active.filter((r) => r.station === station).sort(byNextUp);
+              const waitingHere = here.filter((r) => r.status === 'WAITING');
+              const longestHere = waitingHere.reduce(
+                (max, r) => Math.max(max, minutesWaiting(r, now)),
+                0,
+              );
+              return (
+                <section
+                  key={station}
+                  aria-label={STATION_LABEL[station]}
+                  className="border-b border-line px-5 pb-6 pt-5 md:border-r md:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(3n)]:border-r-0 sm:px-6"
+                >
+                  <div className="section-rule mb-4 flex items-end justify-between gap-3 pt-2">
+                    <div>
+                      <h2 className="text-sm font-semibold text-fg">{STATION_LABEL[station]}</h2>
+                      <p className="mt-0.5 text-[12px] text-fg-muted">
+                        {waitingHere.length === 0 ? (
+                          'Nobody waiting'
+                        ) : (
+                          <>
+                            Longest wait{' '}
+                            <span className={`tabular font-mono ${waitTone(longestHere)}`}>
+                              {formatWait(longestHere)}
+                            </span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <p className="text-right">
+                      <span className="block text-[11px] text-fg-muted">At this desk</span>
+                      <span className="tabular block font-mono text-[28px] leading-none text-fg">
+                        {loading && !data ? '-' : here.length}
+                      </span>
                     </p>
-                  )}
-                  {here.map(card)}
-                </div>
-              </section>
-            );
-          })}
-          <SteppedAway rows={rows.filter((r) => r.status === 'SKIPPED')} renderCard={card} />
-        </div>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {loading && !data && <Skeleton className="h-28 w-full" />}
+                    {!loading && here.length === 0 && (
+                      <p className="border border-dashed border-line py-8 text-center text-[13px] text-fg-subtle">
+                        Nobody waiting
+                      </p>
+                    )}
+                    {here.map(card)}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+          {steppedAway.length > 0 && (
+            <div className="px-5 pb-6 sm:px-8">
+              <SteppedAway rows={steppedAway} renderCard={card} />
+            </div>
+          )}
+        </>
       )}
-    </>
+    </InkSheet>
   );
 }
 
 function DeskSection({
+  number,
   station,
   rows,
   now,
@@ -296,6 +306,7 @@ function DeskSection({
   onCallNext,
   renderCard,
 }: {
+  number?: number;
   station: QueueStationKey;
   rows: QueueRow[];
   now: number;
@@ -308,42 +319,48 @@ function DeskSection({
   const ordered = [...active].sort(byNextUp);
   const waiting = ordered.filter((r) => r.status === 'WAITING');
   const next = waiting[0];
-  const StationIcon = STATION_ICON[station];
+  const longest = next ? minutesWaiting(next, now) : 0;
 
   return (
     <section aria-label={STATION_LABEL[station]}>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-fg">
-            <StationIcon size={20} className="text-primary" aria-hidden="true" />
-            {STATION_LABEL[station]}
-          </h2>
-          <p className="mt-1 text-sm text-fg-muted">
-            {waiting.length === 0 ? (
-              'Nobody waiting'
-            ) : (
-              <>
-                {waiting.length} waiting · longest{' '}
-                <WaitTime minutes={minutesWaiting(waiting[0]!, now)} />
-              </>
-            )}
-          </p>
+      <div className="section-rule mb-5 flex flex-wrap items-end justify-between gap-x-8 gap-y-4 pt-3">
+        <h2 className="text-base font-semibold text-fg">
+          {number !== undefined && (
+            <span className="tabular mr-2 font-mono text-fg-subtle" aria-hidden="true">
+              {number}.
+            </span>
+          )}
+          {STATION_LABEL[station]}
+        </h2>
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+          <Figures
+            size="sm"
+            loading={loading}
+            items={[
+              { label: 'Waiting', value: waiting.length },
+              {
+                label: 'Longest wait',
+                value: next ? formatWait(longest) : 'None',
+                tone: longest >= 40 ? 'danger' : longest >= 20 ? 'warning' : undefined,
+              },
+            ]}
+          />
+          {next && (
+            <Button
+              icon={<Megaphone size={18} aria-hidden="true" />}
+              loading={busyId === next.id}
+              onClick={() => onCallNext(next)}
+            >
+              Call next: <span className="tabular font-mono">{formatToken(next.tokenNumber)}</span>
+            </Button>
+          )}
         </div>
-        {next && (
-          <Button
-            icon={<Megaphone size={18} aria-hidden="true" />}
-            loading={busyId === next.id}
-            onClick={() => onCallNext(next)}
-          >
-            Call next: {formatToken(next.tokenNumber)}
-          </Button>
-        )}
       </div>
 
       {loading ? (
         <Skeleton className="h-28 w-full" />
       ) : ordered.length === 0 ? (
-        <Card>
+        <div className="border border-dashed border-line">
           <EmptyState
             icon={ListNumbers}
             title="Nobody waiting here"
@@ -353,9 +370,9 @@ function DeskSection({
                 : 'Patients appear here when another desk sends them to you.'
             }
           />
-        </Card>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{ordered.map(renderCard)}</div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{ordered.map(renderCard)}</div>
       )}
 
       <SteppedAway rows={rows.filter((r) => r.status === 'SKIPPED')} renderCard={renderCard} />
@@ -372,9 +389,9 @@ function SteppedAway({
 }) {
   if (rows.length === 0) return null;
   return (
-    <details className="col-span-full mt-4 rounded-panel border border-line bg-surface px-5 py-4">
-      <summary className="cursor-pointer text-sm font-medium text-fg">
-        Stepped away ({rows.length})
+    <details className="mt-5 border-t border-line pt-3">
+      <summary className="cursor-pointer text-[13px] font-medium text-fg">
+        Stepped away <span className="tabular font-mono text-fg-muted">{rows.length}</span>
       </summary>
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">{rows.map(renderCard)}</div>
     </details>

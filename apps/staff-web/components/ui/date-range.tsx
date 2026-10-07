@@ -193,6 +193,8 @@ export function rangeLabel(range: DateRange): string {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
-    }).format(new Date(`${d}T12:00:00+05:30`));
+    })
+      .format(new Date(`${d}T12:00:00+05:30`))
+      .replace(/\bSept\b/, 'Sep');
   return range.from === range.to ? fmt(range.from) : `${fmt(range.from)} to ${fmt(range.to)}`;
 }

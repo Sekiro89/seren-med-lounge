@@ -10,8 +10,15 @@ import {
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
+import {
+  Figures,
+  InkSection,
+  InkSheet,
+  MarginNote,
+  SheetHead,
+  SheetRail,
+} from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
@@ -48,92 +55,122 @@ export default function IntegrationsPage() {
 
   const viewOf = (provider: Provider) => list.data?.find((v) => v.provider === provider);
 
+  const statuses = INTEGRATION_PROVIDERS.map((p) => connectionStatus(viewOf(p)).label);
+  const tally = (label: string) =>
+    list.data ? statuses.filter((l) => l === label).length : undefined;
+  const groups = GROUP_ORDER.map((group) => ({
+    group,
+    providers: INTEGRATION_PROVIDERS.filter((p) => INTEGRATION_CATALOG[p].group === group),
+  })).filter((g) => g.providers.length > 0);
+
   return (
     <>
-      <PageHeader
-        title="Integrations"
-        description="Connect the outside services the clinic uses, such as payments, messaging and labs."
-      />
+      <InkSheet>
+        <SheetHead
+          title="Integrations"
+          description="Connect the outside services the clinic uses, such as payments, messaging and labs."
+          figures={
+            <Figures
+              loading={list.loading && !list.data}
+              items={[
+                { label: 'Connected', value: tally('Connected') },
+                { label: 'Saved, switched off', value: tally('Saved, switched off') },
+                { label: 'Not connected', value: tally('Not connected') },
+              ]}
+            />
+          }
+        />
 
-      <div className="mb-8 flex items-start gap-3 rounded-panel bg-surface-muted px-6 py-5">
-        <Lock size={20} className="mt-0.5 shrink-0 text-fg-muted" aria-hidden="true" />
-        <p className="max-w-3xl text-sm text-fg-muted">
-          Keys are stored encrypted and shown only as their last four characters. Only
-          administrators can change them, and every change is recorded without the key itself.
-          Connections are not tested yet: a provider adapter has to be built before any of these
-          services is used.
-        </p>
-      </div>
-
-      {list.errorStatus !== undefined && !list.data ? (
-        <Card>
-          <div role="alert" className="flex items-center justify-between gap-4 px-6 py-6">
+        {list.errorStatus !== undefined && !list.data ? (
+          <div role="alert" className="flex items-center justify-between gap-4 px-8 py-6">
             <p className="text-sm text-danger-fg">{list.errorMessage}</p>
             <Button variant="secondary" size="sm" onClick={list.reload}>
               Try again
             </Button>
           </div>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-8">
-          {GROUP_ORDER.map((group) => {
-            const providers = INTEGRATION_PROVIDERS.filter(
-              (p) => INTEGRATION_CATALOG[p].group === group,
-            );
-            if (providers.length === 0) return null;
-            return (
-              <section key={group} aria-labelledby={`group-${group}`}>
-                <h2
-                  id={`group-${group}`}
-                  className="section-rule mb-3 pt-3 text-base font-semibold text-fg"
-                >
-                  {group}
-                </h2>
-                <Card className="divide-y divide-line">
-                  {providers.map((provider) => {
-                    const definition = INTEGRATION_CATALOG[provider];
-                    const view = viewOf(provider);
-                    const status = connectionStatus(view);
-                    return (
-                      <div
-                        key={provider}
-                        className="flex flex-wrap items-center justify-between gap-4 px-6 py-5"
-                      >
-                        <div className="min-w-0 max-w-xl">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <h3 className="text-[15px] font-medium text-fg">{definition.label}</h3>
-                            {list.loading ? (
-                              <Skeleton className="h-5 w-24" />
-                            ) : (
-                              <Badge tone={status.tone}>{status.label}</Badge>
-                            )}
-                          </div>
-                          <p className="mt-1 text-[13px] text-fg-muted">{definition.description}</p>
-                          {view?.updatedAt && (
-                            <p className="mt-1 text-[13px] text-fg-subtle">
-                              Last changed {whenText(view.updatedAt)}
-                              {view.updatedBy ? ` by ${view.updatedBy}` : ''}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={list.loading}
-                          onClick={() => setSelected(provider)}
-                          aria-label={`Configure ${definition.label}`}
-                        >
-                          Configure
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </Card>
-              </section>
-            );
-          })}
-        </div>
-      )}
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="flex min-w-0 flex-col gap-8 px-5 pb-8 pt-6 sm:px-8">
+              {groups.map(({ group, providers }, index) => {
+                return (
+                  <InkSection
+                    key={group}
+                    id={`group-${group.replace(/\s+/g, '-').toLowerCase()}`}
+                    number={index + 1}
+                    title={group}
+                    meta={`${providers.length} ${providers.length === 1 ? 'service' : 'services'}`}
+                  >
+                    <ul className="divide-y divide-line">
+                      {providers.map((provider) => {
+                        const definition = INTEGRATION_CATALOG[provider];
+                        const view = viewOf(provider);
+                        const status = connectionStatus(view);
+                        return (
+                          <li
+                            key={provider}
+                            className="grid grid-cols-1 items-center gap-x-6 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_170px_auto]"
+                          >
+                            <div className="min-w-0">
+                              <h3 className="text-sm font-medium text-fg">{definition.label}</h3>
+                              <p className="mt-0.5 max-w-[72ch] text-[13px] text-fg-muted">
+                                {definition.description}
+                              </p>
+                              {view?.updatedAt && (
+                                <p className="mt-0.5 text-[12px] text-fg-subtle">
+                                  Last changed{' '}
+                                  <span className="tabular font-mono">
+                                    {whenText(view.updatedAt)}
+                                  </span>
+                                  {view.updatedBy ? ` by ${view.updatedBy}` : ''}
+                                </p>
+                              )}
+                            </div>
+                            <div>
+                              {list.loading ? (
+                                <Skeleton className="h-5 w-24" />
+                              ) : (
+                                <Badge tone={status.tone}>{status.label}</Badge>
+                              )}
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={list.loading}
+                              onClick={() => setSelected(provider)}
+                              aria-label={`Configure ${definition.label}`}
+                            >
+                              Configure
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </InkSection>
+                );
+              })}
+            </div>
+
+            <SheetRail label="How keys are kept">
+              <InkSection title="Keys">
+                <div className="mt-2 flex gap-2.5">
+                  <Lock size={18} className="mt-0.5 shrink-0 text-fg-muted" aria-hidden="true" />
+                  <MarginNote className="text-[13px]">
+                    Keys are stored encrypted and shown only as their last four characters. Only
+                    administrators can change them, and every change is recorded without the key
+                    itself.
+                  </MarginNote>
+                </div>
+              </InkSection>
+              <InkSection title="Testing">
+                <MarginNote className="mt-2 text-[13px]">
+                  Connections are not tested yet: a provider adapter has to be built before any of
+                  these services is used.
+                </MarginNote>
+              </InkSection>
+            </SheetRail>
+          </div>
+        )}
+      </InkSheet>
 
       {selected && (
         <ConfigDrawer

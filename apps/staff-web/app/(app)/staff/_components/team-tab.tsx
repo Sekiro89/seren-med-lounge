@@ -8,14 +8,12 @@ import { ApiError } from '@serenemed/api-client';
 import { StaffRole } from '@serenemed/types';
 import { createUserSchema, type CreateUserInput } from '@serenemed/validation';
 import { PersonCell } from '../../../../components/ui/avatar';
-import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
-import { Card } from '../../../../components/ui/card';
-import { DataTable, type Column } from '../../../../components/ui/data-table';
 import { Dialog } from '../../../../components/ui/dialog';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { Field, Input, Select } from '../../../../components/ui/fields';
-import { Toolbar } from '../../../../components/ui/toolbar';
+import { SheetBar, StatusWord } from '../../../../components/ui/ink';
+import { LedgerTable, type LedgerColumn } from '../../../../components/ui/ledger-table';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, humanize } from '../../../../lib/format';
 import { invalidProps, req, requiredProps, clearOnEditRhf } from '../../../../lib/forms';
@@ -60,21 +58,22 @@ export function TeamTab({
     </Button>
   );
 
-  const columns: Column<StaffRow>[] = [
+  const columns: LedgerColumn<StaffRow>[] = [
     { header: 'Name', render: (u) => <PersonCell name={u.fullName} sub={u.email} /> },
-    { header: 'Role', render: (u) => <Badge tone="info">{humanize(u.role)}</Badge> },
+    { header: 'Role', render: (u) => <span className="text-fg">{humanize(u.role)}</span> },
     {
       header: 'Status',
       render: (u) =>
         u.isActive ? (
-          <Badge tone="success">Active</Badge>
+          <StatusWord tone="success">Active</StatusWord>
         ) : (
-          <Badge tone="neutral">Switched off</Badge>
+          <StatusWord tone="neutral">Switched off</StatusWord>
         ),
     },
     {
       header: 'Added',
-      render: (u) => <span className="tabular font-mono">{formatDate(u.createdAt)}</span>,
+      numeric: true,
+      render: (u) => <span className="text-fg-muted">{formatDate(u.createdAt)}</span>,
     },
     {
       header: 'Actions',
@@ -135,12 +134,12 @@ export function TeamTab({
   ];
 
   return (
-    <Card>
-      <Toolbar actions={addButton}>
-        <p className="text-sm text-fg-muted">
+    <>
+      <SheetBar actions={addButton}>
+        <p className="text-[13px] text-fg-muted">
           Switching someone off or changing their role ends their open sessions.
         </p>
-      </Toolbar>
+      </SheetBar>
       {team.errorStatus !== undefined && !team.loading ? (
         <div className="flex flex-col items-center gap-4 px-6 py-14 text-center">
           <Warning size={24} className="text-danger-fg" aria-hidden="true" />
@@ -150,7 +149,9 @@ export function TeamTab({
           </Button>
         </div>
       ) : (
-        <DataTable
+        <LedgerTable
+          caption="Staff"
+          muted={(u) => !u.isActive}
           columns={columns}
           rows={team.data}
           getRowKey={(u) => u.id}
@@ -194,7 +195,7 @@ export function TeamTab({
           }}
         />
       )}
-    </Card>
+    </>
   );
 }
 

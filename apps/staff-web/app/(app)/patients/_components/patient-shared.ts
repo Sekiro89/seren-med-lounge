@@ -8,6 +8,9 @@ export interface PatientSummary {
   phone: string;
   email: string | null;
   dateOfBirth: string;
+  /** Patient number, `SM-004812`. Older records may not have one yet. */
+  mrn?: string | null;
+  sex?: 'FEMALE' | 'MALE' | 'OTHER' | null;
 }
 
 /** GET /patients/:id. */
@@ -37,6 +40,26 @@ export function ageLabel(dateOfBirth: string): string {
     return `${months} mo`;
   }
   return `${years} yrs`;
+}
+
+const SEX_LETTER = { FEMALE: 'F', MALE: 'M', OTHER: 'Other' } as const;
+const SEX_WORD = { FEMALE: 'Female', MALE: 'Male', OTHER: 'Other' } as const;
+
+/** `F`, `M`, `Other`, or undefined when not recorded. */
+export function sexLetter(sex: PatientSummary['sex']): string | undefined {
+  return sex ? SEX_LETTER[sex] : undefined;
+}
+
+export function sexWord(sex: PatientSummary['sex']): string | undefined {
+  return sex ? SEX_WORD[sex] : undefined;
+}
+
+/** `+91 98901 23456` for a 10-digit Indian mobile; anything else unchanged. */
+export function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+  if (local.length === 10) return `+91 ${local.slice(0, 5)} ${local.slice(5)}`;
+  return phone;
 }
 
 /** The server's own message when it sent one, otherwise the fallback. */

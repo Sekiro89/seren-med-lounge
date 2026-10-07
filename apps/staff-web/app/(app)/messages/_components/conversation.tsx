@@ -113,7 +113,7 @@ export function Conversation({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-line px-6 py-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-5 py-2.5 sm:px-8">
         <Button
           variant="ghost"
           size="sm"
@@ -124,8 +124,13 @@ export function Conversation({
           Inbox
         </Button>
         <div className="mr-auto min-w-0">
-          <h2 className="truncate text-base font-semibold text-fg">{fullName(data.patient)}</h2>
-          <p className="truncate text-[13px] text-fg-muted">{data.subject}</p>
+          <h2 className="truncate text-sm font-semibold text-fg">{fullName(data.patient)}</h2>
+          <p className="truncate text-[12px] text-fg-muted">
+            {data.subject} ·{' '}
+            <span className="tabular font-mono">
+              {data.messages.length} {data.messages.length === 1 ? 'message' : 'messages'}
+            </span>
+          </p>
         </div>
         <div className="w-48">
           <label htmlFor="assignee" className="sr-only">
@@ -152,6 +157,7 @@ export function Conversation({
         </div>
         <Button
           variant="secondary"
+          size="sm"
           loading={acting}
           onClick={() => run(closed ? 'reopen' : 'close')}
         >
@@ -159,31 +165,39 @@ export function Conversation({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <ul className="flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto px-5 pb-6 sm:px-8">
+        {/* A ruled transcript: who and when in the margin, the words beside it. */}
+        <ol className="divide-y divide-line">
           {data.messages.map((m) => {
             const mine = m.senderType === 'USER';
             return (
-              <li key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                <div
-                  className={`max-w-[80%] whitespace-pre-wrap rounded-panel px-4 py-3 text-[15px] leading-6 ${
-                    mine ? 'bg-primary-subtle text-primary-subtle-fg' : 'bg-surface-muted text-fg'
+              <li
+                key={m.id}
+                className="grid grid-cols-1 gap-x-6 gap-y-1 py-4 sm:grid-cols-[150px_minmax(0,1fr)]"
+              >
+                <div className="text-[12px] leading-5">
+                  <p className={`font-medium ${mine ? 'text-primary' : 'text-fg'}`}>
+                    {mine ? (m.senderUser?.fullName ?? 'Staff') : data.patient.firstName}
+                  </p>
+                  <p className="tabular font-mono text-fg-subtle">
+                    {formatDate(m.createdAt).slice(0, 6)} {formatTime(m.createdAt)}
+                  </p>
+                </div>
+                <p
+                  className={`max-w-[72ch] whitespace-pre-wrap text-[15px] leading-6 text-fg ${
+                    mine ? 'border-l-2 border-primary-line pl-3' : ''
                   }`}
                 >
                   {m.body}
-                </div>
-                <p className="mt-1.5 text-xs text-fg-subtle">
-                  {mine ? (m.senderUser?.fullName ?? 'Staff') : data.patient.firstName},{' '}
-                  {formatDate(m.createdAt)} {formatTime(m.createdAt)}
                 </p>
               </li>
             );
           })}
-        </ul>
+        </ol>
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-line bg-surface px-6 py-4">
+      <div className="border-t border-line bg-surface px-5 py-3 sm:px-8">
         {error && (
           <p role="alert" className="mb-3 text-sm text-danger-fg">
             {error}

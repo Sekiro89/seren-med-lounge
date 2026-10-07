@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { ArrowUUpLeft, CreditCard, Prohibit } from '@phosphor-icons/react';
-import { StatusBadge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
+import { InkStatus, LedgerLine } from '../../../../components/ui/ink';
 import { Skeleton } from '../../../../components/ui/skeleton';
 import { formatDate, formatMoney, fullName, humanize } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
@@ -52,7 +52,7 @@ export function InvoiceDrawer({
         variant="drawer"
         open={invoiceId !== null}
         onClose={onClose}
-        title={current ? invoiceLabel(current.number) : 'Invoice'}
+        title="Invoice"
         description={current ? fullName(current.patient) : undefined}
         footer={
           current && (canPay || canVoid) ? (
@@ -79,7 +79,7 @@ export function InvoiceDrawer({
         }
       >
         {errorStatus && !current ? (
-          <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg">
+          <p role="alert" className="bg-danger-bg px-3 py-2 text-sm text-danger-fg">
             This invoice could not be loaded.{' '}
             <button type="button" onClick={reload} className="cursor-pointer font-medium underline">
               Retry
@@ -92,129 +92,160 @@ export function InvoiceDrawer({
             <Skeleton className="h-24 w-full" />
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <StatusBadge domain="invoice" status={current.status} />
-              <span className="text-[13px] text-fg-muted">
-                Issued {formatDate(current.createdAt)}
-              </span>
+          <article aria-label={`Invoice ${invoiceLabel(current.number)}`} className="text-fg">
+            {/* Letterhead: the printed bill */}
+            <div className="flex items-start justify-between gap-6 border-b border-fg pb-4">
+              <div className="min-w-0">
+                <p className="text-xs text-fg-muted">SereneMed Lounge · Tax invoice</p>
+                <p className="tabular mt-1 font-mono text-[26px] font-medium leading-none tracking-tight">
+                  {invoiceLabel(current.number)}
+                </p>
+              </div>
+              <div className="shrink-0 pt-0.5 text-right">
+                <InkStatus domain="invoice" status={current.status} />
+                <p className="tabular mt-1.5 font-mono text-[12px] text-fg-muted">
+                  {formatDate(current.createdAt)}
+                </p>
+              </div>
             </div>
 
+            <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-y-1 border-b border-line py-3 text-[13px]">
+              <dt className="text-fg-muted">Billed to</dt>
+              <dd className="font-medium">{fullName(current.patient)}</dd>
+              <dt className="text-fg-muted">Issued</dt>
+              <dd className="tabular font-mono">{formatDate(current.createdAt)}</dd>
+            </dl>
+
             {current.status === 'VOID' && (
-              <p className="rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg">
+              <p className="mt-4 bg-danger-bg px-3 py-2 text-sm text-danger-fg">
                 Voided{current.voidedAt ? ` on ${formatDate(current.voidedAt)}` : ''}
                 {current.voidReason ? `: ${current.voidReason}` : '.'}
               </p>
             )}
 
-            <section aria-labelledby="items-h">
-              <h3 id="items-h" className="mb-2 text-sm font-semibold">
+            <section aria-labelledby="items-h" className="mt-5">
+              <h3 id="items-h" className="sr-only">
                 Items
               </h3>
-              <div className="overflow-x-auto rounded-control border border-line">
-                <table className="w-full border-collapse text-left text-[13px]">
-                  <thead>
-                    <tr className="border-b border-line bg-surface-muted text-xs uppercase tracking-wide text-fg-muted">
-                      <th scope="col" className="px-3 py-2 font-semibold">
-                        Item
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-right font-semibold">
-                        Qty
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-right font-semibold">
-                        Unit
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-right font-semibold">
-                        Tax
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-right font-semibold">
-                        Total
-                      </th>
+              <table className="w-full border-collapse text-left text-[13px]">
+                <thead>
+                  <tr className="h-8 border-b border-fg text-[11px] text-fg-muted">
+                    <th scope="col" className="pr-2 font-medium">
+                      Item
+                    </th>
+                    <th scope="col" className="w-10 px-2 text-right font-medium">
+                      Qty
+                    </th>
+                    <th scope="col" className="px-2 text-right font-medium">
+                      Rate
+                    </th>
+                    <th scope="col" className="pl-2 text-right font-medium">
+                      Amount
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {current.items.map((item, index) => (
+                    <tr key={item.id} className="border-b border-line align-top">
+                      <td className="py-2 pr-2">
+                        <p>
+                          <span className="tabular mr-1.5 font-mono text-[11px] text-fg-subtle">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <span className="font-medium">{item.description}</span>
+                        </p>
+                        <p className="pl-6 text-[12px] text-fg-subtle">
+                          {humanize(item.itemType)}
+                          {item.taxMinor > 0 && (
+                            <>
+                              {' '}
+                              · tax{' '}
+                              <span className="tabular font-mono">
+                                {formatMoney(item.taxMinor)}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </td>
+                      <td className="tabular px-2 py-2 text-right font-mono">{item.quantity}</td>
+                      <td className="tabular px-2 py-2 text-right font-mono text-fg-muted">
+                        {formatMoney(item.unitPriceMinor)}
+                      </td>
+                      <td className="tabular py-2 pl-2 text-right font-mono font-medium">
+                        {formatMoney(item.lineTotalMinor)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {current.items.map((item) => (
-                      <tr key={item.id} className="border-b border-line last:border-0">
-                        <td className="px-3 py-2">
-                          <p className="font-medium">{item.description}</p>
-                          <p className="text-fg-subtle">{humanize(item.itemType)}</p>
-                        </td>
-                        <td className="tabular font-mono px-3 py-2 text-right">{item.quantity}</td>
-                        <td className="tabular font-mono px-3 py-2 text-right">
-                          {formatMoney(item.unitPriceMinor)}
-                        </td>
-                        <td className="tabular font-mono px-3 py-2 text-right">
-                          {formatMoney(item.taxMinor)}
-                        </td>
-                        <td className="tabular font-mono px-3 py-2 text-right font-medium">
-                          {formatMoney(item.lineTotalMinor)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <dl className="tabular font-mono mt-3 space-y-1 text-sm">
-                {(
-                  [
-                    ['Subtotal', current.subtotalMinor],
-                    ['Tax', current.taxMinor],
-                    ['Total', current.totalMinor],
-                    ['Paid', current.paidMinor],
-                  ] as const
-                ).map(([label, value]) => (
-                  <div key={label} className="flex justify-between">
-                    <dt className="text-fg-muted">{label}</dt>
-                    <dd className="font-mono">{formatMoney(value)}</dd>
-                  </div>
-                ))}
-                <div className="flex justify-between border-t border-line pt-2 font-semibold">
-                  <dt>Balance</dt>
-                  <dd className="font-mono">
-                    {formatMoney(current.status === 'VOID' ? 0 : balance)}
-                  </dd>
+                  ))}
+                </tbody>
+              </table>
+
+              <dl className="ml-auto mt-3 w-full max-w-[260px]">
+                <LedgerLine label="Subtotal" value={formatMoney(current.subtotalMinor)} />
+                <LedgerLine label="Tax" value={formatMoney(current.taxMinor)} />
+                <div className="border-t border-fg">
+                  <LedgerLine label="Total" value={formatMoney(current.totalMinor)} strong />
+                </div>
+                <LedgerLine label="Paid" value={formatMoney(current.paidMinor)} tone="muted" />
+                <div className="border-y-2 border-double border-fg">
+                  <LedgerLine
+                    label="Balance due"
+                    value={formatMoney(current.status === 'VOID' ? 0 : balance)}
+                    strong
+                  />
                 </div>
               </dl>
-              {current.notes && <p className="mt-3 text-[13px] text-fg-muted">{current.notes}</p>}
+              {current.notes && (
+                <p className="mt-4 border-l-2 border-line pl-3 text-[13px] text-fg-muted">
+                  {current.notes}
+                </p>
+              )}
             </section>
 
-            <section aria-labelledby="pay-h">
-              <h3 id="pay-h" className="mb-2 text-sm font-semibold">
-                Payments
+            <section aria-labelledby="pay-h" className="mt-8">
+              <h3
+                id="pay-h"
+                className="section-rule flex min-h-10 items-center pt-1 text-sm font-semibold"
+              >
+                Payments received
               </h3>
               {current.payments.length === 0 ? (
-                <p className="text-sm text-fg-muted">No payments recorded yet.</p>
+                <p className="py-2 text-[13px] text-fg-muted">No payments recorded yet.</p>
               ) : (
-                <ul className="divide-y divide-line rounded-control border border-line">
+                <ul className="divide-y divide-line border-t border-line">
                   {current.payments.map((payment) => {
                     const refundable = payment.amountMinor - refundedOf(payment);
                     return (
-                      <li key={payment.id} className="px-3 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium">{humanize(payment.method)}</p>
-                            <p className="text-[13px] text-fg-muted">
+                      <li key={payment.id} className="py-2.5">
+                        <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                          <div className="min-w-0">
+                            <span className="font-medium">{humanize(payment.method)}</span>
+                            <span className="tabular ml-2 font-mono text-[12px] text-fg-muted">
                               {formatDate(payment.createdAt)}
-                              {payment.reference ? ` / ${payment.reference}` : ''}
-                            </p>
+                              {payment.reference ? ` · ${payment.reference}` : ''}
+                            </span>
                           </div>
-                          <p className="tabular font-mono text-sm font-medium">
+                          <span className="tabular shrink-0 font-mono font-medium">
                             {formatMoney(payment.amountMinor)}
-                          </p>
+                          </span>
                         </div>
                         {payment.refunds.map((refund) => (
-                          <p key={refund.id} className="mt-2 text-[13px] text-fg-muted">
-                            <span className="tabular font-mono text-danger-fg">
-                              Refunded {formatMoney(refund.amountMinor)}
-                            </span>{' '}
-                            on {formatDate(refund.createdAt)}: {refund.reason}
-                          </p>
+                          <div
+                            key={refund.id}
+                            className="mt-1 flex items-baseline justify-between gap-3 text-[12px] text-fg-muted"
+                          >
+                            <span className="min-w-0">
+                              Refunded {formatDate(refund.createdAt)}: {refund.reason}
+                            </span>
+                            <span className="tabular shrink-0 font-mono text-danger-fg">
+                              -{formatMoney(refund.amountMinor)}
+                            </span>
+                          </div>
                         ))}
                         {canRefund && refundable > 0 && (
-                          <div className="mt-2">
+                          <div className="mt-1.5">
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="ghost"
                               icon={<ArrowUUpLeft size={16} aria-hidden="true" />}
                               onClick={() => setAction({ kind: 'refund', payment })}
                             >
@@ -228,7 +259,7 @@ export function InvoiceDrawer({
                 </ul>
               )}
             </section>
-          </div>
+          </article>
         )}
       </Dialog>
 

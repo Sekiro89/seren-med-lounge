@@ -2,20 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import { Pill, Plus } from '@phosphor-icons/react';
-import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
-import { DataTable, type Column } from '../../../../components/ui/data-table';
+import { LevelRuler, SheetBar, StatusWord } from '../../../../components/ui/ink';
+import { LedgerTable, type LedgerColumn } from '../../../../components/ui/ledger-table';
 import { Dialog } from '../../../../components/ui/dialog';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { SearchBox } from '../../../../components/ui/search-box';
-import { Toolbar } from '../../../../components/ui/toolbar';
 import { apiClient } from '../../../../lib/api-client';
 import { formatMoney, humanize } from '../../../../lib/format';
 import { useApi } from '../../../../lib/use-api';
 import { AddMedicineDialog } from './add-medicine-dialog';
 import { ErrorPanel, FormError, serverMessage, type Medication } from './shared';
 
-export function MedicinesTab({ version, onChanged }: { version: number; onChanged: () => void }) {
+export function MedicinesTab({
+  version,
+  onChanged,
+  stock,
+}: {
+  version: number;
+  onChanged: () => void;
+  /** Usable (unexpired) units on hand per medication id, from the batches; undefined while loading. */
+  stock?: Map<string, number>;
+}) {
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
@@ -55,7 +63,7 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
     }
   };
 
-  const columns: Column<Medication>[] = [
+  const columns: LedgerColumn<Medication>[] = [
     {
       header: 'Medicine',
       render: (m) => (
@@ -67,7 +75,43 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
         </div>
       ),
     },
-    { header: 'Unit', render: (m) => <span className="text-fg-muted">{m.unit}</span> },
+    {
+      header: 'On hand',
+      align: 'right',
+      numeric: true,
+      width: 'w-[96px]',
+      render: (m) =>
+        stock === undefined ? (
+          <span className="text-fg-subtle">-</span>
+        ) : (
+          <span
+            className={
+              (stock.get(m.id) ?? 0) === 0
+                ? 'font-medium text-danger-fg'
+                : m.reorderLevel !== null && (stock.get(m.id) ?? 0) <= m.reorderLevel
+                  ? 'font-medium text-warning-fg'
+                  : ''
+            }
+          >
+            {stock.get(m.id) ?? 0}{' '}
+            <span className="font-sans text-[12px] font-normal text-fg-subtle">{m.unit}</span>
+          </span>
+        ),
+    },
+    {
+      header: 'Stock against reorder level',
+      width: 'w-[190px]',
+      render: (m) =>
+        stock === undefined ? null : (
+          <span
+            role="img"
+            aria-label={`${stock.get(m.id) ?? 0} on hand${m.reorderLevel !== null ? `, reorder at ${m.reorderLevel}` : ''}`}
+            className="flex items-center gap-2"
+          >
+            <LevelRuler value={stock.get(m.id) ?? 0} reorder={m.reorderLevel} className="w-32" />
+          </span>
+        ),
+    },
     {
       header: 'Price',
       align: 'right',
@@ -88,9 +132,9 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
     {
       header: 'Status',
       render: (m) => (
-        <Badge tone={m.isActive ? 'success' : 'neutral'}>
+        <StatusWord tone={m.isActive ? 'success' : 'neutral'}>
           {m.isActive ? 'Active' : 'Inactive'}
-        </Badge>
+        </StatusWord>
       ),
     },
     {
@@ -99,7 +143,7 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
       render: (m) => (
         <Button
           size="sm"
-          variant="secondary"
+          variant="ghost"
           onClick={() => {
             setError(undefined);
             setTarget(m);
@@ -113,7 +157,7 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
 
   return (
     <>
-      <Toolbar
+      <SheetBar
         actions={
           <Button
             variant="secondary"
@@ -129,13 +173,16 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
           placeholder="Search medicines"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="w-72"
+          className="w-72 py-1"
         />
-      </Toolbar>
+      </SheetBar>
       {errorStatus !== undefined && !data ? (
         <ErrorPanel message="The catalogue could not be loaded." onRetry={reload} />
       ) : (
-        <DataTable
+        <LedgerTable
+          minWidth={920}
+          caption="Medicine catalogue"
+          muted={(m) => !m.isActive}
           columns={columns}
           rows={data}
           getRowKey={(m) => m.id}

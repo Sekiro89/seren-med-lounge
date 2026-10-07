@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { ArrowUUpLeft, Check, Megaphone, Play, SkipForward } from '@phosphor-icons/react';
 import { QUEUE_STATIONS, type QueueStationKey } from '@serenemed/permissions';
 import { Button } from '../../../../components/ui/button';
-import { StatusBadge } from '../../../../components/ui/badge';
+import { InkStatus } from '../../../../components/ui/ink';
 import { fullName } from '../../../../lib/format';
 import {
   STATION_LABEL,
   SUGGESTED_NEXT,
-  WaitTime,
   formatToken,
+  formatWait,
+  waitTone,
   minutesWaiting,
   workHref,
   type QueueRow,
@@ -50,33 +51,42 @@ export function TokenCard({
   const suggested = SUGGESTED_NEXT[row.station];
   const others = QUEUE_STATIONS.filter((s) => s !== row.station && !suggested.includes(s));
   const work = workHref(row);
+  const minutes = minutesWaiting(row, now);
 
   return (
-    <article className="rounded-control border border-control bg-surface p-4">
-      <div className="flex items-start gap-3">
-        <span className="tabular flex h-11 min-w-14 items-center justify-center rounded-control bg-primary-subtle px-2 font-mono text-lg font-semibold text-primary-subtle-fg">
+    <article
+      aria-label={`Token ${formatToken(row.tokenNumber)}, ${name}`}
+      className={`border bg-surface p-4 ${
+        row.status === 'CALLED' || row.status === 'IN_SERVICE'
+          ? 'border-control border-l-2 border-l-primary'
+          : 'border-control'
+      }`}
+    >
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4">
+        <span
+          className={`tabular font-mono font-medium leading-none text-fg ${compact ? 'text-[26px]' : 'text-[32px]'}`}
+        >
           {formatToken(row.tokenNumber)}
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="truncate text-sm font-semibold text-fg">{name}</p>
-            <StatusBadge domain="queue" status={row.status} />
-          </div>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[13px] text-fg-muted">
-            <span>{row.status === 'WAITING' ? 'Waiting' : 'At this desk'}</span>
-            <WaitTime minutes={minutesWaiting(row, now)} />
-            {doctor && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="truncate">{doctor}</span>
-              </>
-            )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-fg">{name}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-fg-muted">
+            <InkStatus domain="queue" status={row.status} />
+            {doctor && <span className="truncate">{doctor}</span>}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] text-fg-muted">
+            {row.status === 'WAITING' ? 'Waiting' : 'At desk'}
+          </p>
+          <p className={`tabular font-mono text-[18px] leading-tight ${waitTone(minutes)}`}>
+            {formatWait(minutes)}
           </p>
         </div>
       </div>
 
       {(canAct || showOpen) && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
           {canAct && row.status === 'WAITING' && (
             <Button
               size="sm"

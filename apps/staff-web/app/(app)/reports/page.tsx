@@ -2,23 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import {
-  ArrowRight,
-  CalendarCheck,
-  ChartBar,
-  Coins,
-  HandCoins,
-  Package,
-  Receipt,
-  Stethoscope,
-  Timer,
-  UserPlus,
-  UsersThree,
-  Warning,
-} from '@phosphor-icons/react';
-import type { Icon } from '@phosphor-icons/react';
+import { ArrowRight, ChartBar, Warning } from '@phosphor-icons/react';
 import { Button } from '../../../components/ui/button';
-import { Card, CardHeader } from '../../../components/ui/card';
+import { Card } from '../../../components/ui/card';
 import {
   DateRangePicker,
   presetRange,
@@ -28,9 +14,16 @@ import {
   type DateRange,
   type RangePreset,
 } from '../../../components/ui/date-range';
-import { KPI_STRIP, KpiTile } from '../../../components/ui/kpi-tile';
+import {
+  Figures,
+  InkSection,
+  InkSheet,
+  MarginNote,
+  RuledBar,
+  SheetHead,
+  StatusWord,
+} from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { formatMoney, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
@@ -104,171 +97,129 @@ export default function ReportsPage() {
   const longestWait = waits.length ? waits.reduce((a, b) => (b[1] > a[1] ? b : a)) : undefined;
   const noShowPct = data ? `${Math.round(data.appointments.noShowRate * 100)}%` : undefined;
 
-  const actions: { href: string; icon: Icon; text: string; count: number; tone: string }[] = data
+  const actions: { href: string; text: string; count: number; tone: 'warning' | 'danger' }[] = data
     ? [
         {
           href: '/follow-ups',
-          icon: CalendarCheck,
           text: 'Overdue follow-ups',
           count: data.care.followUpsOverdue,
-          tone: 'text-warning-fg',
+          tone: 'warning',
         },
         {
           href: '/inventory',
-          icon: Package,
           text: 'Stock batches expiring in 30 days',
           count: data.pharmacy.batchesExpiringIn30Days,
-          tone: 'text-danger-fg',
+          tone: 'danger',
         },
         {
           href: '/billing',
-          icon: Receipt,
           text: 'Invoices with a balance',
           count: data.money.outstandingInvoices,
-          tone: 'text-fg-muted',
+          tone: 'warning',
         },
       ]
     : [];
+  const show = !loading && !!data;
+  const failed = errorStatus !== undefined && !loading && !data;
+  const dayCount = rangeDays(range);
 
   return (
-    <>
-      <PageHeader
+    <InkSheet>
+      <SheetHead
         eyebrow={rangeLabel(range)}
         title="Reports"
         description="How the clinic is doing over a period: visits, money, waiting times and what needs attention."
-      />
-
-      <Card className="mb-6">
-        <div className="px-6 py-4">
-          <DateRangePicker
-            value={range}
-            preset={preset}
-            onChange={(next, key) => {
-              setRange(next);
-              setPreset(key);
-            }}
-          />
-        </div>
-      </Card>
-
-      {errorStatus !== undefined && !loading && !data ? (
-        <Card>
-          <div className="flex flex-col items-center gap-4 px-6 py-14 text-center">
-            <Warning size={24} className="text-danger-fg" aria-hidden="true" />
-            <p className="text-sm text-fg-muted">
-              {errorStatus === 403
-                ? 'Your role cannot view reports.'
-                : errorStatus === 400
-                  ? 'This period cannot be reported on. Choose a period of at most a year.'
-                  : 'The report could not be loaded.'}
-            </p>
-            {errorStatus !== 403 && (
-              <Button variant="secondary" onClick={reload}>
-                Try again
-              </Button>
-            )}
-          </div>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-6">
-          <div className={`sm:grid-cols-2 xl:grid-cols-3 ${KPI_STRIP}`}>
-            <KpiTile
-              label="Visits"
-              value={visits}
-              hint={data ? `${data.appointments.total} appointments booked` : undefined}
-              icon={Stethoscope}
-              href="/appointments"
-              loading={loading}
-            />
-            <KpiTile
-              label="New patients"
-              value={data?.patients.new}
-              hint="Registered in this period"
-              icon={UserPlus}
-              tone="info"
-              href="/patients"
-              loading={loading}
-            />
-            <KpiTile
-              label="Collected"
-              value={data ? formatMoney(data.money.collectedMinor) : undefined}
-              hint={
-                data
+        figures={
+          <Figures
+            size="sm"
+            loading={loading}
+            items={[
+              {
+                label: 'Visits',
+                value: visits,
+                hint: data ? `${data.appointments.total} booked` : undefined,
+              },
+              { label: 'New patients', value: data?.patients.new, hint: 'Registered' },
+              {
+                label: 'Collected',
+                value: data ? formatMoney(data.money.collectedMinor) : undefined,
+                hint: data
                   ? data.money.refundedMinor > 0
                     ? `${formatMoney(data.money.refundedMinor)} refunded`
                     : `${formatMoney(data.money.invoicedMinor)} invoiced`
-                  : undefined
-              }
-              icon={HandCoins}
-              tone="success"
-              href={`/payments?from=${range.from}&to=${range.to}`}
-              loading={loading}
-            />
-            <KpiTile
-              label="Outstanding"
-              value={data ? formatMoney(data.money.outstandingMinor) : undefined}
-              hint={
-                data
-                  ? `${data.money.outstandingInvoices} invoice${data.money.outstandingInvoices === 1 ? '' : 's'} with a balance`
-                  : undefined
-              }
-              icon={Coins}
-              tone="warning"
-              href="/billing"
-              loading={loading}
-            />
-            <KpiTile
-              label="No-show rate"
-              value={noShowPct}
-              hint="Of appointments in this period"
-              icon={UsersThree}
-              tone={data && data.appointments.noShowRate >= 0.15 ? 'danger' : 'primary'}
-              href="/appointments"
-              loading={loading}
-            />
-            <KpiTile
-              label="Longest average wait"
-              value={longestWait ? minutes(longestWait[1]) : data ? 'None' : undefined}
-              hint={
-                longestWait
-                  ? `At ${STATION_LABEL[longestWait[0]] ?? humanize(longestWait[0])}`
-                  : data
-                    ? 'No one was called from the queue'
-                    : undefined
-              }
-              icon={Timer}
-              tone="info"
-              href="/queue"
-              loading={loading}
-            />
-          </div>
+                  : undefined,
+              },
+              {
+                label: 'Outstanding',
+                value: data ? formatMoney(data.money.outstandingMinor) : undefined,
+                tone: data && data.money.outstandingMinor > 0 ? 'warning' : undefined,
+                hint: data
+                  ? `${data.money.outstandingInvoices} invoice${data.money.outstandingInvoices === 1 ? '' : 's'}`
+                  : undefined,
+              },
+            ]}
+          />
+        }
+      />
 
-          <Card>
-            <CardHeader
-              title="Visits and money per day"
-              description={`${rangeDays(range)} day${rangeDays(range) === 1 ? '' : 's'}: visits as bars, the amount collected as a line.`}
-            />
-            {loading || !data ? (
-              <div className="px-6 py-6">
-                <Skeleton className="h-56 w-full" />
-              </div>
+      <div className="border-b border-line px-5 py-4 sm:px-8">
+        <DateRangePicker
+          value={range}
+          preset={preset}
+          onChange={(next, key) => {
+            setRange(next);
+            setPreset(key);
+          }}
+        />
+      </div>
+
+      {failed ? (
+        <div className="flex flex-col items-center gap-4 px-6 py-14 text-center">
+          <Warning size={24} className="text-danger-fg" aria-hidden="true" />
+          <p className="text-sm text-fg-muted">
+            {errorStatus === 403
+              ? 'Your role cannot view reports.'
+              : errorStatus === 400
+                ? 'This period cannot be reported on. Choose a period of at most a year.'
+                : 'The report could not be loaded.'}
+          </p>
+          {errorStatus !== 403 && (
+            <Button variant="secondary" onClick={reload}>
+              Try again
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-10 px-5 pb-10 pt-8 sm:px-8">
+          <InkSection
+            number={1}
+            title="Visits and money per day"
+            meta={`${dayCount} day${dayCount === 1 ? '' : 's'}: visits as ink bars, money collected as the cobalt line.`}
+            action={
+              <SectionLink href={`/payments?from=${range.from}&to=${range.to}`}>
+                Open payments
+              </SectionLink>
+            }
+          >
+            {!show ? (
+              <Skeleton className="mt-3 h-56 w-full" />
             ) : visits === 0 && data.money.collectedMinor === 0 ? (
-              <div className="flex flex-col items-center px-6 py-14 text-center">
+              <div className="flex flex-col items-center py-12 text-center">
                 <ChartBar size={24} className="text-fg-subtle" aria-hidden="true" />
                 <p className="mt-3 text-sm text-fg-muted">No visits or payments in this period.</p>
               </div>
             ) : (
               <DayChart points={days} />
             )}
-          </Card>
+          </InkSection>
 
-          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-            <Card>
-              <CardHeader
-                title="Where visits come from"
-                description="Appointments by how they were booked."
-              />
-              {loading || !data ? (
+          <div className="grid gap-x-10 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
+            <InkSection
+              number={2}
+              title="Where visits come from"
+              action={<SectionLink href="/appointments">Appointments</SectionLink>}
+            >
+              {!show ? (
                 <Loading />
               ) : (
                 <BarList
@@ -280,15 +231,14 @@ export default function ReportsPage() {
                   empty="No appointments in this period."
                 />
               )}
-              <CardLink href="/appointments">Open appointments</CardLink>
-            </Card>
+            </InkSection>
 
-            <Card>
-              <CardHeader
-                title="Visits by outcome"
-                description="What happened to each appointment."
-              />
-              {loading || !data ? (
+            <InkSection
+              number={3}
+              title="Visits by outcome"
+              meta={noShowPct ? `${noShowPct} no-show` : undefined}
+            >
+              {!show ? (
                 <Loading />
               ) : (
                 <BarList
@@ -300,40 +250,48 @@ export default function ReportsPage() {
                   empty="No appointments in this period."
                 />
               )}
-              <CardLink href="/appointments">Open appointments</CardLink>
-            </Card>
+            </InkSection>
 
-            <Card>
-              <CardHeader
-                title="Average wait by desk"
-                description={
-                  data
-                    ? `${data.queue.tokensCalled} token${data.queue.tokensCalled === 1 ? '' : 's'} called from the queue.`
-                    : undefined
-                }
-              />
-              {loading || !data ? (
+            <InkSection
+              number={4}
+              title="Average wait by desk"
+              meta={
+                data
+                  ? `${data.queue.tokensCalled} token${data.queue.tokensCalled === 1 ? '' : 's'} called`
+                  : undefined
+              }
+              action={<SectionLink href="/queue">Queue</SectionLink>}
+            >
+              {!show ? (
                 <Loading />
               ) : (
-                <BarList
-                  rows={waits.map(([k, v]) => ({
-                    key: k,
-                    label: STATION_LABEL[k] ?? humanize(k),
-                    value: v,
-                    display: minutes(v),
-                  }))}
-                  empty="No one was called from the queue in this period."
-                />
+                <>
+                  <BarList
+                    rows={waits.map(([k, v]) => ({
+                      key: k,
+                      label: STATION_LABEL[k] ?? humanize(k),
+                      value: v,
+                      display: minutes(v),
+                    }))}
+                    empty="No one was called from the queue in this period."
+                  />
+                  {longestWait && (
+                    <MarginNote className="pt-2">
+                      Longest at {STATION_LABEL[longestWait[0]] ?? humanize(longestWait[0])}, about{' '}
+                      <span className="tabular font-mono text-fg">{minutes(longestWait[1])}</span>.
+                    </MarginNote>
+                  )}
+                </>
               )}
-              <CardLink href="/queue">Open the queue</CardLink>
-            </Card>
+            </InkSection>
 
-            <Card>
-              <CardHeader
-                title="Most common diagnoses"
-                description="Signed-off diagnoses, by how often they were recorded."
-              />
-              {loading || !data ? (
+            <InkSection
+              number={5}
+              title="Most common diagnoses"
+              meta="Signed off"
+              action={<SectionLink href="/dashboard">Consultations</SectionLink>}
+            >
+              {!show ? (
                 <Loading />
               ) : (
                 <BarList
@@ -344,7 +302,7 @@ export default function ReportsPage() {
                       <>
                         {d.description}
                         {d.icdCode && (
-                          <span className="tabular ml-2 font-mono text-xs text-fg-subtle">
+                          <span className="tabular ml-2 font-mono text-[11px] text-fg-subtle">
                             {d.icdCode}
                           </span>
                         )}
@@ -355,46 +313,45 @@ export default function ReportsPage() {
                   empty="No diagnoses were recorded in this period."
                 />
               )}
-              <CardLink href="/dashboard">Open consultations</CardLink>
-            </Card>
+            </InkSection>
 
-            <Card>
-              <CardHeader
-                title="Leads"
-                description="Enquiries received and turned into patients."
-              />
-              {loading || !data ? (
+            <InkSection
+              number={6}
+              title="Leads"
+              action={<SectionLink href="/leads">Leads</SectionLink>}
+            >
+              {!show ? (
                 <Loading />
               ) : (
-                <dl className="grid grid-cols-2 gap-4 px-6 py-5">
-                  <div>
-                    <dt className="text-[13px] font-medium text-fg-muted">New leads</dt>
-                    <dd className="tabular mt-1 font-mono text-2xl font-semibold text-fg">
-                      {data.leads.new}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-[13px] font-medium text-fg-muted">Became patients</dt>
-                    <dd className="tabular mt-1 font-mono text-2xl font-semibold text-fg">
-                      {data.leads.converted}
-                      {data.leads.new > 0 && (
-                        <span className="ml-2 text-sm font-normal text-fg-subtle">
-                          {Math.round((data.leads.converted / data.leads.new) * 100)}%
-                        </span>
-                      )}
-                    </dd>
-                  </div>
-                </dl>
+                <div className="pt-3">
+                  <Figures
+                    size="sm"
+                    items={[
+                      { label: 'New leads', value: data.leads.new },
+                      {
+                        label: 'Became patients',
+                        value: data.leads.converted,
+                        hint:
+                          data.leads.new > 0
+                            ? `${Math.round((data.leads.converted / data.leads.new) * 100)}% converted`
+                            : undefined,
+                      },
+                    ]}
+                  />
+                  {data.leads.new > 0 && (
+                    <RuledBar
+                      value={data.leads.converted}
+                      max={data.leads.new}
+                      tone="primary"
+                      className="mt-4"
+                    />
+                  )}
+                </div>
               )}
-              <CardLink href="/leads">Open leads</CardLink>
-            </Card>
+            </InkSection>
 
-            <Card>
-              <CardHeader
-                title="Things to act on"
-                description="Open items as of now, not limited to the period."
-              />
-              {loading || !data ? (
+            <InkSection number={7} title="Things to act on" meta="As of now, not the period">
+              {!show ? (
                 <Loading />
               ) : (
                 <ul className="divide-y divide-line">
@@ -402,34 +359,34 @@ export default function ReportsPage() {
                     <li key={item.href}>
                       <Link
                         href={item.href}
-                        className="flex items-center gap-3 px-6 py-3.5 text-sm hover:bg-surface-muted"
+                        className="group flex items-center gap-3 py-2.5 text-[13px] hover:bg-surface-muted"
                       >
-                        <item.icon
-                          size={20}
-                          aria-hidden="true"
-                          className={`shrink-0 ${item.count > 0 ? item.tone : 'text-fg-subtle'}`}
-                        />
                         <span className="flex-1 text-fg">{item.text}</span>
-                        <span className="tabular font-mono font-semibold text-fg">
+                        {item.count > 0 ? (
+                          <StatusWord tone={item.tone}>Open</StatusWord>
+                        ) : (
+                          <StatusWord tone="success">Clear</StatusWord>
+                        )}
+                        <span className="tabular w-8 text-right font-mono font-medium text-fg">
                           {item.count}
                         </span>
-                        <ArrowRight size={16} className="text-fg-subtle" aria-hidden="true" />
+                        <ArrowRight size={14} className="text-fg-subtle" aria-hidden="true" />
                       </Link>
                     </li>
                   ))}
                 </ul>
               )}
-            </Card>
+            </InkSection>
           </div>
         </div>
       )}
-    </>
+    </InkSheet>
   );
 }
 
 function Loading() {
   return (
-    <div className="flex flex-col gap-3 px-6 py-5">
+    <div className="flex flex-col gap-3 py-4">
       <Skeleton className="h-4 w-3/4" />
       <Skeleton className="h-4 w-1/2" />
       <Skeleton className="h-4 w-2/3" />
@@ -437,16 +394,14 @@ function Loading() {
   );
 }
 
-function CardLink({ href, children }: { href: string; children: string }) {
+function SectionLink({ href, children }: { href: string; children: string }) {
   return (
-    <div className="border-t border-line px-6 py-3">
-      <Link
-        href={href}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary hover:text-primary-hover"
-      >
-        {children}
-        <ArrowRight size={14} aria-hidden="true" />
-      </Link>
-    </div>
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:text-primary-hover"
+    >
+      {children}
+      <ArrowRight size={12} aria-hidden="true" />
+    </Link>
   );
 }

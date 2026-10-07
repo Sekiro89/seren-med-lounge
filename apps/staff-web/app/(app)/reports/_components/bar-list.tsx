@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { RuledBar } from '../../../../components/ui/ink';
 
 export interface BarRow {
   key: string;
@@ -21,25 +22,25 @@ export function BarList({
   keepOrder?: boolean;
   empty: string;
 }) {
-  if (rows.length === 0) return <p className="px-6 py-6 text-sm text-fg-muted">{empty}</p>;
+  if (rows.length === 0) return <p className="py-3 text-[13px] text-fg-muted">{empty}</p>;
   const sorted = keepOrder ? rows : [...rows].sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...sorted.map((r) => r.value));
   return (
-    <ul className="flex flex-col gap-3 px-6 py-5">
-      {sorted.map((row) => (
-        <li key={row.key} className="text-sm">
+    <ul className="divide-y divide-line">
+      {sorted.map((row, i) => (
+        <li key={row.key} className="py-2 text-[13px]">
           <div className="flex items-baseline justify-between gap-4">
             <span className="min-w-0 truncate text-fg">{row.label}</span>
-            <span className="tabular font-mono shrink-0 font-medium text-fg">
+            <span className="tabular shrink-0 font-mono text-fg">
               {row.display ?? row.value.toLocaleString('en-IN')}
             </span>
           </div>
-          <div className="mt-1.5 h-2 overflow-hidden bg-surface-muted" aria-hidden="true">
-            <div
-              className="h-full bg-primary"
-              style={{ width: `${Math.max(2, (row.value / max) * 100)}%` }}
-            />
-          </div>
+          <RuledBar
+            value={row.value}
+            max={max}
+            tone={i === 0 ? 'ink' : 'muted'}
+            className="mt-1.5"
+          />
         </li>
       ))}
     </ul>

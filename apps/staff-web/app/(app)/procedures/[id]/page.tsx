@@ -2,18 +2,20 @@
 
 import { use, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import {
-  ArrowLeft,
-  CheckCircle,
-  Circle,
-  Plus,
-  Scissors,
-  WarningCircle,
-} from '@phosphor-icons/react';
-import { Avatar } from '../../../../components/ui/avatar';
+import { ArrowLeft, Check, Plus, Scissors, WarningCircle } from '@phosphor-icons/react';
 import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
+import { Card } from '../../../../components/ui/card';
+import {
+  Figures,
+  InkSection,
+  InkSheet,
+  LedgerLine,
+  MarginNote,
+  SheetHead,
+  SheetRail,
+} from '../../../../components/ui/ink';
+import { StageRuler, type Stage } from '../../../../components/ui/stage-ruler';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { NoAccess } from '../../../../components/ui/no-access';
@@ -54,6 +56,35 @@ interface DocumentRow {
 }
 
 type Dialogs = 'estimate' | 'schedule' | 'cancel' | undefined;
+
+const STAGES = [
+  { status: 'PLANNED', label: 'Planned' },
+  { status: 'SCHEDULED', label: 'Scheduled' },
+  { status: 'IN_PROGRESS', label: 'In progress' },
+  { status: 'COMPLETED', label: 'Completed' },
+] as const;
+
+/** The procedure on the Ruler; a cancelled one stops red where it was. */
+function stagesOf(p: ProcedureDetail): Stage[] {
+  const order = STAGES.map((s) => s.status as string);
+  const at =
+    p.status === 'CANCELLED' ? (p.startedAt ? 2 : p.scheduledAt ? 1 : 0) : order.indexOf(p.status);
+  const when: Record<string, string | null> = {
+    SCHEDULED: p.scheduledAt,
+    IN_PROGRESS: p.startedAt,
+    COMPLETED: p.completedAt,
+  };
+  return STAGES.map((s, i) => {
+    const date = when[s.status];
+    const stamp = date ? `${formatDate(date).slice(0, 6)} ${formatTime(date)}` : undefined;
+    if (i === at && p.status === 'CANCELLED')
+      return { label: s.label, state: 'stopped', note: 'cancelled' };
+    if (i < at || (i === at && p.status === 'COMPLETED'))
+      return { label: s.label, state: 'done', note: stamp };
+    if (i === at) return { label: s.label, state: 'current', note: stamp ?? 'now' };
+    return { label: s.label, state: 'todo', note: s.status === 'SCHEDULED' ? stamp : undefined };
+  });
+}
 
 export default function ProcedureRecordPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -128,6 +159,11 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
     }
   }
 
+  const readyTotal = (procedure?.checklist.length ?? 0) + 1;
+  const readyDone =
+    (procedure?.checklist.filter((i) => i.completedAt).length ?? 0) +
+    (procedure?.consentDocumentId ? 1 : 0);
+
   const addItem = async (event: FormEvent) => {
     event.preventDefault();
     const label = newItem.trim();
@@ -163,13 +199,13 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-3">
       <Link
         href="/procedures"
-        className="inline-flex items-center gap-1.5 self-start text-[13px] font-medium text-fg-muted hover:text-fg"
+        className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-primary hover:text-primary-hover"
       >
         <ArrowLeft size={16} aria-hidden="true" />
-        All procedures
+        Procedures
       </Link>
 
       {detail.loading && (
@@ -206,71 +242,337 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
 
       {procedure && (
         <>
-          <section
-            aria-label="Patient and procedure"
-            className="rounded-panel border border-line bg-surface"
-          >
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-4 px-6 py-5">
-              <Avatar name={fullName(procedure.patient)} size={48} />
-              <div className="min-w-0 flex-1">
-                <h1 className="truncate text-2xl font-semibold leading-8 tracking-tight text-fg">
-                  {procedure.name}
-                </h1>
-                <p className="mt-0.5 text-sm text-fg-muted">
-                  {canDocuments ? (
-                    <Link
-                      href={`/patients/${procedure.patient.id}`}
-                      className="font-medium hover:text-primary"
-                    >
-                      {fullName(procedure.patient)}
-                    </Link>
-                  ) : (
-                    fullName(procedure.patient)
-                  )}
-                  <span className="tabular font-mono text-[13px] text-fg-subtle">
-                    {' '}
-                    {procedure.patient.id}
-                  </span>
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {procedure.kind === 'SURGERY' && <Badge tone="info">Surgery</Badge>}
-                <Badge tone={STATUS_TONE[procedure.status]}>{humanize(procedure.status)}</Badge>
-              </div>
-            </div>
-          </section>
-
           {!mayAct && (
-            <p
-              role="status"
-              className="rounded-control bg-surface-muted px-4 py-3 text-sm text-fg-muted"
-            >
+            <p role="status" className="bg-surface-muted px-4 py-2.5 text-[13px] text-fg-muted">
               This is a surgery. Your role can view it but not change it.
             </p>
           )}
           {error && (
-            <p
-              role="alert"
-              className="rounded-control bg-danger-bg px-4 py-3 text-sm text-danger-fg"
-            >
+            <p role="alert" className="bg-danger-bg px-4 py-2.5 text-sm text-danger-fg">
               {error}
             </p>
           )}
 
-          <Card>
-            <CardHeader
-              title="Details"
+          <InkSheet>
+            <SheetHead
+              eyebrow={`${procedure.kind === 'SURGERY' ? 'Surgery' : 'Procedure'} record`}
+              title={procedure.name}
+              description={
+                <>
+                  {canDocuments ? (
+                    <Link
+                      href={`/patients/${procedure.patient.id}`}
+                      className="font-medium text-fg hover:text-primary"
+                    >
+                      {fullName(procedure.patient)}
+                    </Link>
+                  ) : (
+                    <span className="font-medium text-fg">{fullName(procedure.patient)}</span>
+                  )}
+                  {procedure.performedBy ? ` · ${procedure.performedBy.fullName}` : ''}
+                  {procedure.location ? ` · ${procedure.location}` : ''}
+                </>
+              }
+              figures={
+                <Figures
+                  className="items-start!"
+                  items={[
+                    {
+                      label: 'Scheduled',
+                      value: procedure.scheduledAt
+                        ? formatDate(procedure.scheduledAt).slice(0, 6)
+                        : '-',
+                      hint: procedure.scheduledAt ? formatTime(procedure.scheduledAt) : undefined,
+                    },
+                    {
+                      label: 'Ready',
+                      value: `${readyDone}/${readyTotal}`,
+                      tone:
+                        readyDone < readyTotal &&
+                        (procedure.status === 'PLANNED' || procedure.status === 'SCHEDULED')
+                          ? 'warning'
+                          : undefined,
+                    },
+                    {
+                      label: 'Estimate',
+                      value:
+                        procedure.estimateMinor === null
+                          ? '-'
+                          : formatMoney(procedure.estimateMinor).replace(/\.00$/, ''),
+                    },
+                  ]}
+                />
+              }
               action={
-                mayAct && (
-                  <div className="flex gap-2">
-                    {editable && (
-                      <Button size="sm" variant="secondary" onClick={() => setDialog('schedule')}>
-                        {procedure.status === 'SCHEDULED' ? 'Reschedule' : 'Schedule'}
+                <>
+                  {procedure.kind === 'SURGERY' && <Badge tone="info">Surgery</Badge>}
+                  <Badge tone={STATUS_TONE[procedure.status]}>{humanize(procedure.status)}</Badge>
+                </>
+              }
+            />
+
+            <div className="border-b border-line px-5 pb-4 pt-6 sm:px-10">
+              <StageRuler label="Procedure stages" stages={stagesOf(procedure)} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="flex min-w-0 flex-col gap-8 px-5 pb-8 pt-6 sm:px-8">
+                <InkSection
+                  number={1}
+                  title="Consent form"
+                  meta={procedure.consentDocumentId ? 'attached' : 'missing'}
+                >
+                  <p className="flex items-center gap-2.5 py-3 text-[13px] text-fg">
+                    <CheckBox done={Boolean(procedure.consentDocumentId)} />
+                    {procedure.consentDocumentId
+                      ? attached
+                        ? `Attached: ${attached.fileName}`
+                        : 'A signed consent form is attached.'
+                      : 'No consent form attached.'}
+                  </p>
+                  {editable && (
+                    <form
+                      onSubmit={attach}
+                      noValidate
+                      onChange={clearOnEdit(clearError)}
+                      className="flex max-w-lg flex-wrap items-end gap-3 border-t border-line pt-3"
+                    >
+                      <div className="min-w-56 flex-1">
+                        {canDocuments ? (
+                          <Field
+                            label={req('Consent form')}
+                            htmlFor="consent-doc"
+                            error={fieldErrors['consent-doc']}
+                            helper={
+                              documents.loading
+                                ? 'Loading this patient’s documents.'
+                                : consentDocs.length === 0
+                                  ? 'This patient has no consent form on file. Upload one at registration first.'
+                                  : undefined
+                            }
+                          >
+                            <Select
+                              id="consent-doc"
+                              value={documentId}
+                              disabled={consentDocs.length === 0}
+                              {...requiredProps}
+                              {...invalidProps(fieldErrors['consent-doc'])}
+                              onChange={(e) => setDocumentId(e.target.value)}
+                            >
+                              <option value="">Choose a form</option>
+                              {consentDocs.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.fileName}, {formatDate(d.createdAt)}
+                                </option>
+                              ))}
+                            </Select>
+                          </Field>
+                        ) : (
+                          <Field
+                            label={req('Consent form document ID')}
+                            htmlFor="consent-doc"
+                            error={fieldErrors['consent-doc']}
+                            helper="Your role cannot list patient documents, so enter the ID of the patient's consent form."
+                          >
+                            <Input
+                              id="consent-doc"
+                              value={documentId}
+                              {...requiredProps}
+                              {...invalidProps(fieldErrors['consent-doc'])}
+                              onChange={(e) => setDocumentId(e.target.value)}
+                            />
+                          </Field>
+                        )}
+                      </div>
+                      <Button type="submit" variant="secondary" loading={busy === 'consent'}>
+                        Attach form
                       </Button>
-                    )}
-                    {procedure.status === 'IN_PROGRESS' && (
+                    </form>
+                  )}
+                </InkSection>
+
+                <InkSection
+                  number={2}
+                  title="Pre-op checklist"
+                  meta={
+                    procedure.checklist.length > 0 ? (
+                      <span className="tabular font-mono">
+                        {procedure.checklist.filter((i) => i.completedAt).length}/
+                        {procedure.checklist.length} done
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  {procedure.checklist.length === 0 ? (
+                    <p className="py-3 text-[13px] text-fg-muted">No checklist items yet.</p>
+                  ) : (
+                    <ol className="divide-y divide-line">
+                      {procedure.checklist.map((item, index) => {
+                        const done = Boolean(item.completedAt);
+                        return (
+                          <li key={item.id} className="flex min-h-11 items-center gap-3 py-2">
+                            <span
+                              aria-hidden="true"
+                              className="tabular w-6 shrink-0 font-mono text-[12px] text-fg-subtle"
+                            >
+                              {String(index + 1).padStart(2, '0')}
+                            </span>
+                            <input
+                              id={`item-${item.id}`}
+                              type="checkbox"
+                              checked={done}
+                              disabled={!editable || busy === `item-${item.id}`}
+                              onChange={() =>
+                                void act(
+                                  `item-${item.id}`,
+                                  `checklist/${item.id}`,
+                                  { done: !done },
+                                  'The item was not updated.',
+                                )
+                              }
+                              className="size-[18px] shrink-0 cursor-pointer accent-primary disabled:cursor-default"
+                            />
+                            <label
+                              htmlFor={`item-${item.id}`}
+                              className={`flex-1 text-[13px] ${done ? 'text-fg-muted line-through' : 'text-fg'}`}
+                            >
+                              {item.label}
+                            </label>
+                            <span className="tabular shrink-0 font-mono text-[12px] text-fg-subtle">
+                              {item.completedAt
+                                ? `${formatDate(item.completedAt).slice(0, 6)} ${formatTime(item.completedAt)}`
+                                : ''}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                  {editable && (
+                    <form
+                      onSubmit={addItem}
+                      noValidate
+                      onChange={clearOnEdit(clearError)}
+                      className="flex max-w-lg flex-wrap items-end gap-3 border-t border-line pt-3"
+                    >
+                      <div className="min-w-56 flex-1">
+                        <Field
+                          label={req('New checklist item')}
+                          htmlFor="new-item"
+                          error={fieldErrors['new-item']}
+                        >
+                          <Input
+                            id="new-item"
+                            value={newItem}
+                            maxLength={300}
+                            {...requiredProps}
+                            {...invalidProps(fieldErrors['new-item'])}
+                            onChange={(e) => setNewItem(e.target.value)}
+                          />
+                        </Field>
+                      </div>
                       <Button
-                        size="sm"
+                        type="submit"
+                        variant="secondary"
+                        icon={<Plus size={18} aria-hidden="true" />}
+                        loading={busy === 'add'}
+                      >
+                        Add item
+                      </Button>
+                    </form>
+                  )}
+                </InkSection>
+
+                <InkSection number={3} title="Operative notes" meta="Written by the clinical team">
+                  {procedure.clinicalNotes.length === 0 ? (
+                    <p className="py-3 text-[13px] text-fg-muted">
+                      No operative notes are linked to this procedure yet.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-line">
+                      {procedure.clinicalNotes.map((note) => {
+                        const v = note.versions[0];
+                        const sections = [
+                          ['Subjective', v?.subjective],
+                          ['Objective', v?.objective],
+                          ['Assessment', v?.assessment],
+                          ['Plan', v?.plan],
+                        ].filter(([, text]) => text);
+                        return (
+                          <li key={note.id} className="flex flex-col gap-3 py-4">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[13px] font-medium text-fg">
+                                {humanize(note.noteType)}
+                              </span>
+                              <Badge tone={note.status === 'FINALIZED' ? 'success' : 'warning'}>
+                                {humanize(note.status)}
+                              </Badge>
+                              <span className="tabular ml-auto font-mono text-[12px] text-fg-subtle">
+                                {formatDate(note.createdAt)}
+                              </span>
+                            </div>
+                            {sections.length === 0 ? (
+                              <p className="text-[13px] text-fg-muted">
+                                This note has no text yet.
+                              </p>
+                            ) : (
+                              <dl className="flex flex-col gap-2 text-[13px]">
+                                {sections.map(([label, text]) => (
+                                  <div
+                                    key={label}
+                                    className="grid grid-cols-[100px_minmax(0,1fr)] gap-3"
+                                  >
+                                    <dt className="text-fg-muted">{label}</dt>
+                                    <dd className="max-w-[72ch] whitespace-pre-wrap text-fg">
+                                      {text}
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </InkSection>
+              </div>
+
+              <SheetRail label="Procedure actions">
+                {mayAct && (procedure.status === 'PLANNED' || procedure.status === 'SCHEDULED') && (
+                  <InkSection title="Start">
+                    <div className="mt-3 flex flex-col gap-2">
+                      <Button
+                        className="w-full"
+                        disabled={missing.length > 0}
+                        loading={busy === 'start'}
+                        onClick={() => void act('start', 'start', {}, 'It could not be started.')}
+                      >
+                        Start procedure
+                      </Button>
+                      {missing.length > 0 ? (
+                        <ul className="mt-1 flex flex-col gap-1 text-[12px] text-warning-fg">
+                          {missing.map((m) => (
+                            <li key={m} className="flex gap-2">
+                              <span
+                                aria-hidden="true"
+                                className="mt-[5px] size-1.5 shrink-0 bg-current"
+                              />
+                              {m}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <MarginNote>Scheduled, consented and every item done.</MarginNote>
+                      )}
+                    </div>
+                  </InkSection>
+                )}
+                {mayAct && procedure.status === 'IN_PROGRESS' && (
+                  <InkSection title="Finish">
+                    <div className="mt-3">
+                      <Button
+                        className="w-full"
                         loading={busy === 'complete'}
                         onClick={() =>
                           void act('complete', 'complete', {}, 'It was not completed.')
@@ -278,299 +580,78 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                       >
                         Complete procedure
                       </Button>
-                    )}
-                    {editable && (
-                      <Button size="sm" variant="ghost" onClick={() => setDialog('cancel')}>
-                        Cancel procedure
+                    </div>
+                  </InkSection>
+                )}
+
+                <InkSection
+                  title="Details"
+                  action={
+                    editable ? (
+                      <Button size="sm" variant="ghost" onClick={() => setDialog('estimate')}>
+                        Edit estimate
                       </Button>
-                    )}
-                  </div>
-                )
-              }
-            />
-            <dl className="grid gap-x-8 gap-y-6 px-6 py-6 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-[13px] text-fg-subtle">Scheduled for</dt>
-                <dd className="tabular font-mono mt-1 text-fg">
-                  {procedure.scheduledAt
-                    ? `${formatDate(procedure.scheduledAt)} ${formatTime(procedure.scheduledAt)}`
-                    : 'Not scheduled'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[13px] text-fg-subtle">Doctor</dt>
-                <dd className="mt-1 text-fg">
-                  {procedure.performedBy?.fullName ?? 'Not assigned'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[13px] text-fg-subtle">Location</dt>
-                <dd className="mt-1 text-fg">{procedure.location ?? 'Not set'}</dd>
-              </div>
-              <div>
-                <dt className="text-[13px] text-fg-subtle">Estimate</dt>
-                <dd className="mt-1 flex items-center gap-3 text-fg">
-                  <span className="tabular font-mono">
-                    {procedure.estimateMinor === null
-                      ? 'None'
-                      : formatMoney(procedure.estimateMinor)}
-                  </span>
-                  {editable && (
-                    <Button size="sm" variant="ghost" onClick={() => setDialog('estimate')}>
-                      Edit estimate
-                    </Button>
+                    ) : undefined
+                  }
+                >
+                  <dl className="divide-y divide-line">
+                    <LedgerLine
+                      label="Scheduled for"
+                      value={
+                        procedure.scheduledAt
+                          ? `${formatDate(procedure.scheduledAt)} ${formatTime(procedure.scheduledAt)}`
+                          : 'Not scheduled'
+                      }
+                      tone={procedure.scheduledAt ? undefined : 'muted'}
+                    />
+                    <LedgerLine
+                      label="Doctor"
+                      value={
+                        <span className="font-sans">
+                          {procedure.performedBy?.fullName ?? 'Not assigned'}
+                        </span>
+                      }
+                    />
+                    <LedgerLine
+                      label="Location"
+                      value={<span className="font-sans">{procedure.location ?? 'Not set'}</span>}
+                    />
+                    <LedgerLine
+                      label="Estimate"
+                      value={
+                        procedure.estimateMinor === null
+                          ? 'None'
+                          : formatMoney(procedure.estimateMinor)
+                      }
+                    />
+                  </dl>
+                  {procedure.notes && (
+                    <MarginNote className="mt-2 whitespace-pre-wrap">{procedure.notes}</MarginNote>
                   )}
-                </dd>
-              </div>
-              {procedure.notes && (
-                <div className="sm:col-span-2">
-                  <dt className="text-[13px] text-fg-subtle">Notes</dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-fg">{procedure.notes}</dd>
-                </div>
-              )}
-              {procedure.status === 'CANCELLED' && (
-                <div className="sm:col-span-2">
-                  <dt className="text-[13px] text-fg-subtle">Cancelled</dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-fg">
-                    {procedure.cancelReason ?? 'No reason recorded.'}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          </Card>
-
-          <Card>
-            <CardHeader
-              title="Readiness"
-              description="The procedure can start once it is scheduled, the consent form is attached and every checklist item is done."
-              action={
-                mayAct &&
-                (procedure.status === 'PLANNED' || procedure.status === 'SCHEDULED') && (
-                  <Button
-                    disabled={missing.length > 0}
-                    loading={busy === 'start'}
-                    onClick={() => void act('start', 'start', {}, 'It could not be started.')}
-                  >
-                    Start procedure
-                  </Button>
-                )
-              }
-            />
-            <div className="flex flex-col gap-8 px-6 py-6">
-              {editable && missing.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-fg">Still missing</h3>
-                  <ul className="mt-2 list-disc pl-5 text-sm text-fg-muted">
-                    {missing.map((m) => (
-                      <li key={m}>{m}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div>
-                <h3 className="text-sm font-semibold text-fg">Consent form</h3>
-                <p className="mt-2 flex items-center gap-2 text-sm text-fg">
-                  {procedure.consentDocumentId ? (
-                    <>
-                      <CheckCircle
-                        size={20}
-                        weight="fill"
-                        aria-hidden="true"
-                        className="text-success-fg"
-                      />
-                      {attached
-                        ? `Attached: ${attached.fileName}`
-                        : 'A signed consent form is attached.'}
-                    </>
-                  ) : (
-                    <>
-                      <Circle size={20} aria-hidden="true" className="text-fg-subtle" />
-                      No consent form attached.
-                    </>
+                  {procedure.status === 'CANCELLED' && (
+                    <p className="mt-2 whitespace-pre-wrap text-[13px] text-danger-fg">
+                      Cancelled: {procedure.cancelReason ?? 'No reason recorded.'}
+                    </p>
                   )}
-                </p>
-                {editable && (
-                  <form
-                    onSubmit={attach}
-                    noValidate
-                    onChange={clearOnEdit(clearError)}
-                    className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
-                  >
-                    <div className="min-w-56 flex-1">
-                      {canDocuments ? (
-                        <Field
-                          label={req('Consent form')}
-                          htmlFor="consent-doc"
-                          error={fieldErrors['consent-doc']}
-                          helper={
-                            documents.loading
-                              ? 'Loading this patient’s documents.'
-                              : consentDocs.length === 0
-                                ? 'This patient has no consent form on file. Upload one at registration first.'
-                                : undefined
-                          }
-                        >
-                          <Select
-                            id="consent-doc"
-                            value={documentId}
-                            disabled={consentDocs.length === 0}
-                            {...requiredProps}
-                            {...invalidProps(fieldErrors['consent-doc'])}
-                            onChange={(e) => setDocumentId(e.target.value)}
-                          >
-                            <option value="">Choose a form</option>
-                            {consentDocs.map((d) => (
-                              <option key={d.id} value={d.id}>
-                                {d.fileName}, {formatDate(d.createdAt)}
-                              </option>
-                            ))}
-                          </Select>
-                        </Field>
-                      ) : (
-                        <Field
-                          label={req('Consent form document ID')}
-                          htmlFor="consent-doc"
-                          error={fieldErrors['consent-doc']}
-                          helper="Your role cannot list patient documents, so enter the ID of the patient's consent form."
-                        >
-                          <Input
-                            id="consent-doc"
-                            value={documentId}
-                            {...requiredProps}
-                            {...invalidProps(fieldErrors['consent-doc'])}
-                            onChange={(e) => setDocumentId(e.target.value)}
-                          />
-                        </Field>
-                      )}
-                    </div>
-                    <Button type="submit" variant="secondary" loading={busy === 'consent'}>
-                      Attach form
-                    </Button>
-                  </form>
-                )}
-              </div>
+                </InkSection>
 
-              <div>
-                <h3 className="text-sm font-semibold text-fg">Pre-op checklist</h3>
-                {procedure.checklist.length === 0 ? (
-                  <p className="mt-2 text-sm text-fg-muted">No checklist items yet.</p>
-                ) : (
-                  <ul className="mt-2 divide-y divide-line">
-                    {procedure.checklist.map((item) => {
-                      const done = Boolean(item.completedAt);
-                      return (
-                        <li key={item.id} className="flex items-center gap-3 py-3">
-                          <input
-                            id={`item-${item.id}`}
-                            type="checkbox"
-                            checked={done}
-                            disabled={!editable || busy === `item-${item.id}`}
-                            onChange={() =>
-                              void act(
-                                `item-${item.id}`,
-                                `checklist/${item.id}`,
-                                { done: !done },
-                                'The item was not updated.',
-                              )
-                            }
-                            className="size-5 cursor-pointer accent-primary"
-                          />
-                          <label
-                            htmlFor={`item-${item.id}`}
-                            className={`flex-1 text-sm ${done ? 'text-fg-muted line-through' : 'text-fg'}`}
-                          >
-                            {item.label}
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                {editable && (
-                  <form
-                    onSubmit={addItem}
-                    noValidate
-                    onChange={clearOnEdit(clearError)}
-                    className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
-                  >
-                    <div className="min-w-56 flex-1">
-                      <Field
-                        label={req('New checklist item')}
-                        htmlFor="new-item"
-                        error={fieldErrors['new-item']}
-                      >
-                        <Input
-                          id="new-item"
-                          value={newItem}
-                          maxLength={300}
-                          {...requiredProps}
-                          {...invalidProps(fieldErrors['new-item'])}
-                          onChange={(e) => setNewItem(e.target.value)}
-                        />
-                      </Field>
-                    </div>
+                {mayAct && editable && (
+                  <div className="flex flex-col gap-2">
                     <Button
-                      type="submit"
                       variant="secondary"
-                      icon={<Plus size={18} aria-hidden="true" />}
-                      loading={busy === 'add'}
+                      className="w-full"
+                      onClick={() => setDialog('schedule')}
                     >
-                      Add item
+                      {procedure.status === 'SCHEDULED' ? 'Reschedule' : 'Schedule'}
                     </Button>
-                  </form>
+                    <Button variant="ghost" className="w-full" onClick={() => setDialog('cancel')}>
+                      Cancel procedure
+                    </Button>
+                  </div>
                 )}
-              </div>
+              </SheetRail>
             </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Operative notes" description="Written by the clinical team." />
-            {procedure.clinicalNotes.length === 0 ? (
-              <p className="px-6 py-6 text-sm text-fg-muted">
-                No operative notes are linked to this procedure yet.
-              </p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {procedure.clinicalNotes.map((note) => {
-                  const v = note.versions[0];
-                  const sections = [
-                    ['Subjective', v?.subjective],
-                    ['Objective', v?.objective],
-                    ['Assessment', v?.assessment],
-                    ['Plan', v?.plan],
-                  ].filter(([, text]) => text);
-                  return (
-                    <li key={note.id} className="flex flex-col gap-4 px-6 py-6">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-fg">
-                          {humanize(note.noteType)}
-                        </span>
-                        <Badge tone={note.status === 'FINALIZED' ? 'success' : 'warning'}>
-                          {humanize(note.status)}
-                        </Badge>
-                        <span className="tabular font-mono text-[13px] text-fg-subtle">
-                          {formatDate(note.createdAt)}
-                        </span>
-                      </div>
-                      {sections.length === 0 ? (
-                        <p className="text-sm text-fg-muted">This note has no text yet.</p>
-                      ) : (
-                        <dl className="flex flex-col gap-3 text-sm">
-                          {sections.map(([label, text]) => (
-                            <div key={label}>
-                              <dt className="text-[13px] text-fg-subtle">{label}</dt>
-                              <dd className="mt-1 whitespace-pre-wrap text-fg">{text}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
+          </InkSheet>
 
           {dialog === 'estimate' && (
             <EstimateDialog
@@ -597,5 +678,22 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
         </>
       )}
     </div>
+  );
+}
+
+/** A square tick: ink with a check when done, an outline when not. */
+function CheckBox({ done }: { done: boolean }) {
+  return done ? (
+    <span
+      aria-hidden="true"
+      className="flex size-[18px] shrink-0 items-center justify-center bg-fg text-surface"
+    >
+      <Check size={12} weight="bold" />
+    </span>
+  ) : (
+    <span
+      aria-hidden="true"
+      className="block size-[18px] shrink-0 border border-control bg-surface"
+    />
   );
 }

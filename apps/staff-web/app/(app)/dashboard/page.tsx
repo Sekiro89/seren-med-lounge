@@ -16,14 +16,27 @@ import {
 import { AppointmentEntrySource } from '@serenemed/types';
 import { ApiError } from '@serenemed/api-client';
 import { Button } from '../../../components/ui/button';
-import { StatusBadge } from '../../../components/ui/badge';
-import { Card, CardHeader } from '../../../components/ui/card';
-import { DataTable, type Column } from '../../../components/ui/data-table';
 import { EmptyState } from '../../../components/ui/empty-state';
 import { Field, Input, Select } from '../../../components/ui/fields';
-import { PageHeader } from '../../../components/ui/page-header';
+import {
+  Figures,
+  InkSection,
+  InkSheet,
+  InkStatus,
+  MarginNote,
+  SheetHead,
+  SheetRail,
+} from '../../../components/ui/ink';
+import { LedgerTable, type LedgerColumn } from '../../../components/ui/ledger-table';
 import { apiClient } from '../../../lib/api-client';
-import { clinicToday, formatDate, formatTime, fullName, humanize } from '../../../lib/format';
+import {
+  clinicToday,
+  formatDate,
+  formatLongDate,
+  formatTime,
+  fullName,
+  humanize,
+} from '../../../lib/format';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
@@ -131,7 +144,7 @@ const patientFormSchema = patientRegistrationSchema.extend({
 
 function MatchPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-control border border-line bg-warning-bg p-4">
+    <div className="border-l-2 border-warning-fg bg-warning-bg p-4">
       <p className="mb-2 text-sm font-semibold text-warning-fg">{title}</p>
       {children}
     </div>
@@ -299,16 +312,26 @@ export default function ConsultationsPage() {
     }
   };
 
-  const columns: Column<AppointmentRow>[] = [
-    {
-      header: 'Patient',
-      render: (a) => <span className="font-medium">{fullName(a.patient)}</span>,
-    },
+  const columns: LedgerColumn<AppointmentRow>[] = [
     {
       header: 'Scheduled',
+      width: 'w-[150px]',
+      numeric: true,
       render: (a) => (
-        <span className="tabular font-mono">
-          {formatDate(a.scheduledAt)} {formatTime(a.scheduledAt)}
+        <span className="whitespace-nowrap">
+          <span className="text-fg-muted">{formatDate(a.scheduledAt)}</span>{' '}
+          {formatTime(a.scheduledAt)}
+        </span>
+      ),
+    },
+    {
+      header: 'Patient',
+      render: (a) => (
+        <span className="block leading-tight">
+          <span className="block font-medium">{fullName(a.patient)}</span>
+          {a.doctor?.fullName && (
+            <span className="block text-[12px] text-fg-muted">{a.doctor.fullName}</span>
+          )}
         </span>
       ),
     },
@@ -316,7 +339,11 @@ export default function ConsultationsPage() {
       header: 'Source',
       render: (a) => <span className="text-fg-muted">{humanize(a.entrySource)}</span>,
     },
-    { header: 'Status', render: (a) => <StatusBadge domain="appointment" status={a.status} /> },
+    {
+      header: 'Status',
+      width: 'w-[120px]',
+      render: (a) => <InkStatus domain="appointment" status={a.status} />,
+    },
     {
       header: 'Action',
       align: 'right',
@@ -358,21 +385,45 @@ export default function ConsultationsPage() {
     },
   ];
 
-  const header = (
-    <PageHeader
+  const today = clinicToday();
+  const todays = data?.filter(
+    (a) =>
+      a.scheduledAt &&
+      new Date(a.scheduledAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) === today,
+  );
+  const sorted = data && [...data].sort((x, y) => y.scheduledAt.localeCompare(x.scheduledAt));
+  const countToday = (statuses: string[]) =>
+    todays?.filter((a) => statuses.includes(a.status)).length;
+
+  const head = (
+    <SheetHead
+      eyebrow={formatLongDate(new Date())}
       title="Consultations"
       description={
         canCheckIn
           ? "Register patients, book appointments and open a patient's visit."
           : "Today's consultations. Open a visit once the front desk has checked the patient in."
       }
+      figures={
+        canReadAppointments ? (
+          <Figures
+            loading={loading && !data}
+            items={[
+              { label: 'Today', value: todays?.length },
+              { label: 'Still to come', value: countToday(['REQUESTED', 'CONFIRMED']) },
+              { label: 'In the clinic', value: countToday(['CHECKED_IN', 'IN_PROGRESS']) },
+              { label: 'Completed', value: countToday(['COMPLETED']) },
+            ]}
+          />
+        ) : undefined
+      }
       action={
         can(user.role, 'patient:write') ? (
           <Link
             href="/claims"
-            className="inline-flex h-9 items-center gap-2 rounded-control border border-control bg-surface px-4 text-sm font-medium text-fg hover:bg-surface-muted"
+            className="inline-flex h-9 items-center gap-2 rounded-control border border-control bg-surface px-3.5 text-[13px] font-medium text-fg hover:bg-surface-muted"
           >
-            <IdentificationCard size={20} aria-hidden="true" />
+            <IdentificationCard size={16} aria-hidden="true" />
             Patient claims
           </Link>
         ) : undefined
@@ -382,341 +433,371 @@ export default function ConsultationsPage() {
 
   if (!canReadAppointments) {
     return (
-      <>
-        {header}
-        <Card>
-          <EmptyState
-            icon={Stethoscope}
-            title="Open a visit from the queue"
-            description="Patients appear in your queue once they are checked in. Open a patient there to start the consultation."
-            action={
-              <Link
-                href="/queue"
-                className="inline-flex h-9 items-center rounded-control bg-primary px-4 text-sm font-medium text-on-primary hover:bg-primary-hover"
-              >
-                Go to queue
-              </Link>
-            }
-          />
-        </Card>
-      </>
+      <InkSheet>
+        {head}
+        <EmptyState
+          icon={Stethoscope}
+          title="Open a visit from the queue"
+          description="Patients appear in your queue once they are checked in. Open a patient there to start the consultation."
+          action={
+            <Link
+              href="/queue"
+              className="inline-flex h-9 items-center rounded-control bg-primary px-4 text-sm font-medium text-on-primary hover:bg-primary-hover"
+            >
+              Go to queue
+            </Link>
+          }
+        />
+      </InkSheet>
     );
   }
 
   return (
     <>
-      {header}
-
-      <div className="flex flex-col gap-6">
+      <InkSheet>
+        {head}
         {formError && (
-          <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg">
+          <p
+            role="alert"
+            className="border-b border-line bg-danger-bg px-8 py-2.5 text-sm text-danger-fg"
+          >
             {formError}
           </p>
         )}
-
-        {canWriteAppointments && (
-          <Card>
-            <CardHeader
-              title="New appointment"
-              description="Pick a patient, or register a new one, then choose a time."
-            />
-            <form
-              onSubmit={appointmentForm.handleSubmit(onCreateAppointment)}
-              onChange={(event) => {
-                clearAppointmentEdit(event);
-                clearPatientEdit(event);
-              }}
-              className="flex flex-col gap-4 p-5"
-              noValidate
-            >
-              <div className="flex flex-wrap items-start gap-3">
-                <div className="min-w-[14rem] flex-1">
-                  <PatientPicker
-                    value={selectedPatient}
-                    onChange={(patient) => {
-                      setSelectedPatient(patient);
-                      appointmentForm.setValue('patientId', patient?.id ?? '', {
-                        shouldValidate: true,
-                      });
-                    }}
-                    error={appointmentForm.formState.errors.patientId?.message}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="sm:mt-[1.625rem]"
-                  icon={<UserPlus size={20} aria-hidden="true" />}
-                  onClick={() => {
-                    setShowRegisterPatient((prev) => !prev);
-                    setRegisterOutcome(null);
-                    setActivationOutcome(null);
-                  }}
-                >
-                  {showRegisterPatient ? 'Cancel' : 'New patient'}
+        <div
+          className={`grid grid-cols-1 ${canWriteAppointments ? 'lg:grid-cols-[minmax(0,1fr)_380px]' : ''}`}
+        >
+          <section aria-label="Appointments" className="min-w-0">
+            <div className="flex min-h-11 items-center justify-between gap-4 border-b border-line px-5 py-2 sm:px-8">
+              <h2 className="text-[14px] font-semibold text-fg">Appointments</h2>
+              <span className="text-[12px] text-fg-muted">
+                {data ? (
+                  <>
+                    <span className="tabular font-mono text-fg">{data.length}</span> on record,
+                    newest first
+                  </>
+                ) : null}
+              </span>
+            </div>
+            {errorStatus !== undefined && !data ? (
+              <div role="alert" className="flex items-center justify-between gap-4 px-8 py-5">
+                <p className="text-sm text-danger-fg">Could not load appointments.</p>
+                <Button variant="secondary" size="sm" onClick={reload}>
+                  Retry
                 </Button>
               </div>
-
-              {showRegisterPatient && !registerOutcome && (
-                <div
-                  className="rounded-control border border-line bg-surface-muted p-4"
-                  onKeyDown={(event) => {
-                    // Enter here registers the patient, not the whole appointment.
-                    if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
-                      event.preventDefault();
-                      void patientForm.handleSubmit(onRegisterPatient)();
+            ) : (
+              <LedgerTable
+                columns={columns}
+                rows={sorted}
+                getRowKey={(a) => a.id}
+                loading={loading}
+                muted={(a) =>
+                  a.status === 'COMPLETED' || a.status === 'CANCELLED' || a.status === 'NO_SHOW'
+                }
+                minWidth={720}
+                caption="Appointments"
+                empty={
+                  <EmptyState
+                    icon={CalendarBlank}
+                    title="No appointments yet"
+                    description={
+                      canWriteAppointments
+                        ? 'Book the first appointment in the rail and it will appear here.'
+                        : 'Appointments booked at the front desk appear here.'
                     }
+                  />
+                }
+              />
+            )}
+          </section>
+
+          {canWriteAppointments && (
+            <SheetRail label="Book an appointment">
+              <InkSection title="New appointment">
+                <MarginNote className="pt-1">
+                  Pick a patient, or register a new one, then choose a time.
+                </MarginNote>
+                <form
+                  onSubmit={appointmentForm.handleSubmit(onCreateAppointment)}
+                  onChange={(event) => {
+                    clearAppointmentEdit(event);
+                    clearPatientEdit(event);
                   }}
+                  className="flex flex-col gap-4 pt-3"
+                  noValidate
                 >
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field
-                      label="First name"
-                      htmlFor="reg-first-name"
-                      error={patientForm.formState.errors.firstName?.message}
-                    >
-                      <Input
-                        id="reg-first-name"
-                        required
-                        aria-required="true"
-                        aria-invalid={patientForm.formState.errors.firstName ? true : undefined}
-                        {...patientForm.register('firstName')}
+                  <div className="flex flex-col gap-2">
+                    <div className="min-w-0">
+                      <PatientPicker
+                        value={selectedPatient}
+                        onChange={(patient) => {
+                          setSelectedPatient(patient);
+                          appointmentForm.setValue('patientId', patient?.id ?? '', {
+                            shouldValidate: true,
+                          });
+                        }}
+                        error={appointmentForm.formState.errors.patientId?.message}
                       />
-                    </Field>
-                    <Field
-                      label="Last name"
-                      htmlFor="reg-last-name"
-                      error={patientForm.formState.errors.lastName?.message}
-                    >
-                      <Input
-                        id="reg-last-name"
-                        required
-                        aria-required="true"
-                        aria-invalid={patientForm.formState.errors.lastName ? true : undefined}
-                        {...patientForm.register('lastName')}
-                      />
-                    </Field>
-                    <Field
-                      label="Date of birth"
-                      htmlFor="reg-dob"
-                      error={patientForm.formState.errors.dateOfBirth?.message}
-                    >
-                      <Input
-                        id="reg-dob"
-                        type="date"
-                        min="1900-01-01"
-                        max={clinicToday()}
-                        required
-                        aria-required="true"
-                        aria-invalid={patientForm.formState.errors.dateOfBirth ? true : undefined}
-                        {...patientForm.register('dateOfBirth')}
-                      />
-                    </Field>
-                    <Field
-                      label="Phone"
-                      htmlFor="reg-phone"
-                      error={patientForm.formState.errors.phone?.message}
-                    >
-                      <Input
-                        id="reg-phone"
-                        required
-                        aria-required="true"
-                        aria-invalid={patientForm.formState.errors.phone ? true : undefined}
-                        {...patientForm.register('phone')}
-                      />
-                    </Field>
-                  </div>
-                  <Button
-                    type="button"
-                    className="mt-4"
-                    onClick={patientForm.handleSubmit(onRegisterPatient)}
-                    loading={patientForm.formState.isSubmitting}
-                  >
-                    Register patient
-                  </Button>
-                </div>
-              )}
-
-              {/* PatientsService.register's non-`created` outcomes: the
-                  backend found something Reception should look at before
-                  any record is created. */}
-              {registerOutcome && registerOutcome.kind === 'existing' && (
-                <MatchPanel title="Existing patient found">
-                  <PatientLine patient={registerOutcome.patient} />
-                  <p className="mt-2 text-[13px] text-fg-muted">
-                    {registerOutcome.hasAccount
-                      ? 'This patient already has an online account. They can sign in directly.'
-                      : 'This patient does not have an online account yet.'}
-                  </p>
-
-                  {activationOutcome && activationOutcome.kind === 'created' && (
-                    <p className="mt-2 rounded-control bg-surface px-3 py-2 text-sm text-fg">
-                      Activation code:{' '}
-                      <span className="font-mono font-semibold">{activationOutcome.code}</span>.
-                      Share this with the patient. Expires {formatDate(activationOutcome.expiresAt)}{' '}
-                      {formatTime(activationOutcome.expiresAt)}.
-                    </p>
-                  )}
-                  {activationOutcome && activationOutcome.kind === 'duplicate_account' && (
-                    <p className="mt-2 text-[13px] text-fg-muted">
-                      This patient already has an account, so no new code was created.
-                    </p>
-                  )}
-
-                  <div className="mt-3 flex flex-wrap gap-2">
+                    </div>
                     <Button
-                      variant="secondary"
-                      onClick={() => selectPatient(registerOutcome.patient)}
-                    >
-                      Open patient record
-                    </Button>
-                    {!registerOutcome.hasAccount && !activationOutcome && (
-                      <Button
-                        variant="secondary"
-                        disabled={claimBusy}
-                        onClick={() => handleSendActivation(registerOutcome.patient.id)}
-                      >
-                        Send account activation
-                      </Button>
-                    )}
-                    <Button
+                      type="button"
                       variant="ghost"
+                      size="sm"
+                      className="self-start"
+                      icon={<UserPlus size={20} aria-hidden="true" />}
                       onClick={() => {
+                        setShowRegisterPatient((prev) => !prev);
                         setRegisterOutcome(null);
                         setActivationOutcome(null);
                       }}
                     >
-                      Cancel
+                      {showRegisterPatient ? 'Cancel' : 'New patient'}
                     </Button>
                   </div>
-                </MatchPanel>
-              )}
 
-              {registerOutcome &&
-                (registerOutcome.kind === 'possible_match' ||
-                  registerOutcome.kind === 'ambiguous_match') && (
-                  <MatchPanel
-                    title={
-                      registerOutcome.kind === 'possible_match'
-                        ? 'Possible existing patient found'
-                        : 'Multiple possible patients found'
-                    }
-                  >
-                    <ul className="flex flex-col gap-2">
-                      {registerOutcome.candidates.map((candidate) => {
-                        const claimRequestId = registerOutcome.claimRequestId;
-                        return (
-                          <li
-                            key={candidate.id}
-                            className="rounded-control border border-line bg-surface p-3"
-                          >
-                            <PatientLine patient={candidate} />
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="mt-2"
-                              disabled={claimBusy}
-                              onClick={() => handleConfirmSamePatient(claimRequestId, candidate.id)}
-                            >
-                              This is the same patient
-                            </Button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                  {showRegisterPatient && !registerOutcome && (
+                    <div
+                      className="border-y border-line py-4"
+                      onKeyDown={(event) => {
+                        // Enter here registers the patient, not the whole appointment.
+                        if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+                          event.preventDefault();
+                          void patientForm.handleSubmit(onRegisterPatient)();
+                        }
+                      }}
+                    >
+                      <div className="grid grid-cols-1 gap-4">
+                        <Field
+                          label="First name"
+                          htmlFor="reg-first-name"
+                          error={patientForm.formState.errors.firstName?.message}
+                        >
+                          <Input
+                            id="reg-first-name"
+                            required
+                            aria-required="true"
+                            aria-invalid={patientForm.formState.errors.firstName ? true : undefined}
+                            {...patientForm.register('firstName')}
+                          />
+                        </Field>
+                        <Field
+                          label="Last name"
+                          htmlFor="reg-last-name"
+                          error={patientForm.formState.errors.lastName?.message}
+                        >
+                          <Input
+                            id="reg-last-name"
+                            required
+                            aria-required="true"
+                            aria-invalid={patientForm.formState.errors.lastName ? true : undefined}
+                            {...patientForm.register('lastName')}
+                          />
+                        </Field>
+                        <Field
+                          label="Date of birth"
+                          htmlFor="reg-dob"
+                          error={patientForm.formState.errors.dateOfBirth?.message}
+                        >
+                          <Input
+                            id="reg-dob"
+                            type="date"
+                            min="1900-01-01"
+                            max={clinicToday()}
+                            required
+                            aria-required="true"
+                            aria-invalid={
+                              patientForm.formState.errors.dateOfBirth ? true : undefined
+                            }
+                            {...patientForm.register('dateOfBirth')}
+                          />
+                        </Field>
+                        <Field
+                          label="Phone"
+                          htmlFor="reg-phone"
+                          error={patientForm.formState.errors.phone?.message}
+                        >
+                          <Input
+                            id="reg-phone"
+                            required
+                            aria-required="true"
+                            aria-invalid={patientForm.formState.errors.phone ? true : undefined}
+                            {...patientForm.register('phone')}
+                          />
+                        </Field>
+                      </div>
                       <Button
-                        variant="secondary"
-                        disabled={claimBusy}
-                        onClick={() => handleCreateNewFromClaim(registerOutcome.claimRequestId)}
+                        type="button"
+                        className="mt-4"
+                        onClick={patientForm.handleSubmit(onRegisterPatient)}
+                        loading={patientForm.formState.isSubmitting}
                       >
-                        None of these, create new patient
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        disabled={claimBusy}
-                        onClick={() => handleEscalateClaim(registerOutcome.claimRequestId)}
-                      >
-                        Escalate
-                      </Button>
-                      <Button variant="ghost" onClick={() => setRegisterOutcome(null)}>
-                        Cancel
+                        Register patient
                       </Button>
                     </div>
-                  </MatchPanel>
-                )}
+                  )}
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field
-                  label="Entry source"
-                  htmlFor="appt-source"
-                  error={appointmentForm.formState.errors.entrySource && 'Choose an entry source.'}
-                >
-                  <Select
-                    id="appt-source"
-                    required
-                    aria-required="true"
-                    {...appointmentForm.register('entrySource')}
+                  {/* PatientsService.register's non-`created` outcomes: the
+                  backend found something Reception should look at before
+                  any record is created. */}
+                  {registerOutcome && registerOutcome.kind === 'existing' && (
+                    <MatchPanel title="Existing patient found">
+                      <PatientLine patient={registerOutcome.patient} />
+                      <p className="mt-2 text-[13px] text-fg-muted">
+                        {registerOutcome.hasAccount
+                          ? 'This patient already has an online account. They can sign in directly.'
+                          : 'This patient does not have an online account yet.'}
+                      </p>
+
+                      {activationOutcome && activationOutcome.kind === 'created' && (
+                        <p className="mt-2 rounded-control bg-surface px-3 py-2 text-sm text-fg">
+                          Activation code:{' '}
+                          <span className="font-mono font-semibold">{activationOutcome.code}</span>.
+                          Share this with the patient. Expires{' '}
+                          {formatDate(activationOutcome.expiresAt)}{' '}
+                          {formatTime(activationOutcome.expiresAt)}.
+                        </p>
+                      )}
+                      {activationOutcome && activationOutcome.kind === 'duplicate_account' && (
+                        <p className="mt-2 text-[13px] text-fg-muted">
+                          This patient already has an account, so no new code was created.
+                        </p>
+                      )}
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => selectPatient(registerOutcome.patient)}
+                        >
+                          Open patient record
+                        </Button>
+                        {!registerOutcome.hasAccount && !activationOutcome && (
+                          <Button
+                            variant="secondary"
+                            disabled={claimBusy}
+                            onClick={() => handleSendActivation(registerOutcome.patient.id)}
+                          >
+                            Send account activation
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setRegisterOutcome(null);
+                            setActivationOutcome(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </MatchPanel>
+                  )}
+
+                  {registerOutcome &&
+                    (registerOutcome.kind === 'possible_match' ||
+                      registerOutcome.kind === 'ambiguous_match') && (
+                      <MatchPanel
+                        title={
+                          registerOutcome.kind === 'possible_match'
+                            ? 'Possible existing patient found'
+                            : 'Multiple possible patients found'
+                        }
+                      >
+                        <ul className="flex flex-col gap-2">
+                          {registerOutcome.candidates.map((candidate) => {
+                            const claimRequestId = registerOutcome.claimRequestId;
+                            return (
+                              <li key={candidate.id} className="border-b border-line py-3">
+                                <PatientLine patient={candidate} />
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="mt-2"
+                                  disabled={claimBusy}
+                                  onClick={() =>
+                                    handleConfirmSamePatient(claimRequestId, candidate.id)
+                                  }
+                                >
+                                  This is the same patient
+                                </Button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            variant="secondary"
+                            disabled={claimBusy}
+                            onClick={() => handleCreateNewFromClaim(registerOutcome.claimRequestId)}
+                          >
+                            None of these, create new patient
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            disabled={claimBusy}
+                            onClick={() => handleEscalateClaim(registerOutcome.claimRequestId)}
+                          >
+                            Escalate
+                          </Button>
+                          <Button variant="ghost" onClick={() => setRegisterOutcome(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </MatchPanel>
+                    )}
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <Field
+                      label="Entry source"
+                      htmlFor="appt-source"
+                      error={
+                        appointmentForm.formState.errors.entrySource && 'Choose an entry source.'
+                      }
+                    >
+                      <Select
+                        id="appt-source"
+                        required
+                        aria-required="true"
+                        {...appointmentForm.register('entrySource')}
+                      >
+                        {Object.values(AppointmentEntrySource).map((source) => (
+                          <option key={source} value={source}>
+                            {humanize(source)}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field
+                      label="Scheduled at"
+                      htmlFor="appt-scheduled"
+                      error={appointmentForm.formState.errors.scheduledAt?.message}
+                    >
+                      <Input
+                        id="appt-scheduled"
+                        type="datetime-local"
+                        required
+                        aria-required="true"
+                        aria-invalid={
+                          appointmentForm.formState.errors.scheduledAt ? true : undefined
+                        }
+                        {...appointmentForm.register('scheduledAt')}
+                      />
+                    </Field>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    loading={appointmentForm.formState.isSubmitting}
                   >
-                    {Object.values(AppointmentEntrySource).map((source) => (
-                      <option key={source} value={source}>
-                        {humanize(source)}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field
-                  label="Scheduled at"
-                  htmlFor="appt-scheduled"
-                  error={appointmentForm.formState.errors.scheduledAt?.message}
-                >
-                  <Input
-                    id="appt-scheduled"
-                    type="datetime-local"
-                    required
-                    aria-required="true"
-                    aria-invalid={appointmentForm.formState.errors.scheduledAt ? true : undefined}
-                    {...appointmentForm.register('scheduledAt')}
-                  />
-                </Field>
-              </div>
-
-              <Button
-                type="submit"
-                className="self-start"
-                loading={appointmentForm.formState.isSubmitting}
-              >
-                Book appointment
-              </Button>
-            </form>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader title="Appointments" />
-          {errorStatus !== undefined && !data ? (
-            <div role="alert" className="flex items-center justify-between gap-4 p-5">
-              <p className="text-sm text-danger-fg">Could not load appointments.</p>
-              <Button variant="secondary" size="sm" onClick={reload}>
-                Retry
-              </Button>
-            </div>
-          ) : (
-            <DataTable
-              columns={columns}
-              rows={data}
-              getRowKey={(a) => a.id}
-              loading={loading}
-              empty={
-                <EmptyState
-                  icon={CalendarBlank}
-                  title="No appointments yet"
-                  description="Book the first appointment above and it will appear here."
-                />
-              }
-            />
+                    Book appointment
+                  </Button>
+                </form>
+              </InkSection>
+            </SheetRail>
           )}
-        </Card>
-      </div>
+        </div>
+      </InkSheet>
 
       <CheckInDialog
         target={checkIn}

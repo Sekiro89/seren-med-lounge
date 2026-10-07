@@ -1,33 +1,53 @@
-import { FUNNEL_FILL, FUNNEL_LABELS, FUNNEL_ORDER, type Funnel } from './shared';
+import { RuledBar } from '../../../../components/ui/ink';
+import { FUNNEL_LABELS, FUNNEL_ORDER, type Funnel } from './shared';
 
-/** One stacked bar across the stages, with a named count for each stage underneath. */
+/**
+ * The campaign funnel as ruled rows: each stage named, its count in Plex
+ * Mono, and an ink bar on a hairline (converted in cobalt, lost in grey).
+ * The bar is decorative; the number is always beside it.
+ */
 export function FunnelBar({ funnel, total }: { funnel: Funnel; total: number }) {
+  const widest = Math.max(1, ...FUNNEL_ORDER.map((s) => funnel[s]));
   return (
-    <div>
-      <div
-        role="img"
-        aria-label={FUNNEL_ORDER.map((s) => `${FUNNEL_LABELS[s]} ${funnel[s]}`).join(', ')}
-        className="flex h-4 w-full overflow-hidden bg-surface-muted"
-      >
-        {FUNNEL_ORDER.filter((s) => funnel[s] > 0).map((s) => (
-          <div
-            key={s}
-            className={`${FUNNEL_FILL[s]} h-full border-r-2 border-surface last:border-r-0`}
-            style={{ width: `${(funnel[s] / total) * 100}%` }}
+    <dl className="divide-y divide-line">
+      {FUNNEL_ORDER.map((s, i) => (
+        <div
+          key={s}
+          className="grid grid-cols-[24px_150px_48px_minmax(0,1fr)_56px] items-center gap-x-3 py-2 text-[13px]"
+        >
+          <span aria-hidden="true" className="tabular font-mono text-[11px] text-fg-subtle">
+            {String(i + 1).padStart(2, '0')}
+          </span>
+          <dt className={s === 'LOST' ? 'text-fg-muted' : 'text-fg'}>{FUNNEL_LABELS[s]}</dt>
+          <dd className="tabular text-right font-mono text-fg">{funnel[s]}</dd>
+          <RuledBar
+            value={funnel[s]}
+            max={widest}
+            tone={s === 'CONVERTED' ? 'primary' : s === 'LOST' ? 'muted' : 'ink'}
           />
-        ))}
-      </div>
-      <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
-        {FUNNEL_ORDER.map((s) => (
-          <div key={s}>
-            <dt className="flex items-center gap-2 text-[13px] text-fg-muted">
-              <span aria-hidden="true" className={`size-2.5 ${FUNNEL_FILL[s]}`} />
-              {FUNNEL_LABELS[s]}
-            </dt>
-            <dd className="tabular mt-1 font-mono text-2xl font-semibold text-fg">{funnel[s]}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+          <span className="tabular text-right font-mono text-[12px] text-fg-muted">
+            {total > 0 ? `${Math.round((funnel[s] / total) * 100)}%` : '-'}
+          </span>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** The funnel squeezed into one row of a list: stacked ink segments, decorative. */
+export function FunnelStrip({ funnel, total }: { funnel: Funnel; total: number }) {
+  if (total === 0) return <span className="text-[12px] text-fg-subtle">No leads yet</span>;
+  return (
+    <span aria-hidden="true" className="flex h-2 w-full max-w-40 bg-surface-muted">
+      {FUNNEL_ORDER.filter((s) => funnel[s] > 0).map((s) => (
+        <span
+          key={s}
+          className={`h-full border-r border-surface last:border-r-0 ${
+            s === 'CONVERTED' ? 'bg-primary' : s === 'LOST' ? 'bg-control' : 'bg-fg'
+          }`}
+          style={{ width: `${(funnel[s] / total) * 100}%` }}
+        />
+      ))}
+    </span>
   );
 }

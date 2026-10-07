@@ -5,14 +5,20 @@ import { ChatCircleText, Plus, Star, Tray, WarningCircle } from '@phosphor-icons
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Card } from '../../../components/ui/card';
-import { DataTable, type Column } from '../../../components/ui/data-table';
+import { type Column } from '../../../components/ui/data-table';
 import { Dialog } from '../../../components/ui/dialog';
 import { EmptyState } from '../../../components/ui/empty-state';
+import {
+  Figures,
+  InkFilters,
+  InkSheet,
+  RuledBar,
+  SheetBar,
+  SheetHead,
+} from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
-import { PersonCell } from '../../../components/ui/avatar';
+import { RuledTable } from '../../../components/ui/ruled-table';
 import { Skeleton } from '../../../components/ui/skeleton';
-import { Tabs } from '../../../components/ui/tabs';
 import type { Tone } from '../../../lib/status';
 import { apiClient } from '../../../lib/api-client';
 import { formatDate, fullName, humanize } from '../../../lib/format';
@@ -28,7 +34,7 @@ import {
   type ReviewRow,
 } from './_components/helpers';
 import { RequestDialog } from './_components/request-dialog';
-import { Stars } from './_components/stars';
+import { RatingFigure } from './_components/stars';
 
 type TabKey = 'moderate' | 'published' | 'requests';
 
@@ -59,7 +65,7 @@ function ListSkeleton() {
   return (
     <div className="divide-y divide-line">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="flex flex-col gap-3 px-6 py-6">
+        <div key={i} className="flex flex-col gap-3 px-8 py-6">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-4 w-full max-w-xl" />
           <Skeleton className="h-4 w-2/3 max-w-md" />
@@ -91,6 +97,12 @@ export default function ReviewsPage() {
       </Card>
     );
   }
+
+  const average =
+    published.data && published.data.length > 0
+      ? (published.data.reduce((n, r) => n + r.rating, 0) / published.data.length).toFixed(1)
+      : undefined;
+  const openRequests = requests.data?.filter((r) => r.status === 'REQUESTED').length;
 
   const act = async (id: string, verb: 'approve' | 'reject') => {
     setBusyId(id);
@@ -124,7 +136,10 @@ export default function ReviewsPage() {
   };
 
   const requestColumns: Column<RequestRow>[] = [
-    { header: 'Patient', render: (r) => <PersonCell name={fullName(r.patient)} /> },
+    {
+      header: 'Patient',
+      render: (r) => <span className="font-medium">{fullName(r.patient)}</span>,
+    },
     { header: 'Stage', render: (r) => stageLabel(r.stage) },
     {
       header: 'Status',
@@ -134,14 +149,17 @@ export default function ReviewsPage() {
     },
     {
       header: 'Requested',
-      render: (r) => <span className="tabular font-mono">{formatDate(r.createdAt)}</span>,
+      numeric: true,
+      render: (r) => formatDate(r.createdAt),
     },
     {
       header: 'Expires',
-      render: (r) => <span className="tabular font-mono">{formatDate(r.expiresAt)}</span>,
+      numeric: true,
+      render: (r) => <span className="text-fg-muted">{formatDate(r.expiresAt)}</span>,
     },
     {
       header: 'Actions',
+      align: 'right',
       render: (r) =>
         r.status === 'REQUESTED' ? (
           <Button size="sm" variant="ghost" onClick={() => setCancelling(r)}>
@@ -162,29 +180,46 @@ export default function ReviewsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader
-        title="Reviews"
-        description="Ask patients for reviews and decide which ones are published."
-        action={requestButton('primary')}
-      />
-
-      <Card>
-        <div className="px-6">
-          <Tabs<TabKey>
+    <>
+      <InkSheet>
+        <SheetHead
+          title="Reviews"
+          description="Ask patients for reviews and decide which ones are published."
+          figures={
+            <Figures
+              items={[
+                {
+                  label: 'Average rating',
+                  value: published.loading ? undefined : average,
+                  unit: average !== undefined ? '/5' : undefined,
+                },
+                { label: 'Published', value: published.data?.length },
+                {
+                  label: 'To moderate',
+                  value: pending.data?.length,
+                  tone: pending.data && pending.data.length > 0 ? 'warning' : undefined,
+                },
+                { label: 'Open requests', value: openRequests },
+              ]}
+            />
+          }
+          action={requestButton('primary')}
+        />
+        <SheetBar>
+          <InkFilters<TabKey>
             label="Review lists"
             value={tab}
             onChange={setTab}
-            tabs={[
+            options={[
               { key: 'moderate', label: 'To moderate', count: pending.data?.length },
-              { key: 'published', label: 'Published' },
-              { key: 'requests', label: 'Requests' },
+              { key: 'published', label: 'Published', count: published.data?.length },
+              { key: 'requests', label: 'Requests', count: requests.data?.length },
             ]}
           />
-        </div>
+        </SheetBar>
 
         {actionError && (
-          <p role="alert" className="border-b border-line px-6 py-4 text-sm text-danger-fg">
+          <p role="alert" className="border-b border-line px-8 py-3 text-sm text-danger-fg">
             {actionError}
           </p>
         )}
@@ -204,31 +239,42 @@ export default function ReviewsPage() {
           ) : (
             <ul className="divide-y divide-line">
               {pending.data?.map((review) => (
-                <li key={review.id} className="flex flex-col gap-4 px-6 py-6">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <Stars rating={review.rating} />
-                    <span className="text-sm font-medium text-fg">{review.patient.firstName}</span>
-                    <span className="text-[13px] text-fg-subtle">
-                      {stageLabel(review.stage)}, {formatDate(review.createdAt)}
-                    </span>
-                    <Badge tone={review.publishConsent ? 'success' : 'neutral'}>
-                      {review.publishConsent ? 'Agreed to publish' : 'Did not agree to publish'}
-                    </Badge>
+                <li
+                  key={review.id}
+                  className="grid grid-cols-1 gap-x-8 gap-y-4 px-5 py-6 sm:px-8 md:grid-cols-[96px_minmax(0,1fr)_200px]"
+                >
+                  <RatingFigure rating={review.rating} />
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="text-sm font-medium text-fg">
+                        {review.patient.firstName}
+                      </span>
+                      <span className="text-[12px] text-fg-muted">
+                        {stageLabel(review.stage)} ·{' '}
+                        <span className="tabular font-mono">{formatDate(review.createdAt)}</span>
+                      </span>
+                    </p>
+                    {review.comment ? (
+                      <p className="mt-2 max-w-[72ch] whitespace-pre-wrap text-[15px] leading-7 text-fg">
+                        {review.comment}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-sm text-fg-subtle">
+                        {review.format === 'VIDEO'
+                          ? 'Video review, no written comment.'
+                          : 'No comment.'}
+                      </p>
+                    )}
+                    <p className="mt-3">
+                      <Badge tone={review.publishConsent ? 'success' : 'neutral'}>
+                        {review.publishConsent ? 'Agreed to publish' : 'Did not agree to publish'}
+                      </Badge>
+                    </p>
                   </div>
-                  {review.comment ? (
-                    <p className="max-w-3xl whitespace-pre-wrap text-[15px] leading-7 text-fg">
-                      {review.comment}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-fg-subtle">
-                      {review.format === 'VIDEO'
-                        ? 'Video review, no written comment.'
-                        : 'No comment.'}
-                    </p>
-                  )}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 md:flex-col">
                     <Button
                       size="sm"
+                      className="md:w-full"
                       loading={busyId === review.id}
                       onClick={() => act(review.id, 'approve')}
                     >
@@ -237,6 +283,7 @@ export default function ReviewsPage() {
                     <Button
                       size="sm"
                       variant="secondary"
+                      className="md:w-full"
                       disabled={busyId === review.id}
                       onClick={() => setRejecting(review)}
                     >
@@ -260,32 +307,67 @@ export default function ReviewsPage() {
               description="Approved reviews from patients who agreed to publish appear here."
             />
           ) : (
-            <ul className="grid gap-6 p-6 md:grid-cols-2">
-              {published.data?.map((review) => (
-                <li
-                  key={review.id}
-                  className="flex flex-col gap-3 rounded-panel bg-surface-muted p-6"
-                >
-                  <Stars rating={review.rating} />
-                  {review.comment && (
-                    <p className="whitespace-pre-wrap text-[15px] leading-7 text-fg">
-                      {review.comment}
-                    </p>
-                  )}
-                  <p className="mt-auto text-[13px] text-fg-subtle">
-                    {review.patient.firstName}, {stageLabel(review.stage)}
-                    {review.moderatedAt ? `, published ${formatDate(review.moderatedAt)}` : ''}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
+              <ul className="divide-y divide-line lg:border-r lg:border-line">
+                {published.data?.map((review) => (
+                  <li
+                    key={review.id}
+                    className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-8 px-5 py-5 sm:px-8"
+                  >
+                    <RatingFigure rating={review.rating} />
+                    <div className="min-w-0">
+                      {review.comment && (
+                        <p className="max-w-[72ch] whitespace-pre-wrap text-[15px] leading-7 text-fg">
+                          {review.comment}
+                        </p>
+                      )}
+                      <p className="mt-1.5 text-[12px] text-fg-muted">
+                        {review.patient.firstName}, {stageLabel(review.stage)}
+                        {review.moderatedAt ? (
+                          <>
+                            {' '}
+                            · published{' '}
+                            <span className="tabular font-mono">
+                              {formatDate(review.moderatedAt)}
+                            </span>
+                          </>
+                        ) : (
+                          ''
+                        )}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <section aria-labelledby="dist-h" className="px-5 py-5 sm:px-7">
+                <h2 id="dist-h" className="section-rule pt-2 text-sm font-semibold text-fg">
+                  Ratings
+                </h2>
+                <dl className="mt-2 divide-y divide-line">
+                  {[5, 4, 3, 2, 1].map((n) => {
+                    const c = published.data?.filter((r) => r.rating === n).length ?? 0;
+                    return (
+                      <div
+                        key={n}
+                        className="grid grid-cols-[28px_minmax(0,1fr)_28px] items-center gap-3 py-2 text-[13px]"
+                      >
+                        <dt className="tabular font-mono text-fg-muted">{n}/5</dt>
+                        <RuledBar value={c} max={Math.max(1, published.data?.length ?? 1)} />
+                        <dd className="tabular text-right font-mono text-fg">{c}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </section>
+            </div>
           ))}
 
         {tab === 'requests' &&
           (requests.errorStatus !== undefined && !requests.loading ? (
             <ErrorPanel state={requests} label="review requests" />
           ) : (
-            <DataTable
+            <RuledTable
+              caption="Review requests"
               columns={requestColumns}
               rows={requests.data}
               getRowKey={(r) => r.id}
@@ -300,7 +382,7 @@ export default function ReviewsPage() {
               }
             />
           ))}
-      </Card>
+      </InkSheet>
 
       <RequestDialog
         open={requesting}
@@ -356,6 +438,6 @@ export default function ReviewsPage() {
           The patient will no longer be able to answer this request.
         </p>
       </Dialog>
-    </div>
+    </>
   );
 }

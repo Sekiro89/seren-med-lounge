@@ -19,6 +19,8 @@ export interface Vital {
   heightCm: number | null;
   weightKg: number | null;
   recordedAt: string;
+  /** Who took the reading; null for older rows. */
+  recordedBy?: { fullName: string; role: string } | null;
 }
 
 export interface DiagnosisVersion {
@@ -130,6 +132,7 @@ export interface ClinicalNote {
   noteType: string;
   /** The template version the note was started from, if any. */
   templateVersionId?: string | null;
+  templateVersion?: { version: number; template: { name: string } } | null;
   createdAt?: string;
   versions: ClinicalNoteVersion[];
 }
@@ -185,6 +188,19 @@ export interface EncounterDetail {
   labOrders: LabOrder[];
   /** Care plans with their follow-ups (present in the API detail). */
   carePlans?: CarePlan[];
+  /** The booking, for the reason the patient gave. */
+  appointment?: { notes: string | null; scheduledAt: string } | null;
+  /** Medicines still running from earlier visits' prescriptions. */
+  currentMedication?: CurrentMedicationItem[];
+}
+
+export interface CurrentMedicationItem {
+  id: string;
+  medicationName: string;
+  dosage: string;
+  frequency: string;
+  prescribedAt: string;
+  encounterId: string;
 }
 
 export interface PatientInfo {
@@ -195,7 +211,7 @@ export interface PatientInfo {
   phone: string;
   /** Patient number; tolerated when the API does not send it yet. */
   mrn?: string | null;
-  /** Not in the schema today; shown when present. */
+  /** FEMALE, MALE or OTHER when recorded at registration. */
   sex?: string | null;
 }
 

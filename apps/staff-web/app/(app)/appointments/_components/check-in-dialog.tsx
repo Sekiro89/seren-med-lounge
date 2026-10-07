@@ -285,7 +285,11 @@ export function CheckInDialog({
             </label>
           </div>
 
-          <Field label="Note for the clinical team (optional)" htmlFor="checkin-notes">
+          <Field
+            label="Reason for visit (optional)"
+            htmlFor="checkin-notes"
+            helper="In the patient's words. The doctor sees it beside the consultation note."
+          >
             <Textarea
               id="checkin-notes"
               value={notes}

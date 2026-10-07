@@ -3,16 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ClockCounterClockwise, Warning } from '@phosphor-icons/react';
 import { apiClient } from '../../../lib/api-client';
-import { PersonCell } from '../../../components/ui/avatar';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { DataTable, type Column } from '../../../components/ui/data-table';
+import { type Column } from '../../../components/ui/data-table';
 import { Dialog } from '../../../components/ui/dialog';
 import { EmptyState } from '../../../components/ui/empty-state';
 import { Select } from '../../../components/ui/fields';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
-import { Toolbar } from '../../../components/ui/toolbar';
+import { Figures, InkSheet, SheetBar, SheetHead } from '../../../components/ui/ink';
+import { RuledTable } from '../../../components/ui/ruled-table';
 import { formatDate, formatTime, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
@@ -143,9 +142,9 @@ export default function AuditLogPage() {
         <button
           type="button"
           onClick={() => setSelected(e)}
-          className="tabular font-mono cursor-pointer text-left text-fg hover:underline"
+          className="tabular cursor-pointer whitespace-nowrap text-left font-mono text-fg hover:text-primary"
         >
-          {formatDate(e.createdAt)}, {formatTime(e.createdAt)}
+          {formatDate(e.createdAt)} <span className="text-fg-muted">{formatTime(e.createdAt)}</span>
         </button>
       ),
     },
@@ -153,7 +152,12 @@ export default function AuditLogPage() {
       header: 'Person',
       render: (e) => {
         const a = actorLabel(e);
-        return <PersonCell name={a.name} sub={a.sub} />;
+        return (
+          <span className="block min-w-0">
+            <span className="block truncate">{a.name}</span>
+            {a.sub && <span className="block truncate text-[12px] text-fg-muted">{a.sub}</span>}
+          </span>
+        );
       },
     },
     { header: 'What happened', render: (e) => describeAction(e.action) },
@@ -162,7 +166,7 @@ export default function AuditLogPage() {
       render: (e) => (
         <span>
           {humanize(e.entityType)}
-          <span className="tabular font-mono ml-2 text-xs text-fg-subtle">
+          <span className="tabular ml-2 font-mono text-[12px] text-fg-subtle">
             {shortId(e.entityId)}
           </span>
         </span>
@@ -174,13 +178,39 @@ export default function AuditLogPage() {
 
   return (
     <>
-      <PageHeader
-        title="Audit log"
-        description="Who did what, and when. Entries cannot be edited or deleted."
-      />
-
-      <Card>
-        <Toolbar>
+      <InkSheet>
+        <SheetHead
+          title="Audit log"
+          description="Who did what, and when. Entries cannot be edited or deleted."
+          figures={
+            <Figures
+              loading={loading}
+              items={[
+                {
+                  label: 'Entries loaded',
+                  value: rows.length,
+                  unit: hasMore ? '+' : undefined,
+                },
+                {
+                  label: 'People',
+                  value: new Set(rows.map((r) => r.actorId ?? r.actorType)).size,
+                },
+                {
+                  label: 'Oldest shown',
+                  value:
+                    rows.length > 0
+                      ? formatDate(rows[rows.length - 1]!.createdAt).slice(0, 6)
+                      : '-',
+                },
+              ]}
+            />
+          }
+        />
+        <SheetBar
+          actions={
+            <span className="text-[12px] text-fg-subtle">Select a time to see the full entry</span>
+          }
+        >
           <div className="w-52">
             <Select
               aria-label="Area"
@@ -208,7 +238,7 @@ export default function AuditLogPage() {
               ))}
             </Select>
           </div>
-        </Toolbar>
+        </SheetBar>
 
         {failed ? (
           <div className="flex flex-col items-center gap-4 px-6 py-14 text-center">
@@ -226,11 +256,14 @@ export default function AuditLogPage() {
             </Button>
           </div>
         ) : (
-          <DataTable
+          <RuledTable
+            caption="Audit entries"
             columns={columns}
             rows={rows}
             getRowKey={(e) => e.id}
             loading={loading}
+            pageSize={500}
+            onRowClick={(e) => setSelected(e)}
             empty={
               <EmptyState
                 icon={ClockCounterClockwise}
@@ -256,7 +289,7 @@ export default function AuditLogPage() {
         )}
 
         {!failed && !loading && hasMore && (
-          <div className="flex flex-col items-center gap-2 border-t border-line px-6 py-5">
+          <div className="flex flex-col items-center gap-2 px-6 py-5">
             {moreFailed && (
               <p role="alert" className="text-[13px] text-danger-fg">
                 More entries could not be loaded.
@@ -267,7 +300,7 @@ export default function AuditLogPage() {
             </Button>
           </div>
         )}
-      </Card>
+      </InkSheet>
 
       <Dialog
         variant="drawer"

@@ -5,13 +5,11 @@ import { Check, CheckSquare, Plus } from '@phosphor-icons/react';
 import { ApiError } from '@serenemed/api-client';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
-import { Card } from '../../../components/ui/card';
 import { EmptyState } from '../../../components/ui/empty-state';
-import { PageHeader } from '../../../components/ui/page-header';
+import { Figures, InkFilters, InkSheet, SheetBar, SheetHead } from '../../../components/ui/ink';
 import { Skeleton } from '../../../components/ui/skeleton';
-import { Tabs } from '../../../components/ui/tabs';
 import { apiClient } from '../../../lib/api-client';
-import { fullName, humanize } from '../../../lib/format';
+import { clinicToday, formatDate, formatTime, fullName, humanize } from '../../../lib/format';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
@@ -110,41 +108,69 @@ export default function TasksPage() {
 
   const empty = EMPTY[tab];
 
+  const today = clinicToday();
+  const dayOf = (iso: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(iso));
+  const dueToday = assigned.data?.filter(
+    (t) => isPending(t.status) && t.dueAt && dayOf(t.dueAt) === today,
+  ).length;
+  const overdueCount = count(overdue, false);
+
   return (
     <>
-      <PageHeader
-        title="Tasks"
-        description="Your to-do list and reminders."
-        action={
-          <Button icon={<Plus size={18} aria-hidden="true" />} onClick={() => setCreating(true)}>
-            New task
-          </Button>
-        }
-      />
-
       {error && (
-        <p
-          role="alert"
-          className="mb-4 rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
-        >
+        <p role="alert" className="mb-4 bg-danger-bg px-4 py-2.5 text-sm text-danger-fg">
           {error}
         </p>
       )}
 
-      <Card>
-        <div className="px-5">
-          <Tabs<TabKey>
+      <InkSheet>
+        <SheetHead
+          title="Tasks"
+          description="Your to-do list and reminders."
+          figures={
+            <Figures
+              loading={assigned.loading && !assigned.data}
+              items={[
+                { label: 'Open for you', value: count(assigned, true) },
+                { label: 'Due today', value: dueToday },
+                {
+                  label: 'Overdue',
+                  value: overdueCount,
+                  tone: overdueCount ? 'danger' : undefined,
+                },
+                { label: 'Done', value: finished.data?.length },
+              ]}
+            />
+          }
+          action={
+            <Button icon={<Plus size={18} aria-hidden="true" />} onClick={() => setCreating(true)}>
+              New task
+            </Button>
+          }
+        />
+        <SheetBar>
+          <InkFilters<TabKey>
             label="Task lists"
             value={tab}
             onChange={setTab}
-            tabs={[
+            options={[
               { key: 'assigned', label: 'Assigned to me', count: count(assigned, true) },
-              { key: 'created', label: 'Created by me' },
-              { key: 'overdue', label: 'Overdue', count: count(overdue, false) },
-              { key: 'done', label: 'Done' },
+              {
+                key: 'created',
+                label: 'Created by me',
+                count: created.data?.filter((t) => t.status !== 'CANCELLED').length,
+              },
+              { key: 'overdue', label: 'Overdue', count: overdueCount },
+              { key: 'done', label: 'Done', count: finished.data?.length },
             ]}
           />
-        </div>
+        </SheetBar>
 
         {active.errorStatus !== undefined && !active.loading ? (
           <div role="alert" className="flex flex-col items-center gap-3 px-6 py-14 text-center">
@@ -156,7 +182,7 @@ export default function TasksPage() {
             </Button>
           </div>
         ) : active.loading ? (
-          <div className="flex flex-col gap-3 p-5">
+          <div className="flex flex-col gap-3 px-8 py-5">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
             ))}
@@ -179,70 +205,97 @@ export default function TasksPage() {
             }
           />
         ) : (
-          <ul>
-            {rows?.map((task) => {
-              const checked = done.has(task.id) || task.status === 'DONE';
-              const canComplete = isPending(task.status) && !done.has(task.id);
-              const due = task.dueAt ? dueLabel(task.dueAt, task.status, now) : undefined;
-              const strike = checked || task.status === 'CANCELLED';
-              return (
-                <li
-                  key={task.id}
-                  className="flex items-start gap-3 border-b border-line px-5 py-3 last:border-0"
-                >
-                  <button
-                    type="button"
-                    aria-label={`Mark done: ${task.title}`}
-                    aria-pressed={checked}
-                    disabled={!canComplete}
-                    onClick={() => complete(task)}
-                    className={`mt-0.5 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-control border transition-colors disabled:cursor-default ${
-                      checked
-                        ? 'border-primary bg-primary text-on-primary'
-                        : 'border-control bg-surface hover:border-primary'
-                    }`}
+          <>
+            <div
+              aria-hidden="true"
+              className="grid h-9 grid-cols-[20px_minmax(0,1fr)_150px_88px] items-center gap-x-4 border-b border-line px-5 text-[11px] font-medium text-fg-muted sm:px-8"
+            >
+              <span />
+              <span>Task</span>
+              <span className="text-right">Due</span>
+              <span className="text-right">Priority</span>
+            </div>
+            <ul className="divide-y divide-line">
+              {rows?.map((task) => {
+                const checked = done.has(task.id) || task.status === 'DONE';
+                const canComplete = isPending(task.status) && !done.has(task.id);
+                const due = task.dueAt ? dueLabel(task.dueAt, task.status, now) : undefined;
+                const strike = checked || task.status === 'CANCELLED';
+                const loud = task.priority === 'URGENT' || task.priority === 'HIGH';
+                return (
+                  <li
+                    key={task.id}
+                    className="grid grid-cols-[20px_minmax(0,1fr)_150px_88px] items-start gap-x-4 px-5 py-3 sm:px-8"
                   >
-                    {checked && <Check size={14} weight="bold" aria-hidden="true" />}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-sm font-medium ${strike ? 'text-fg-subtle line-through' : 'text-fg'}`}
+                    <button
+                      type="button"
+                      aria-label={`Mark done: ${task.title}`}
+                      aria-pressed={checked}
+                      disabled={!canComplete}
+                      onClick={() => complete(task)}
+                      className={`mt-0.5 flex size-[18px] shrink-0 cursor-pointer items-center justify-center rounded-control border transition-colors disabled:cursor-default ${
+                        checked
+                          ? 'border-fg bg-fg text-surface'
+                          : 'border-control bg-surface hover:border-primary'
+                      }`}
                     >
-                      {task.title}
+                      {checked && <Check size={12} weight="bold" aria-hidden="true" />}
+                    </button>
+                    <div className="min-w-0">
+                      <p
+                        className={`text-sm font-medium ${strike ? 'text-fg-subtle line-through' : 'text-fg'}`}
+                      >
+                        {task.title}
+                      </p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12px] text-fg-muted">
+                        {[
+                          task.patient && fullName(task.patient),
+                          tab === 'created' &&
+                            task.assignee.id !== user.id &&
+                            `For ${task.assignee.fullName}`,
+                          tab === 'assigned' &&
+                            task.createdBy.id !== user.id &&
+                            `From ${task.createdBy.fullName}`,
+                          task.status === 'IN_PROGRESS' && 'In progress',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    </div>
+                    <p className="text-right text-[12px]">
+                      {task.dueAt && due ? (
+                        <>
+                          <span
+                            className={`tabular block font-mono text-[13px] ${
+                              due.overdue ? 'font-medium text-danger-fg' : 'text-fg'
+                            }`}
+                          >
+                            {formatDate(task.dueAt).slice(0, 6)} {formatTime(task.dueAt)}
+                          </span>
+                          <span className={due.overdue ? 'text-danger-fg' : 'text-fg-subtle'}>
+                            {due.overdue ? due.text : due.text.replace(/ \d\d:\d\d$/, '')}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-fg-subtle">-</span>
+                      )}
                     </p>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[13px] text-fg-muted">
-                      {due && (
-                        <span className={due.overdue ? 'font-medium text-danger-fg' : ''}>
-                          {due.text}
-                        </span>
+                    <span className="flex justify-end pt-0.5">
+                      {loud ? (
+                        <Badge tone={task.priority === 'URGENT' ? 'danger' : 'warning'}>
+                          {humanize(task.priority)}
+                        </Badge>
+                      ) : (
+                        <span className="text-[12px] text-fg-muted">{humanize(task.priority)}</span>
                       )}
-                      {task.patient && <span>{fullName(task.patient)}</span>}
-                      {tab === 'created' && task.assignee.id !== user.id && (
-                        <span>For {task.assignee.fullName}</span>
-                      )}
-                      {tab === 'assigned' && task.createdBy.id !== user.id && (
-                        <span>From {task.createdBy.fullName}</span>
-                      )}
-                      {task.status === 'IN_PROGRESS' && <span>In progress</span>}
-                    </p>
-                  </div>
-                  <Badge
-                    tone={
-                      task.priority === 'URGENT'
-                        ? 'danger'
-                        : task.priority === 'HIGH'
-                          ? 'warning'
-                          : 'neutral'
-                    }
-                  >
-                    {humanize(task.priority)}
-                  </Badge>
-                </li>
-              );
-            })}
-          </ul>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
-      </Card>
+      </InkSheet>
 
       <NewTaskDialog
         open={creating}

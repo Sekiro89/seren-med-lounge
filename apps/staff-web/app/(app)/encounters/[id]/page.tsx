@@ -50,6 +50,7 @@ import { VitalsLog, VitalsToday } from './vitals-section';
 import {
   apiErrorMessage,
   isUnsigned,
+  type CurrentMedicationItem,
   type EncounterDetail,
   type HistoryEntry,
   type PatientInfo,
@@ -236,19 +237,40 @@ function RecentResults({ results }: { results: RecentResult[] | undefined }) {
   );
 }
 
-function CurrentMedication({ entries }: { entries: HistoryEntry[] | undefined }) {
+/**
+ * Medicines still running from earlier visits' prescriptions, then anything
+ * recorded in the medical history as current medication (for medicines from
+ * outside the clinic).
+ */
+function CurrentMedication({
+  entries,
+  prescribed,
+}: {
+  entries: HistoryEntry[] | undefined;
+  prescribed: CurrentMedicationItem[];
+}) {
+  const fromHistory = (entries ?? []).filter(
+    (h) =>
+      !prescribed.some((p) => h.description.toLowerCase().includes(p.medicationName.toLowerCase())),
+  );
   return (
     <div>
       <h3 className="border-b border-fg pb-1.5 text-[13px] font-semibold text-fg">
         Current medication
       </h3>
-      {entries === undefined ? (
+      {entries === undefined && prescribed.length === 0 ? (
         <Skeleton className="mt-2 h-12 w-full" />
-      ) : entries.length === 0 ? (
+      ) : prescribed.length + fromHistory.length === 0 ? (
         <p className="py-2 text-[13px] text-fg-muted">None recorded.</p>
       ) : (
         <ul className="divide-y divide-line text-[13px]">
-          {entries.map((m) => (
+          {prescribed.map((m) => (
+            <li key={m.id} className="py-1.5">
+              <p className="text-fg">{m.medicationName}</p>
+              <p className="text-fg-muted">{m.frequency.toLowerCase()}</p>
+            </li>
+          ))}
+          {fromHistory.map((m) => (
             <li key={m.id} className="py-1.5 text-fg">
               {m.description}
             </li>
@@ -492,6 +514,11 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
 
   // Context derived for the margin notes.
   const latestVital = encounter.vitals[0];
+  const reason = encounter.registration?.notes
+    ? { source: 'Check-in reason', text: encounter.registration.notes }
+    : encounter.appointment?.notes
+      ? { source: 'Booking reason', text: encounter.appointment.notes }
+      : undefined;
   const bpDelta =
     latestVital?.bloodPressureSystolic != null && previousVital?.vital.bloodPressureSystolic != null
       ? latestVital.bloodPressureSystolic - previousVital.vital.bloodPressureSystolic
@@ -777,7 +804,11 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
                 <>
                   {latestVital && (
                     <p>
-                      Vitals at <MonoTime iso={latestVital.recordedAt} />.
+                      Vitals
+                      {latestVital.recordedBy
+                        ? ` by ${latestVital.recordedBy.role === 'NURSE' ? 'the nurse' : latestVital.recordedBy.fullName}`
+                        : ''}{' '}
+                      at <MonoTime iso={latestVital.recordedAt} />.
                     </p>
                   )}
                   {recentResults && recentResults[0] && (
@@ -795,7 +826,10 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
                   onChange={reload}
                 />
                 <RecentResults results={recentResults} />
-                <CurrentMedication entries={medication} />
+                <CurrentMedication
+                  entries={medication}
+                  prescribed={encounter.currentMedication ?? []}
+                />
               </div>
             </DocRow>
 
@@ -813,8 +847,10 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
                 ) : undefined
               }
               margins={{
-                subjective: encounter.registration?.notes ? (
-                  <p>Check-in note: &ldquo;{encounter.registration.notes}&rdquo;</p>
+                subjective: reason ? (
+                  <p>
+                    From the patient, in their words. {reason.source}: &ldquo;{reason.text}&rdquo;.
+                  </p>
                 ) : undefined,
                 objective:
                   bpDelta !== undefined && previousVital ? (

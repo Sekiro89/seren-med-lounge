@@ -6,20 +6,24 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { UserPlus, UsersThree, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { PersonCell } from '../../../components/ui/avatar';
-import { DataTable, type Column } from '../../../components/ui/data-table';
+import { type Column } from '../../../components/ui/data-table';
 import { EmptyState } from '../../../components/ui/empty-state';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
+import { RuledTable } from '../../../components/ui/ruled-table';
 import { SearchBox } from '../../../components/ui/search-box';
-import { Toolbar } from '../../../components/ui/toolbar';
+import { Figures, InkSheet, SheetBar, SheetHead } from '../../../components/ui/ink';
 import { formatDate, fullName } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
 import { RegisterPatientDialog } from './_components/register-dialog';
-import { ageLabel, type PatientSummary } from './_components/patient-shared';
+import {
+  ageLabel,
+  formatPhone,
+  sexLetter,
+  type PatientSummary,
+} from './_components/patient-shared';
 
 /** GET /patients returns at most this many rows (newest first). */
 const API_LIMIT = 20;
@@ -76,20 +80,46 @@ function PatientsDesk() {
 
   const columns: Column<PatientSummary>[] = [
     {
+      header: 'Patient no.',
+      render: (p) =>
+        p.mrn ? (
+          <span className="tabular font-mono text-[13px] text-fg-muted">{p.mrn}</span>
+        ) : (
+          <span className="text-[13px] text-fg-subtle">Not issued</span>
+        ),
+      className: 'w-36 whitespace-nowrap',
+    },
+    {
       header: 'Patient',
       render: (p) => (
-        <Link href={`/patients/${p.id}`} className="block rounded-control hover:text-primary">
-          <PersonCell
-            name={fullName(p)}
-            sub={`${ageLabel(p.dateOfBirth)} · Born ${formatDate(p.dateOfBirth)}`}
-          />
+        <Link href={`/patients/${p.id}`} className="group block rounded-control leading-tight">
+          <span className="block font-medium text-fg group-hover:text-primary">{fullName(p)}</span>
+          <span className="mt-0.5 block text-xs text-fg-muted">
+            {[sexLetter(p.sex), ageLabel(p.dateOfBirth)].filter(Boolean).join(' · ')}
+          </span>
         </Link>
       ),
     },
-    { header: 'Phone', render: (p) => <span className="tabular font-mono">{p.phone}</span> },
+    {
+      header: 'Born',
+      numeric: true,
+      render: (p) => <span className="text-[13px]">{formatDate(p.dateOfBirth)}</span>,
+      className: 'whitespace-nowrap',
+    },
+    {
+      header: 'Phone',
+      numeric: true,
+      render: (p) => <span className="text-[13px]">{formatPhone(p.phone)}</span>,
+      className: 'whitespace-nowrap',
+    },
     {
       header: 'Email',
-      render: (p) => p.email ?? <span className="text-fg-subtle">Not given</span>,
+      render: (p) =>
+        p.email ? (
+          <span className="text-[13px] text-fg-muted">{p.email}</span>
+        ) : (
+          <span className="text-[13px] text-fg-subtle">Not given</span>
+        ),
     },
     {
       header: 'Record',
@@ -98,7 +128,7 @@ function PatientsDesk() {
         <Link
           href={`/patients/${p.id}`}
           aria-label={`Open record for ${fullName(p)}`}
-          className="text-[13px] font-medium text-primary hover:text-primary-hover"
+          className="whitespace-nowrap text-[13px] font-medium text-primary hover:text-primary-hover"
         >
           Open record
         </Link>
@@ -114,22 +144,49 @@ function PatientsDesk() {
 
   return (
     <>
-      <PageHeader
-        title="Patients"
-        description="Find a patient by name or phone number, or register someone new."
-        action={register}
-      />
-
-      <Card>
-        <Toolbar>
+      <InkSheet>
+        <SheetHead
+          eyebrow="Front desk"
+          title="Patients"
+          description="Find a patient by name, phone or patient number, or register someone new."
+          figures={
+            <Figures
+              loading={loading && !data}
+              items={[
+                {
+                  label: q ? 'Matches' : 'Showing',
+                  value: data
+                    ? data.length >= API_LIMIT
+                      ? `${API_LIMIT}+`
+                      : data.length
+                    : undefined,
+                },
+              ]}
+            />
+          }
+          action={register}
+        />
+        <SheetBar
+          actions={
+            <span className="text-[13px] text-fg-muted">
+              {q ? (
+                <>
+                  Results for <span className="font-medium text-fg">&ldquo;{q}&rdquo;</span>
+                </>
+              ) : (
+                'Newest registrations first'
+              )}
+            </span>
+          }
+        >
           <SearchBox
-            aria-label="Search patients by name or phone"
-            placeholder="Search by name or phone"
+            aria-label="Search patients by name, phone or patient number"
+            placeholder="Name, phone or SM- number"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            className="w-80 max-w-full"
+            className="w-96 max-w-full"
           />
-        </Toolbar>
+        </SheetBar>
 
         {errorStatus !== undefined && !loading ? (
           <div className="flex flex-col items-center px-6 py-14 text-center">
@@ -140,11 +197,18 @@ function PatientsDesk() {
             </Button>
           </div>
         ) : (
-          <DataTable
+          <RuledTable
             columns={columns}
             rows={data}
             getRowKey={(p) => p.id}
             loading={loading}
+            onRowClick={(p) => router.push(`/patients/${p.id}`)}
+            rowLabel={(p) => `Open record for ${fullName(p)}`}
+            capNotice={
+              data && data.length >= API_LIMIT
+                ? `Showing the ${API_LIMIT} most recent matches. Type more of the name, phone or patient number to narrow the list.`
+                : undefined
+            }
             empty={
               q ? (
                 <EmptyState
@@ -174,14 +238,7 @@ function PatientsDesk() {
             }
           />
         )}
-
-        {data && data.length >= API_LIMIT && (
-          <p className="border-t border-line px-5 py-3 text-[13px] text-fg-muted">
-            Showing the {API_LIMIT} most recent matches. Type more of the name or phone number to
-            narrow the list.
-          </p>
-        )}
-      </Card>
+      </InkSheet>
 
       {canRegister && (
         <RegisterPatientDialog

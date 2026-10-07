@@ -172,3 +172,18 @@ export function errorText(error: unknown, fallback: string): string {
 }
 
 export const invoiceLabel = (number: number) => `INV-${String(number).padStart(6, '0')}`;
+
+/** Whole rupees for a figure strip: `₹85,000` (the ledger keeps the paise). */
+export const rupeeFigure = (paise: number) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(Math.round(paise / 100));
+
+/** A case still being worked: not settled and not closed. */
+export const isOpenCase = (status: CaseStatus) => status !== 'SETTLED' && status !== 'CLOSED';
+
+/** Waiting on the insurer's answer. */
+export const awaitsInsurer = (status: CaseStatus) =>
+  status === 'PRE_AUTH_REQUESTED' || status === 'CLAIM_SUBMITTED';

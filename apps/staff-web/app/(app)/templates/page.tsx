@@ -5,10 +5,11 @@ import { Notebook, Plus } from '@phosphor-icons/react';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { DataTable, type Column } from '../../../components/ui/data-table';
+import { type Column } from '../../../components/ui/data-table';
 import { EmptyState } from '../../../components/ui/empty-state';
+import { Figures, InkSheet, SheetHead } from '../../../components/ui/ink';
 import { NoAccess } from '../../../components/ui/no-access';
-import { PageHeader } from '../../../components/ui/page-header';
+import { RuledTable } from '../../../components/ui/ruled-table';
 import { formatDate, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
@@ -46,10 +47,10 @@ export default function TemplatesPage() {
     {
       header: 'Template',
       render: (t) => (
-        <div>
-          <p className="font-medium text-fg">{t.name}</p>
-          <p className="tabular font-mono text-xs text-fg-muted">
-            Updated {formatDate(t.updatedAt)}
+        <div className="min-w-0">
+          <p className="truncate font-medium">{t.name}</p>
+          <p className="text-[12px] text-fg-muted">
+            Updated <span className="tabular font-mono">{formatDate(t.updatedAt)}</span>
           </p>
         </div>
       ),
@@ -57,9 +58,9 @@ export default function TemplatesPage() {
     { header: 'Note type', render: (t) => humanize(t.noteType) },
     {
       header: 'Specialty',
-      render: (t) => t.specialty ?? <span className="text-fg-subtle">All</span>,
+      render: (t) => t.specialty ?? <span className="text-fg-muted">All</span>,
     },
-    { header: 'Version', align: 'right', numeric: true, render: (t) => t.currentVersion },
+    { header: 'Version', align: 'right', numeric: true, render: (t) => `v${t.currentVersion}` },
     {
       header: 'Status',
       render: (t) =>
@@ -67,8 +68,9 @@ export default function TemplatesPage() {
     },
     {
       header: 'Actions',
+      align: 'right',
       render: (t) => (
-        <div className="flex flex-wrap gap-1.5 py-1">
+        <div className="flex flex-wrap justify-end gap-1.5 py-1">
           <Button size="sm" variant="secondary" onClick={() => setVersioning(t)}>
             New version
           </Button>
@@ -82,17 +84,29 @@ export default function TemplatesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Templates"
-        description="Starting points for clinical notes: a prompt and default text per section."
-        action={
-          <Button icon={<Plus size={18} aria-hidden="true" />} onClick={() => setCreating(true)}>
-            New template
-          </Button>
-        }
-      />
-
-      <Card>
+      <InkSheet>
+        <SheetHead
+          title="Templates"
+          description="Starting points for clinical notes: a prompt and default text per section. Each edit is a new version."
+          figures={
+            <Figures
+              loading={templates.loading && !templates.data}
+              items={[
+                { label: 'Templates', value: templates.data?.length },
+                { label: 'Active', value: templates.data?.filter((t) => t.isActive).length },
+                {
+                  label: 'Versions written',
+                  value: templates.data?.reduce((n, t) => n + t.currentVersion, 0),
+                },
+              ]}
+            />
+          }
+          action={
+            <Button icon={<Plus size={18} aria-hidden="true" />} onClick={() => setCreating(true)}>
+              New template
+            </Button>
+          }
+        />
         {templates.errorStatus !== undefined && !templates.loading ? (
           <div role="alert" className="flex flex-col items-center gap-3 px-6 py-14 text-center">
             <p className="text-sm text-fg-muted">
@@ -105,10 +119,12 @@ export default function TemplatesPage() {
             </Button>
           </div>
         ) : (
-          <DataTable
+          <RuledTable
+            caption="Clinical note templates"
             columns={columns}
             rows={templates.data}
             getRowKey={(t) => t.id}
+            isMuted={(t) => !t.isActive}
             loading={templates.loading}
             empty={
               <EmptyState
@@ -128,7 +144,7 @@ export default function TemplatesPage() {
             }
           />
         )}
-      </Card>
+      </InkSheet>
 
       <NewTemplateDialog
         open={creating}

@@ -1,11 +1,13 @@
 import { formatDate, formatMoney, formatTime } from '../../../../lib/format';
 import { Badge } from '../../../../components/ui/badge';
+import { StageRuler, type Stage as RulerStage } from '../../../../components/ui/stage-ruler';
 import {
   stageOf,
   STATUS_LABEL,
   STATUS_TONE,
   type CaseDetail,
   type CaseEvent,
+  type CaseStatus,
   type Stage,
 } from './insurance-types';
 
@@ -15,48 +17,86 @@ const STEPS: { key: Stage; label: string }[] = [
   { key: 'claims', label: 'Claim' },
   { key: 'settled', label: 'Settled' },
 ];
+const ORDER = STEPS.map((s) => s.key);
 
-/** Horizontal stage tracker: reached steps, the current one, and what is ahead. */
+const STOPPED: CaseStatus[] = ['PRE_AUTH_DENIED', 'CLAIM_REJECTED'];
+
+/** How far a case got: the furthest stage reached, even for a closed case. */
+function reachedIndex(status: CaseStatus, events: { toStatus: CaseStatus }[] = []): number {
+  if (status !== 'CLOSED') return ORDER.indexOf(stageOf(status));
+  return Math.max(
+    ...events.filter((e) => e.toStatus !== 'CLOSED').map((e) => ORDER.indexOf(stageOf(e.toStatus))),
+    0,
+  );
+}
+
+/**
+ * The case on the Ruler (design system 4): Eligibility, Pre-authorisation,
+ * Claim, Settled as squares on a hairline, done stages in ink with the date
+ * they were reached, the current one in cobalt with its status, a denial or
+ * rejection in red. A closed case gets a final "Closed" mark.
+ */
 export function StageTracker({ detail }: { detail: CaseDetail }) {
-  const order = STEPS.map((s) => s.key);
   const closed = detail.status === 'CLOSED';
-  // For a closed case, the furthest stage it reached before closing.
-  const reached = closed
-    ? Math.max(
-        ...detail.events
-          .filter((e) => e.toStatus !== 'CLOSED')
-          .map((e) => order.indexOf(stageOf(e.toStatus))),
-        0,
-      )
-    : order.indexOf(stageOf(detail.status));
+  const reached = reachedIndex(detail.status, detail.events);
+  const firstAt = (stage: Stage) =>
+    detail.events.find((e) => e.fromStatus !== e.toStatus && stageOf(e.toStatus) === stage)
+      ?.createdAt ?? (stage === 'eligibility' ? detail.createdAt : undefined);
 
+  const stages: RulerStage[] = STEPS.map((step, index) => {
+    const at = firstAt(step.key);
+    if (index < reached || (closed && index === reached)) {
+      return { label: step.label, state: 'done', note: at ? formatDate(at).slice(0, 6) : 'done' };
+    }
+    if (index === reached) {
+      return {
+        label: step.label,
+        state: STOPPED.includes(detail.status) ? 'stopped' : 'current',
+        note: STATUS_LABEL[detail.status].toLowerCase(),
+      };
+    }
+    return { label: step.label, state: 'todo' };
+  });
+  if (closed) {
+    const closedAt = [...detail.events].reverse().find((e) => e.toStatus === 'CLOSED')?.createdAt;
+    stages.push({
+      label: 'Closed',
+      state: 'done',
+      note: closedAt ? formatDate(closedAt).slice(0, 6) : undefined,
+    });
+  }
+  return <StageRuler label="Case stages" stages={stages} />;
+}
+
+/**
+ * The same stages as four small squares for a list row: ink for done,
+ * cobalt for the current stage, red where the case stopped. Decorative;
+ * the status word sits beside it.
+ */
+export function StageTicks({ status }: { status: CaseStatus }) {
+  const reached = reachedIndex(status);
+  const closed = status === 'CLOSED';
   return (
-    <ol className="grid grid-cols-2 gap-4 sm:grid-cols-4" aria-label="Case stages">
-      {STEPS.map((step, index) => {
-        const current = !closed && index === reached;
-        const done = index < reached || (closed && index === reached);
+    <span aria-hidden="true" className="inline-flex items-center">
+      {STEPS.map((step, i) => {
+        const cls =
+          closed && i <= reached
+            ? 'bg-fg-subtle'
+            : i < reached || (status === 'SETTLED' && i === reached)
+              ? 'bg-fg'
+              : i === reached
+                ? STOPPED.includes(status)
+                  ? 'bg-danger'
+                  : 'bg-primary'
+                : 'border border-fg-subtle bg-surface';
         return (
-          <li
-            key={step.key}
-            aria-current={current ? 'step' : undefined}
-            className={`border-t-2 pt-3 ${
-              current ? 'border-primary' : done ? 'border-primary/40' : 'border-line'
-            }`}
-          >
-            <p
-              className={`text-sm font-medium ${
-                current ? 'text-primary-subtle-fg' : done ? 'text-fg' : 'text-fg-subtle'
-              }`}
-            >
-              {step.label}
-            </p>
-            <p className="mt-1 text-[13px] text-fg-muted">
-              {current ? STATUS_LABEL[detail.status] : done ? 'Done' : 'Not started'}
-            </p>
-          </li>
+          <span key={step.key} className="inline-flex items-center">
+            {i > 0 && <span className={`h-px w-2.5 ${i <= reached ? 'bg-fg' : 'bg-control'}`} />}
+            <span className={`block size-[7px] ${cls}`} />
+          </span>
         );
       })}
-    </ol>
+    </span>
   );
 }
 
@@ -66,30 +106,39 @@ function describe(e: CaseEvent): string {
   return `${STATUS_LABEL[e.fromStatus]} to ${STATUS_LABEL[e.toStatus]}`;
 }
 
+/** The case history as a ruled log: time in mono at the left, newest first. */
 export function CaseTimeline({ events }: { events: CaseEvent[] }) {
   const newestFirst = [...events].reverse();
   return (
-    <ol className="flex flex-col divide-y divide-line">
+    <ol className="divide-y divide-line">
       {newestFirst.map((e) => (
-        <li key={e.id} className="flex flex-col gap-2 py-5 first:pt-0 last:pb-0">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm font-medium">{describe(e)}</span>
+        <li key={e.id} className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 py-3">
+          <time
+            dateTime={e.createdAt}
+            className="tabular pt-px font-mono text-[12px] text-fg-muted"
+          >
+            {formatDate(e.createdAt).slice(0, 6)}
+            <span className="block">{formatTime(e.createdAt)}</span>
+          </time>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-[13px] font-medium text-fg">{describe(e)}</span>
               {e.fromStatus !== e.toStatus && (
                 <Badge tone={STATUS_TONE[e.toStatus]}>{STATUS_LABEL[e.toStatus]}</Badge>
               )}
               {e.amountMinor !== null && (
-                <span className="tabular font-mono text-sm text-fg-muted">
+                <span className="tabular ml-auto font-mono text-[13px] text-fg">
                   {formatMoney(e.amountMinor)}
                 </span>
               )}
             </div>
-            <time dateTime={e.createdAt} className="text-[13px] text-fg-subtle">
-              {formatDate(e.createdAt)}, {formatTime(e.createdAt)}
-            </time>
+            {e.note && (
+              <p className="mt-1 max-w-[72ch] whitespace-pre-wrap text-[13px] text-fg-muted">
+                {e.note}
+              </p>
+            )}
+            <p className="mt-0.5 text-[12px] text-fg-subtle">By {e.actor.fullName}</p>
           </div>
-          {e.note && <p className="whitespace-pre-wrap text-sm text-fg-muted">{e.note}</p>}
-          <p className="text-[13px] text-fg-subtle">By {e.actor.fullName}</p>
         </li>
       ))}
     </ol>

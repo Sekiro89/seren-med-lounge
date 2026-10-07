@@ -26,13 +26,14 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
-import { Badge, StatusBadge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
-import { DataTable, type Column } from '../../../../components/ui/data-table';
+import { type Column } from '../../../../components/ui/data-table';
 import { Dialog } from '../../../../components/ui/dialog';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { Field, Input, Select } from '../../../../components/ui/fields';
+import { InkFilters, InkSection, InkStatus, StatusWord } from '../../../../components/ui/ink';
+import { RuledTable } from '../../../../components/ui/ruled-table';
+import { MarginLabel, SheetRow } from '../../../../components/ui/sheet';
 import { Skeleton } from '../../../../components/ui/skeleton';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, formatMoney, formatTime, fullName, humanize } from '../../../../lib/format';
@@ -40,9 +41,11 @@ import { invalidProps, req, requiredProps, type FieldErrors } from '../../../../
 import { can } from '../../../../lib/permissions';
 import { useApi } from '../../../../lib/use-api';
 import type { StaffRole } from '@serenemed/types';
+import { RangeRuler, parseRange, parseValue, rangeFlag } from '../../encounters/[id]/document';
+import type { LabOrderRow } from '../../labs/_components/types';
 import type { HistoryEntry } from './patient-banner';
 import { openDocument, uploadDocument, type DocumentRow } from './document-files';
-import { apiMessage, type PatientDetail } from './patient-shared';
+import { apiMessage, formatPhone, sexWord, type PatientDetail } from './patient-shared';
 
 export type TabKey =
   | 'overview'
@@ -73,80 +76,144 @@ export function visibleTabs(role: StaffRole | undefined): { key: TabKey; label: 
   return all.filter((t) => t.show).map(({ key, label }) => ({ key, label }));
 }
 
+/**
+ * The body of the record under the letterhead and tabs. Overview is a set
+ * of numbered ruled sections with margin notes, like the consultation;
+ * every other tab is one ruled section on the same sheet.
+ */
 export function TabPanel({
   tab,
   patientId,
   patient,
   role,
   history,
+  onTab,
 }: {
   tab: TabKey;
   patientId: string;
   patient: PatientDetail;
   role: StaffRole | undefined;
   history: { entries?: HistoryEntry[]; loading: boolean; failed: boolean };
+  /** Jump to another tab (the overview's "Full timeline"). */
+  onTab: (tab: TabKey) => void;
 }) {
   const id = encodeURIComponent(patientId);
-  switch (tab) {
-    case 'overview':
-      return <Overview patientId={patientId} patient={patient} role={role} history={history} />;
-    case 'referrals':
-      return <ReferralsTab path={`/referrals?patientId=${id}`} />;
-    case 'care-plans':
-      return <CarePlansTab path={`/care-plans?patientId=${id}`} />;
-    case 'follow-ups':
-      return <FollowUpsTab path={`/follow-ups?patientId=${id}`} />;
-    case 'dispensing':
-      return <DispensingTab path={`/dispensings?patientId=${id}`} />;
-    case 'invoices':
-      return <InvoicesTab path={`/invoices?patientId=${id}`} />;
-    case 'insurance':
-      return <InsuranceTab path={`/insurance/policies?patientId=${id}`} />;
-    case 'timeline':
-      return <TimelineTab patientId={patientId} />;
-    case 'documents':
-      return <DocumentsTab patientId={patientId} role={role} />;
-    case 'consent':
-      return <ConsentTab patientId={patientId} role={role} />;
+  if (tab === 'overview') {
+    return (
+      <Overview
+        patientId={patientId}
+        patient={patient}
+        role={role}
+        history={history}
+        onTab={onTab}
+      />
+    );
   }
+  let body: ReactNode;
+  switch (tab) {
+    case 'referrals':
+      body = <ReferralsTab path={`/referrals?patientId=${id}`} />;
+      break;
+    case 'care-plans':
+      body = <CarePlansTab path={`/care-plans?patientId=${id}`} />;
+      break;
+    case 'follow-ups':
+      body = <FollowUpsTab path={`/follow-ups?patientId=${id}`} />;
+      break;
+    case 'dispensing':
+      body = <DispensingTab path={`/dispensings?patientId=${id}`} />;
+      break;
+    case 'invoices':
+      body = <InvoicesTab path={`/invoices?patientId=${id}`} />;
+      break;
+    case 'insurance':
+      body = <InsuranceTab path={`/insurance/policies?patientId=${id}`} />;
+      break;
+    case 'timeline':
+      body = <TimelineTab patientId={patientId} />;
+      break;
+    case 'documents':
+      body = <DocumentsTab patientId={patientId} role={role} />;
+      break;
+    case 'consent':
+      body = <ConsentTab patientId={patientId} role={role} />;
+      break;
+  }
+  return (
+    <SheetRow last className="pt-5">
+      {body}
+    </SheetRow>
+  );
 }
+
+/* ---------- shared pieces ---------- */
+
+/** Lets a RuledTable (which insets its own first and last columns) sit flush in the sheet. */
+function Flush({ children }: { children: ReactNode }) {
+  return (
+    <div className="-mx-5 sm:-mx-10 sm:[&_td:first-child]:pl-10 sm:[&_td:last-child]:pr-10 sm:[&_th:first-child]:pl-10 sm:[&_th:last-child]:pr-10">
+      {children}
+    </div>
+  );
+}
+
+function LoadError({ status, onRetry }: { status: number; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center px-6 py-12 text-center">
+      <WarningCircle size={24} className="text-danger-fg" aria-hidden="true" />
+      <p className="mt-3 text-sm text-fg">
+        {status === 403 ? 'Your role cannot view this.' : 'This could not be loaded.'}
+      </p>
+      {status !== 403 && (
+        <Button variant="secondary" size="sm" className="mt-4" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </div>
+  );
+}
+
+const countMeta = (n: number | undefined, one: string, many: string) =>
+  n === undefined ? undefined : (
+    <span className="tabular font-mono">
+      {n} {n === 1 ? one : many}
+    </span>
+  );
 
 /* ---------- generic list panel ---------- */
 
 function ListPanel<T extends { id: string }>({
+  title,
+  noun,
   path,
   columns,
   empty,
 }: {
+  title: string;
+  /** Singular and plural for the count after the title. */
+  noun: [string, string];
   path: string;
   columns: Column<T>[];
   empty: { icon: Icon; title: string; description: string };
 }) {
   const { data, loading, errorStatus, reload } = useApi<T[]>(path);
   return (
-    <Card>
+    <InkSection title={title} meta={countMeta(data?.length, noun[0], noun[1])}>
       {errorStatus !== undefined && !loading ? (
-        <div className="flex flex-col items-center px-6 py-14 text-center">
-          <WarningCircle size={24} className="text-danger-fg" aria-hidden="true" />
-          <p className="mt-3 text-sm text-fg">
-            {errorStatus === 403 ? 'Your role cannot view this.' : 'This could not be loaded.'}
-          </p>
-          {errorStatus !== 403 && (
-            <Button variant="secondary" size="sm" className="mt-4" onClick={reload}>
-              Try again
-            </Button>
-          )}
-        </div>
+        <LoadError status={errorStatus} onRetry={reload} />
       ) : (
-        <DataTable
-          columns={columns}
-          rows={data}
-          getRowKey={(row) => row.id}
-          loading={loading}
-          empty={<EmptyState {...empty} />}
-        />
+        <Flush>
+          <RuledTable
+            columns={columns}
+            rows={data}
+            getRowKey={(row) => row.id}
+            loading={loading}
+            minWidth={640}
+            empty={<EmptyState {...empty} />}
+          />
+        </Flush>
       )}
-    </Card>
+    </InkSection>
   );
 }
 
@@ -192,25 +259,27 @@ function ReferralsTab({ path }: { path: string }) {
     {
       header: 'Urgency',
       render: (r) => (
-        <Badge
+        <StatusWord
           tone={r.urgency === 'ROUTINE' ? 'neutral' : r.urgency === 'URGENT' ? 'warning' : 'danger'}
         >
           {humanize(r.urgency)}
-        </Badge>
+        </StatusWord>
       ),
     },
     { header: 'By', render: (r) => r.referredBy.fullName },
     {
       header: 'Status',
       render: (r) => (
-        <Badge tone={REFERRAL_STATUS[r.status as keyof typeof REFERRAL_STATUS] ?? 'neutral'}>
+        <StatusWord tone={REFERRAL_STATUS[r.status as keyof typeof REFERRAL_STATUS] ?? 'neutral'}>
           {humanize(r.status)}
-        </Badge>
+        </StatusWord>
       ),
     },
   ];
   return (
     <ListPanel
+      title="Referrals"
+      noun={['referral', 'referrals']}
       path={path}
       columns={columns}
       empty={{
@@ -265,14 +334,16 @@ function CarePlansTab({ path }: { path: string }) {
     {
       header: 'Status',
       render: (c) => (
-        <Badge tone={PLAN_TONE[c.status as keyof typeof PLAN_TONE] ?? 'neutral'}>
+        <StatusWord tone={PLAN_TONE[c.status as keyof typeof PLAN_TONE] ?? 'neutral'}>
           {humanize(c.status)}
-        </Badge>
+        </StatusWord>
       ),
     },
   ];
   return (
     <ListPanel
+      title="Care plans"
+      noun={['plan', 'plans']}
       path={path}
       columns={columns}
       empty={{
@@ -316,10 +387,12 @@ function FollowUpsTab({ path }: { path: string }) {
       header: 'Assigned to',
       render: (f) => f.assignedTo?.fullName ?? muted('Unassigned'),
     },
-    { header: 'Status', render: (f) => <StatusBadge domain="followUp" status={f.status} /> },
+    { header: 'Status', render: (f) => <InkStatus domain="followUp" status={f.status} /> },
   ];
   return (
     <ListPanel
+      title="Follow-ups"
+      noun={['follow-up', 'follow-ups']}
       path={path}
       columns={columns}
       empty={{
@@ -370,14 +443,16 @@ function DispensingTab({ path }: { path: string }) {
     {
       header: 'Status',
       render: (d) => (
-        <Badge tone={DISPENSING_TONE[d.status as keyof typeof DISPENSING_TONE] ?? 'neutral'}>
+        <StatusWord tone={DISPENSING_TONE[d.status as keyof typeof DISPENSING_TONE] ?? 'neutral'}>
           {humanize(d.status)}
-        </Badge>
+        </StatusWord>
       ),
     },
   ];
   return (
     <ListPanel
+      title="Dispensing"
+      noun={['item', 'items']}
       path={path}
       columns={columns}
       empty={{
@@ -410,7 +485,7 @@ function InvoicesTab({ path }: { path: string }) {
       header: 'Date',
       render: (i) => <span className="tabular font-mono">{formatDate(i.createdAt)}</span>,
     },
-    { header: 'Status', render: (i) => <StatusBadge domain="invoice" status={i.status} /> },
+    { header: 'Status', render: (i) => <InkStatus domain="invoice" status={i.status} /> },
     { header: 'Total', align: 'right', numeric: true, render: (i) => formatMoney(i.totalMinor) },
     { header: 'Paid', align: 'right', numeric: true, render: (i) => formatMoney(i.paidMinor) },
     {
@@ -426,6 +501,8 @@ function InvoicesTab({ path }: { path: string }) {
   ];
   return (
     <ListPanel
+      title="Invoices"
+      noun={['invoice', 'invoices']}
       path={path}
       columns={columns}
       empty={{
@@ -487,14 +564,16 @@ function InsuranceTab({ path }: { path: string }) {
     {
       header: 'Status',
       render: (p) => (
-        <Badge tone={p.isActive ? 'success' : 'neutral'}>
+        <StatusWord tone={p.isActive ? 'success' : 'neutral'}>
           {p.isActive ? 'Active' : 'Inactive'}
-        </Badge>
+        </StatusWord>
       ),
     },
   ];
   return (
     <ListPanel
+      title="Insurance"
+      noun={['policy', 'policies']}
       path={path}
       columns={columns}
       empty={{
@@ -517,26 +596,104 @@ const CATEGORY_ORDER = [
   'SOCIAL_HISTORY',
 ];
 
+interface TimelineLite {
+  id: string;
+  kind: string;
+  at: string;
+  title: string;
+  detail?: string;
+  status?: string;
+  encounterId?: string | null;
+}
+
+interface ResultLine {
+  key: string;
+  testName: string;
+  value: string;
+  unit: string | null;
+  range: string | null;
+  at: string;
+  corrected: boolean;
+}
+
+/** The newest result of every test, newest first. */
+function latestResults(orders: LabOrderRow[] | undefined): ResultLine[] | undefined {
+  if (!orders) return undefined;
+  const lines: ResultLine[] = [];
+  for (const order of orders) {
+    if (order.status === 'CANCELLED') continue;
+    for (const item of order.items) {
+      const newest = [...item.results].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      if (!newest) continue;
+      lines.push({
+        key: item.id,
+        testName: item.testName,
+        value: newest.resultValue,
+        unit: newest.unit,
+        range: newest.referenceRange,
+        at: newest.createdAt,
+        corrected: item.results.length > 1,
+      });
+    }
+  }
+  lines.sort((a, b) => b.at.localeCompare(a.at));
+  // One line per test name: the latest value wins.
+  const seen = new Set<string>();
+  return lines.filter((l) => {
+    const k = l.testName.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 function Overview({
   patientId,
   patient,
   role,
   history,
+  onTab,
 }: {
   patientId: string;
   patient: PatientDetail;
   role: StaffRole | undefined;
   history: { entries?: HistoryEntry[]; loading: boolean; failed: boolean };
+  onTab: (tab: TabKey) => void;
 }) {
   const canClinical = can(role, 'patient-record:read-clinical');
   const canActivate = can(role, 'patient:write');
   const [activating, setActivating] = useState(false);
+  const id = encodeURIComponent(patientId);
+  const labs = useApi<LabOrderRow[]>(canClinical ? `/lab-orders?patientId=${id}` : null);
+  const timeline = useApi<TimelineLite[]>(canClinical ? `/patients/${id}/timeline` : null);
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-      <Card>
-        <CardHeader
-          title="Contact"
+  const results = latestResults(labs.data);
+  const visits = timeline.data?.filter((e) => e.kind === 'visit');
+  const prescriptions = timeline.data?.filter((e) => e.kind === 'prescription');
+  const medsFromHistory = (history.entries ?? []).filter(
+    (e) => e.category === 'CURRENT_MEDICATION' && e.status === 'ACTIVE',
+  );
+  const outOfRange = (results ?? []).filter((r) => {
+    const range = parseRange(r.range);
+    const value = parseValue(r.value);
+    return range && value !== undefined && rangeFlag(value, range) !== 'NORMAL';
+  }).length;
+  const lastVisit = visits?.[0];
+
+  // Clinical roles read history, results, medication and visits first.
+  const contactSection = (
+    <SheetRow
+      last
+      margin={
+        !patient.hasAccount && canActivate ? (
+          <p>No portal login yet. An activation code lets the patient set one up.</p>
+        ) : undefined
+      }
+    >
+      <div className="pt-4">
+        <InkSection
+          number={canClinical ? 5 : 1}
+          title="Contact and account"
           action={
             canActivate && !patient.hasAccount ? (
               <Button variant="secondary" size="sm" onClick={() => setActivating(true)}>
@@ -544,34 +701,127 @@ function Overview({
               </Button>
             ) : undefined
           }
-        />
-        <dl className="grid grid-cols-[auto_1fr] gap-x-8 gap-y-3 px-5 py-5 text-sm">
-          <dt className="text-fg-muted">Phone</dt>
-          <dd className="tabular font-mono text-fg">{patient.phone}</dd>
-          <dt className="text-fg-muted">Email</dt>
-          <dd className="text-fg">{patient.email ?? muted('Not given')}</dd>
-          <dt className="text-fg-muted">Date of birth</dt>
-          <dd className="tabular font-mono text-fg">{formatDate(patient.dateOfBirth)}</dd>
-          <dt className="text-fg-muted">Registered</dt>
-          <dd className="tabular font-mono text-fg">{formatDate(patient.createdAt)}</dd>
-          <dt className="text-fg-muted">Patient portal</dt>
-          <dd>
-            <Badge tone={patient.hasAccount ? 'success' : 'neutral'}>
-              {patient.hasAccount ? 'Account active' : 'No account yet'}
-            </Badge>
-          </dd>
-        </dl>
-      </Card>
+        >
+          <dl className="grid gap-x-10 text-[13px] sm:grid-cols-2">
+            <ContactLine label="Phone">
+              <a href={`tel:${patient.phone}`} className="tabular font-mono hover:text-primary">
+                {formatPhone(patient.phone)}
+              </a>
+            </ContactLine>
+            <ContactLine label="Email">{patient.email ?? muted('Not given')}</ContactLine>
+            <ContactLine label="Date of birth">
+              <span className="tabular font-mono">{formatDate(patient.dateOfBirth)}</span>
+            </ContactLine>
+            <ContactLine label="Sex">{sexWord(patient.sex) ?? muted('Not recorded')}</ContactLine>
+            <ContactLine label="Patient no.">
+              {patient.mrn ? (
+                <span className="tabular font-mono">{patient.mrn}</span>
+              ) : (
+                muted('Not issued')
+              )}
+            </ContactLine>
+            <ContactLine label="Patient portal">
+              <StatusWord tone={patient.hasAccount ? 'success' : 'neutral'}>
+                {patient.hasAccount ? 'Account active' : 'No account yet'}
+              </StatusWord>
+            </ContactLine>
+          </dl>
+        </InkSection>
+      </div>
+    </SheetRow>
+  );
 
+  return (
+    <>
       {canClinical && (
-        <Card>
-          <CardHeader
-            title="Medical history"
-            description="Active entries recorded by clinicians."
-          />
-          <HistoryList history={history} />
-        </Card>
+        <>
+          <SheetRow margin={<p>Active entries recorded by clinicians during visits.</p>}>
+            <div className="pt-4">
+              <InkSection number={1} title="Medical history">
+                <HistoryList history={history} />
+              </InkSection>
+            </div>
+          </SheetRow>
+
+          <SheetRow
+            margin={
+              results && results.length > 0 ? (
+                <>
+                  <p>
+                    Latest value of each test, from{' '}
+                    <span className="font-mono text-fg">{formatDate(results[0]!.at)}</span> back.
+                  </p>
+                  {outOfRange > 0 && (
+                    <p className="mt-1 font-medium text-warning-fg">
+                      {outOfRange} outside the normal range.
+                    </p>
+                  )}
+                </>
+              ) : undefined
+            }
+          >
+            <div className="pt-4">
+              <InkSection
+                number={2}
+                title="Results"
+                meta={countMeta(results?.length, 'test', 'tests')}
+              >
+                <ResultsList results={results} failed={labs.errorStatus !== undefined} />
+              </InkSection>
+            </div>
+          </SheetRow>
+
+          <SheetRow
+            margin={
+              prescriptions && prescriptions.length > 0 ? (
+                <p>Prescribed at this clinic, newest first, then medicines from elsewhere.</p>
+              ) : undefined
+            }
+          >
+            <div className="pt-4">
+              <InkSection number={3} title="Medication">
+                <MedicationList
+                  prescriptions={prescriptions}
+                  fromHistory={history.loading ? undefined : medsFromHistory}
+                  failed={timeline.errorStatus !== undefined}
+                />
+              </InkSection>
+            </div>
+          </SheetRow>
+
+          <SheetRow
+            margin={
+              lastVisit ? (
+                <>
+                  <MarginLabel>Last visit</MarginLabel>
+                  <p className="mt-1 font-mono text-fg">{formatDate(lastVisit.at)}</p>
+                </>
+              ) : undefined
+            }
+          >
+            <div className="pt-4">
+              <InkSection
+                number={4}
+                title="Visits"
+                meta={countMeta(visits?.length, 'visit', 'visits')}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => onTab('timeline')}
+                    className="cursor-pointer text-[13px] font-medium text-primary hover:text-primary-hover"
+                  >
+                    Full timeline
+                  </button>
+                }
+              >
+                <VisitsList visits={visits} failed={timeline.errorStatus !== undefined} />
+              </InkSection>
+            </div>
+          </SheetRow>
+        </>
       )}
+
+      {contactSection}
 
       {activating && (
         <ActivationDialog
@@ -580,6 +830,15 @@ function Overview({
           onClose={() => setActivating(false)}
         />
       )}
+    </>
+  );
+}
+
+function ContactLine({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-line py-2">
+      <dt className="text-fg-muted">{label}</dt>
+      <dd className="text-right text-fg">{children}</dd>
     </div>
   );
 }
@@ -589,17 +848,22 @@ function HistoryList({
 }: {
   history: { entries?: HistoryEntry[]; loading: boolean; failed: boolean };
 }) {
-  if (history.loading) return <p className="px-5 py-5 text-sm text-fg-muted">Loading history</p>;
+  if (history.loading)
+    return (
+      <div className="flex flex-col gap-2 py-3">
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-5 w-2/3" />
+      </div>
+    );
   if (history.failed)
-    return <p className="px-5 py-5 text-sm text-danger-fg">Medical history could not be loaded.</p>;
+    return <p className="py-3 text-sm text-danger-fg">Medical history could not be loaded.</p>;
   const active = (history.entries ?? []).filter((e) => e.status === 'ACTIVE');
   if (active.length === 0)
     return (
-      <EmptyState
-        icon={Bandaids}
-        title="No history recorded"
-        description="Allergies, conditions and medication are added during visits."
-      />
+      <p className="flex items-center gap-2 py-3 text-[13px] text-fg-muted">
+        <Bandaids size={16} aria-hidden="true" />
+        No history recorded. Allergies, conditions and medication are added during visits.
+      </p>
     );
   const groups = CATEGORY_ORDER.map((category) => ({
     category,
@@ -607,27 +871,203 @@ function HistoryList({
   })).filter((g) => g.items.length > 0);
 
   return (
-    <div className="divide-y divide-line">
+    <dl className="text-[13px]">
       {groups.map((group) => (
-        <div key={group.category} className="px-5 py-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        <div
+          key={group.category}
+          className="grid gap-x-6 border-b border-line py-2 last:border-b-0 sm:grid-cols-[150px_minmax(0,1fr)]"
+        >
+          <dt
+            className={`${group.category === 'ALLERGY' ? 'font-medium text-danger-fg' : 'text-fg-muted'}`}
+          >
             {humanize(group.category)}
-          </h3>
-          <ul className="mt-2 space-y-1.5">
-            {group.items.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-fg">{e.description}</span>
-                {e.severity && (
-                  <Badge tone={e.severity === 'MILD' ? 'neutral' : 'danger'}>
-                    {humanize(e.severity)}
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ul>
+          </dt>
+          <dd>
+            <ul className="flex flex-col gap-1">
+              {group.items.map((e) => (
+                <li key={e.id} className="flex items-baseline justify-between gap-3">
+                  <span className="text-fg">{e.description}</span>
+                  {e.severity && (
+                    <StatusWord tone={e.severity === 'MILD' ? 'neutral' : 'danger'}>
+                      {humanize(e.severity)}
+                    </StatusWord>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </dd>
         </div>
       ))}
-    </div>
+    </dl>
+  );
+}
+
+const FLAG_WORD = { HIGH: 'High', LOW: 'Low', NORMAL: 'Normal' } as const;
+
+/** Each result with its value in Plex Mono and the range Ruler under it (design system 4). */
+function ResultsList({ results, failed }: { results: ResultLine[] | undefined; failed: boolean }) {
+  if (failed) return <p className="py-3 text-sm text-danger-fg">Results could not be loaded.</p>;
+  if (!results)
+    return (
+      <div className="flex flex-col gap-2 py-3">
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+      </div>
+    );
+  if (results.length === 0)
+    return (
+      <p className="flex items-center gap-2 py-3 text-[13px] text-fg-muted">
+        <Flask size={16} aria-hidden="true" />
+        No results on record. Tests ordered in a consultation show here once the lab enters them.
+      </p>
+    );
+  return (
+    <ul className="grid gap-x-10 text-[13px] @[700px]:grid-cols-2">
+      {results.slice(0, 10).map((r) => {
+        const range = parseRange(r.range);
+        const value = parseValue(r.value);
+        const flag = range && value !== undefined ? rangeFlag(value, range) : undefined;
+        const out = flag === 'HIGH' || flag === 'LOW';
+        return (
+          <li key={r.key} className="border-b border-line py-2">
+            <div className="flex items-baseline gap-2">
+              <span className="min-w-0 truncate text-fg" title={r.testName}>
+                {r.testName}
+              </span>
+              <span
+                className={`tabular ml-auto shrink-0 font-mono ${out ? 'text-warning-fg' : 'text-fg'}`}
+              >
+                {r.value}
+                {r.unit ? (r.unit === '%' ? '%' : ` ${r.unit}`) : ''}
+              </span>
+              {flag && (
+                <span
+                  className={`w-12 shrink-0 text-right text-[11px] font-semibold ${
+                    out ? 'text-warning-fg' : 'text-success-fg'
+                  }`}
+                >
+                  {FLAG_WORD[flag]}
+                </span>
+              )}
+            </div>
+            {range && value !== undefined && <RangeRuler value={value} range={range} />}
+            <p className="mt-0.5 text-[11px] text-fg-muted">
+              {r.range ? `normal ${r.range} · ` : 'No range given · '}
+              <span className="font-mono">{formatDate(r.at)}</span>
+              {r.corrected ? ' · corrected' : ''}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function MedicationList({
+  prescriptions,
+  fromHistory,
+  failed,
+}: {
+  prescriptions: TimelineLite[] | undefined;
+  fromHistory: HistoryEntry[] | undefined;
+  failed: boolean;
+}) {
+  if (failed) return <p className="py-3 text-sm text-danger-fg">Medication could not be loaded.</p>;
+  if (!prescriptions || !fromHistory)
+    return (
+      <div className="flex flex-col gap-2 py-3">
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-5 w-1/2" />
+      </div>
+    );
+  if (prescriptions.length + fromHistory.length === 0)
+    return (
+      <p className="flex items-center gap-2 py-3 text-[13px] text-fg-muted">
+        <Pill size={16} aria-hidden="true" />
+        No medication on record.
+      </p>
+    );
+  return (
+    <ul className="text-[13px]">
+      {prescriptions.slice(0, 5).map((p) => (
+        <li
+          key={p.id}
+          className="grid items-baseline gap-x-6 border-b border-line py-2 sm:grid-cols-[150px_minmax(0,1fr)_auto]"
+        >
+          <span className="tabular font-mono text-fg-muted">{formatDate(p.at)}</span>
+          <span className="text-fg">{p.detail ?? 'Prescription'}</span>
+          {p.encounterId ? (
+            <Link
+              href={`/encounters/${p.encounterId}`}
+              className="font-medium text-primary hover:text-primary-hover"
+            >
+              Open visit
+            </Link>
+          ) : (
+            <span />
+          )}
+        </li>
+      ))}
+      {fromHistory.map((m) => (
+        <li
+          key={m.id}
+          className="grid items-baseline gap-x-6 border-b border-line py-2 sm:grid-cols-[150px_minmax(0,1fr)_auto]"
+        >
+          <span className="text-fg-muted">From elsewhere</span>
+          <span className="text-fg">{m.description}</span>
+          <span />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function VisitsList({ visits, failed }: { visits: TimelineLite[] | undefined; failed: boolean }) {
+  if (failed) return <p className="py-3 text-sm text-danger-fg">Visits could not be loaded.</p>;
+  if (!visits)
+    return (
+      <div className="flex flex-col gap-2 py-3">
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-5 w-full" />
+      </div>
+    );
+  if (visits.length === 0)
+    return (
+      <p className="flex items-center gap-2 py-3 text-[13px] text-fg-muted">
+        <Stethoscope size={16} aria-hidden="true" />
+        No visits yet. A visit starts when the patient is checked in.
+      </p>
+    );
+  return (
+    <ol className="text-[13px]">
+      {visits.slice(0, 6).map((v) => (
+        <li
+          key={v.id}
+          className="grid items-baseline gap-x-6 border-b border-line py-2 last:border-b-0 sm:grid-cols-[150px_minmax(0,1fr)_auto]"
+        >
+          <span className="tabular font-mono text-fg">
+            {formatDate(v.at)} <span className="text-fg-muted">{formatTime(v.at)}</span>
+          </span>
+          <span className="flex flex-wrap items-baseline gap-x-3">
+            <span className="text-fg">{v.title}</span>
+            {v.detail && <span className="text-fg-muted">{v.detail}</span>}
+            {v.status && (
+              <StatusWord tone={timelineTone(v.status)}>{humanize(v.status)}</StatusWord>
+            )}
+          </span>
+          {v.encounterId ? (
+            <Link
+              href={`/encounters/${v.encounterId}`}
+              className="font-medium text-primary hover:text-primary-hover"
+            >
+              Open visit
+            </Link>
+          ) : (
+            <span />
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -830,53 +1270,35 @@ function TimelineTab({ patientId }: { patientId: string }) {
   }
 
   return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4">
-        <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
-          {FILTERS.map((f) => {
-            const active = f.key === filter;
-            return (
-              <button
-                key={f.key}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setFilter(f.key)}
-                className={`h-9 cursor-pointer rounded-control border px-3.5 text-[13px] font-medium transition-colors ${
-                  active
-                    ? 'border-primary bg-primary-subtle text-primary-subtle-fg'
-                    : 'border-control bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg'
-                }`}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-        {data && (
-          <span className="tabular font-mono text-[13px] text-fg-subtle">
+    <InkSection
+      title="Timeline"
+      meta={
+        data ? (
+          <span className="tabular font-mono">
             {entries.length} of {data.length} entries
           </span>
-        )}
-      </div>
-
+        ) : undefined
+      }
+      action={
+        <InkFilters
+          label="Show"
+          value={filter}
+          onChange={setFilter}
+          options={FILTERS.map((f) => ({
+            key: f.key,
+            label: f.label,
+          }))}
+        />
+      }
+    >
       {errorStatus !== undefined && !loading ? (
-        <div className="flex flex-col items-center px-6 py-14 text-center">
-          <WarningCircle size={24} className="text-danger-fg" aria-hidden="true" />
-          <p className="mt-3 text-sm text-fg">
-            {errorStatus === 403 ? 'Your role cannot view this.' : 'This could not be loaded.'}
-          </p>
-          {errorStatus !== 403 && (
-            <Button variant="secondary" size="sm" className="mt-4" onClick={reload}>
-              Try again
-            </Button>
-          )}
-        </div>
+        <LoadError status={errorStatus} onRetry={reload} />
       ) : loading ? (
-        <div className="flex flex-col gap-4 px-6 py-6">
+        <div className="flex flex-col gap-3 py-4">
           <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-3/4" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
         </div>
       ) : days.length === 0 ? (
         <EmptyState
@@ -896,51 +1318,50 @@ function TimelineTab({ patientId }: { patientId: string }) {
           }
         />
       ) : (
-        <ol className="px-6 py-5">
+        <ol>
           {days.map((group) => (
-            <li key={group.day} className="mb-6 last:mb-0">
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <li
+              key={group.day}
+              className="grid gap-x-6 border-b border-line py-3 last:border-b-0 sm:grid-cols-[120px_minmax(0,1fr)]"
+            >
+              <h3 className="tabular pt-0.5 font-mono text-[12px] font-medium text-fg">
                 {formatDate(`${group.day}T12:00:00+05:30`)}
               </h3>
-              <ol className="relative ml-4 border-l border-line pl-6">
+              <ol className="divide-y divide-line">
                 {group.items.map((entry) => {
                   const KindIcon = KIND_ICON[entry.kind] ?? ClipboardText;
                   return (
-                    <li key={entry.id} className="relative pb-5 last:pb-0">
-                      <span
-                        aria-hidden="true"
-                        className="absolute -left-[37px] top-0 flex size-7 items-center justify-center border border-line bg-surface text-fg-muted"
-                      >
-                        <KindIcon size={15} />
+                    <li
+                      key={entry.id}
+                      className="grid grid-cols-[44px_18px_minmax(0,1fr)_auto] items-baseline gap-x-2 py-1.5 text-[13px] first:pt-0"
+                    >
+                      <span className="tabular font-mono text-fg-subtle">
+                        {formatTime(entry.at)}
                       </span>
-                      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                        <div className="min-w-0">
-                          <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-fg">
-                            {entry.title}
-                            {entry.status && (
-                              <Badge tone={timelineTone(entry.status)}>
-                                {humanize(entry.status)}
-                              </Badge>
-                            )}
-                          </p>
-                          {entry.detail && (
-                            <p className="mt-0.5 text-[13px] text-fg-muted">{entry.detail}</p>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3 text-[13px]">
-                          {entry.encounterId && (
-                            <Link
-                              href={`/encounters/${entry.encounterId}`}
-                              className="font-medium text-primary hover:text-primary-hover"
-                            >
-                              Open visit
-                            </Link>
-                          )}
-                          <span className="tabular font-mono text-fg-subtle">
-                            {formatTime(entry.at)}
-                          </span>
-                        </div>
-                      </div>
+                      <KindIcon
+                        size={15}
+                        aria-hidden="true"
+                        className="translate-y-0.5 text-fg-muted"
+                      />
+                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                        <span className="font-medium text-fg">{entry.title}</span>
+                        {entry.detail && <span className="text-fg-muted">{entry.detail}</span>}
+                        {entry.status && (
+                          <StatusWord tone={timelineTone(entry.status)}>
+                            {humanize(entry.status)}
+                          </StatusWord>
+                        )}
+                      </span>
+                      {entry.encounterId ? (
+                        <Link
+                          href={`/encounters/${entry.encounterId}`}
+                          className="font-medium text-primary hover:text-primary-hover"
+                        >
+                          Open visit
+                        </Link>
+                      ) : (
+                        <span />
+                      )}
                     </li>
                   );
                 })}
@@ -949,7 +1370,7 @@ function TimelineTab({ patientId }: { patientId: string }) {
           ))}
         </ol>
       )}
-    </Card>
+    </InkSection>
   );
 }
 
@@ -1065,66 +1486,62 @@ function DocumentsTab({ patientId, role }: { patientId: string; role: StaffRole 
   ];
 
   return (
-    <Card>
-      <CardHeader
-        title="Documents"
-        description="Photos, ID proof, insurance cards and signed forms kept with this record."
-        action={
-          canWrite ? (
-            <Button
-              size="sm"
-              icon={<Plus size={16} aria-hidden="true" />}
-              onClick={() => setAdding(true)}
-            >
-              Add document
-            </Button>
-          ) : undefined
-        }
-      />
+    <InkSection
+      title="Documents"
+      meta={countMeta(data?.length, 'file', 'files')}
+      action={
+        canWrite ? (
+          <Button
+            size="sm"
+            icon={<Plus size={16} aria-hidden="true" />}
+            onClick={() => setAdding(true)}
+          >
+            Add document
+          </Button>
+        ) : undefined
+      }
+    >
+      <p className="pb-2 text-[13px] text-fg-muted">
+        Photos, ID proof, insurance cards and signed forms kept with this record.
+      </p>
       {openError && (
         <p
           role="alert"
-          className="mx-6 mt-4 rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
+          className="mb-3 rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
         >
           {openError}
         </p>
       )}
       {errorStatus !== undefined && !loading ? (
-        <div className="flex flex-col items-center px-6 py-14 text-center">
-          <WarningCircle size={24} className="text-danger-fg" aria-hidden="true" />
-          <p className="mt-3 text-sm text-fg">
-            {errorStatus === 403 ? 'Your role cannot view this.' : 'This could not be loaded.'}
-          </p>
-          {errorStatus !== 403 && (
-            <Button variant="secondary" size="sm" className="mt-4" onClick={reload}>
-              Try again
-            </Button>
-          )}
-        </div>
+        <LoadError status={errorStatus} onRetry={reload} />
       ) : (
-        <DataTable
-          columns={columns}
-          rows={data}
-          getRowKey={(d) => d.id}
-          loading={loading}
-          empty={
-            <EmptyState
-              icon={File}
-              title="No documents yet"
-              description="Add a photo, ID proof, insurance card or signed form."
-              action={
-                canWrite ? (
-                  <Button
-                    icon={<Plus size={16} aria-hidden="true" />}
-                    onClick={() => setAdding(true)}
-                  >
-                    Add document
-                  </Button>
-                ) : undefined
-              }
-            />
-          }
-        />
+        <Flush>
+          <RuledTable
+            columns={columns}
+            rows={data}
+            getRowKey={(d) => d.id}
+            loading={loading}
+            minWidth={640}
+            empty={
+              <EmptyState
+                icon={File}
+                title="No documents yet"
+                description="Add a photo, ID proof, insurance card or signed form."
+                action={
+                  canWrite ? (
+                    <Button
+                      variant="secondary"
+                      icon={<Plus size={16} aria-hidden="true" />}
+                      onClick={() => setAdding(true)}
+                    >
+                      Add document
+                    </Button>
+                  ) : undefined
+                }
+              />
+            }
+          />
+        </Flush>
       )}
 
       {adding && (
@@ -1147,7 +1564,7 @@ function DocumentsTab({ patientId, role }: { patientId: string; role: StaffRole 
           }}
         />
       )}
-    </Card>
+    </InkSection>
   );
 }
 
@@ -1371,114 +1788,111 @@ function ConsentTab({ patientId, role }: { patientId: string; role: StaffRole | 
   const history = [...(data?.history ?? [])].reverse();
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader
-          title="Current consent"
-          description="The latest answer recorded for each kind of consent."
-          action={
-            canWrite ? (
-              <Button
-                size="sm"
-                icon={<Plus size={16} aria-hidden="true" />}
-                onClick={() => setRecording('any')}
-              >
-                Record consent
-              </Button>
-            ) : undefined
-          }
-        />
+    <div className="flex flex-col gap-8">
+      <InkSection
+        number={1}
+        title="Current consent"
+        meta="The latest answer for each kind of consent"
+        action={
+          canWrite ? (
+            <Button
+              size="sm"
+              icon={<Plus size={16} aria-hidden="true" />}
+              onClick={() => setRecording('any')}
+            >
+              Record consent
+            </Button>
+          ) : undefined
+        }
+      >
         {errorStatus !== undefined && !loading ? (
-          <div className="flex flex-col items-center px-6 py-14 text-center">
-            <WarningCircle size={24} className="text-danger-fg" aria-hidden="true" />
-            <p className="mt-3 text-sm text-fg">
-              {errorStatus === 403 ? 'Your role cannot view this.' : 'This could not be loaded.'}
-            </p>
-            {errorStatus !== 403 && (
-              <Button variant="secondary" size="sm" className="mt-4" onClick={reload}>
-                Try again
-              </Button>
-            )}
-          </div>
+          <LoadError status={errorStatus} onRetry={reload} />
         ) : loading ? (
-          <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+          <div className="flex flex-col gap-2 py-3">
             {CONSENT_TYPES.map((t) => (
-              <Skeleton key={t} className="h-24 w-full" />
+              <Skeleton key={t} className="h-10 w-full" />
             ))}
           </div>
         ) : (
-          <ul className="grid gap-4 px-6 py-5 sm:grid-cols-2">
+          <ul className="text-[13px]">
             {CONSENT_TYPES.map((type) => {
               const state = data?.current[type];
               const entry = latest.get(type);
               return (
                 <li
                   key={type}
-                  className="flex flex-col gap-2 rounded-control border border-line bg-surface-muted/60 p-4"
+                  className="grid items-baseline gap-x-6 gap-y-1 border-b border-line py-2.5 sm:grid-cols-[minmax(0,1fr)_110px_220px_64px]"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-fg">{CONSENT_LABEL[type]}</p>
-                      <p className="mt-0.5 text-[13px] text-fg-muted">{CONSENT_HINT[type]}</p>
-                    </div>
-                    <Badge
-                      tone={
-                        state === 'GRANTED' ? 'success' : state === 'REVOKED' ? 'danger' : 'neutral'
-                      }
-                    >
-                      {state === 'GRANTED'
-                        ? 'Given'
-                        : state === 'REVOKED'
-                          ? 'Withdrawn'
-                          : 'Not recorded'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-[13px] text-fg-subtle">
-                    <span className="tabular font-mono">
-                      {entry
-                        ? `${formatDate(entry.createdAt)}, ${formatTime(entry.createdAt)}${entry.recordedBy ? ` by ${entry.recordedBy.fullName}` : ''}`
-                        : 'Nothing recorded yet'}
-                    </span>
+                  <span>
+                    <span className="block font-medium text-fg">{CONSENT_LABEL[type]}</span>
+                    <span className="block text-fg-muted">{CONSENT_HINT[type]}</span>
+                  </span>
+                  <StatusWord
+                    tone={
+                      state === 'GRANTED' ? 'success' : state === 'REVOKED' ? 'danger' : 'neutral'
+                    }
+                  >
+                    {state === 'GRANTED'
+                      ? 'Given'
+                      : state === 'REVOKED'
+                        ? 'Withdrawn'
+                        : 'Not recorded'}
+                  </StatusWord>
+                  <span className="text-fg-subtle">
+                    {entry ? (
+                      <>
+                        <span className="tabular font-mono">
+                          {formatDate(entry.createdAt)} {formatTime(entry.createdAt)}
+                        </span>
+                        {entry.recordedBy ? ` by ${entry.recordedBy.fullName}` : ''}
+                      </>
+                    ) : (
+                      'Nothing recorded yet'
+                    )}
+                  </span>
+                  <span className="sm:text-right">
                     {canWrite && (
                       <button
                         type="button"
                         onClick={() => setRecording(type)}
+                        aria-label={`${state ? 'Update' : 'Record'} ${CONSENT_LABEL[type].toLowerCase()} consent`}
                         className="cursor-pointer font-medium text-primary hover:text-primary-hover"
                       >
                         {state ? 'Update' : 'Record'}
                       </button>
                     )}
-                  </div>
+                  </span>
                 </li>
               );
             })}
           </ul>
         )}
-      </Card>
+      </InkSection>
 
       {data && history.length > 0 && (
-        <Card>
-          <CardHeader title="History" description="Every answer ever recorded, newest first." />
-          <ul className="divide-y divide-line">
+        <InkSection number={2} title="History" meta="Every answer ever recorded, newest first">
+          <ul className="text-[13px]">
             {history.map((entry) => (
               <li
                 key={entry.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 py-3 text-sm"
+                className="grid items-baseline gap-x-6 border-b border-line py-2 last:border-b-0 sm:grid-cols-[150px_minmax(0,1fr)_110px]"
               >
-                <span className="tabular font-mono w-40 shrink-0 text-fg-muted">
-                  {formatDate(entry.createdAt)}, {formatTime(entry.createdAt)}
+                <span className="tabular font-mono text-fg-muted">
+                  {formatDate(entry.createdAt)} {formatTime(entry.createdAt)}
                 </span>
-                <span className="font-medium text-fg">{CONSENT_LABEL[entry.consentType]}</span>
-                <Badge tone={entry.action === 'GRANTED' ? 'success' : 'danger'}>
+                <span className="text-fg">
+                  {CONSENT_LABEL[entry.consentType]}
+                  {entry.recordedBy && (
+                    <span className="text-fg-subtle"> by {entry.recordedBy.fullName}</span>
+                  )}
+                </span>
+                <StatusWord tone={entry.action === 'GRANTED' ? 'success' : 'danger'}>
                   {entry.action === 'GRANTED' ? 'Given' : 'Withdrawn'}
-                </Badge>
-                {entry.recordedBy && (
-                  <span className="text-fg-subtle">by {entry.recordedBy.fullName}</span>
-                )}
+                </StatusWord>
               </li>
             ))}
           </ul>
-        </Card>
+        </InkSection>
       )}
 
       {recording && (

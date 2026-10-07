@@ -10,7 +10,7 @@ import { patientRegistrationSchema, type PatientRegistrationInput } from '@seren
 import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
-import { Field, Input } from '../../../../components/ui/fields';
+import { Field, Input, Select } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { clinicToday, formatDate, fullName } from '../../../../lib/format';
 import { clearOnEditRhf } from '../../../../lib/forms';
@@ -57,10 +57,14 @@ const registrationFormSchema = patientRegistrationSchema.extend({
   email: z.string().trim().email('Enter a valid email address, or leave it blank.').optional(),
 });
 
-/** An empty optional email is "not given", not an invalid address. */
+/** An empty optional email or sex is "not given", not an invalid value. */
 const resolver: Resolver<PatientRegistrationInput> = (values, context, options) =>
   zodResolver(registrationFormSchema)(
-    { ...values, email: values.email?.trim() ? values.email.trim() : undefined },
+    {
+      ...values,
+      email: values.email?.trim() ? values.email.trim() : undefined,
+      sex: values.sex || undefined,
+    },
     context,
     options,
   );
@@ -361,6 +365,14 @@ function RegisterFlow({
             {...register('dateOfBirth')}
           />
         </Field>
+        <Field label="Sex (optional)" htmlFor="reg-sex">
+          <Select id="reg-sex" defaultValue="" {...register('sex')}>
+            <option value="">Not recorded</option>
+            <option value="FEMALE">Female</option>
+            <option value="MALE">Male</option>
+            <option value="OTHER">Other</option>
+          </Select>
+        </Field>
         <Field label="Phone" htmlFor="reg-phone" error={errors.phone?.message}>
           <Input
             id="reg-phone"
@@ -372,22 +384,20 @@ function RegisterFlow({
             {...register('phone')}
           />
         </Field>
-        <div className="sm:col-span-2">
-          <Field
-            label="Email (optional)"
-            htmlFor="reg-email"
-            helper="Used for the patient portal and receipts."
-            error={errors.email?.message}
-          >
-            <Input
-              id="reg-email"
-              type="email"
-              autoComplete="off"
-              aria-invalid={errors.email ? true : undefined}
-              {...register('email')}
-            />
-          </Field>
-        </div>
+        <Field
+          label="Email (optional)"
+          htmlFor="reg-email"
+          helper="Used for the patient portal and receipts."
+          error={errors.email?.message}
+        >
+          <Input
+            id="reg-email"
+            type="email"
+            autoComplete="off"
+            aria-invalid={errors.email ? true : undefined}
+            {...register('email')}
+          />
+        </Field>
       </div>
       {errorPanel}
       <div className="mt-6 flex justify-end gap-2">

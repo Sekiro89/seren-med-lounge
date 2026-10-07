@@ -14,6 +14,7 @@ export interface AgendaAppointment {
     firstName: string;
     lastName: string;
     mrn?: string | null;
+    sex?: string | null;
     dateOfBirth: string;
     phone: string;
   };
