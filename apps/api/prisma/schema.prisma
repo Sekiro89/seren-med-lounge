@@ -148,6 +148,8 @@ model Organization {
   messageThreads           MessageThread[]
   messages                 Message[]
   integrationSettings      IntegrationSetting[]
+  queueEvents              QueueEvent[]
+  clinicHours              ClinicHour[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -234,6 +236,7 @@ model User {
   threadsAssigned                 MessageThread[]           @relation("ThreadAssignee")
   messagesSent                    Message[]                 @relation("MessageSender")
   integrationsUpdated             IntegrationSetting[]      @relation("IntegrationUpdatedBy")
+  queueEventsActed                QueueEvent[]              @relation("QueueEventActor")
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -265,6 +268,11 @@ model Patient {
   dateOfBirth       DateTime
   phone             String
   email             String?
+  /// Patient number shown to staff and on paperwork: "SM-" + a 6-digit,
+  /// per-organization sequence (PatientsService.allocateMrn, under an
+  /// advisory lock). Nullable only so a raw insert outside the app (tests,
+  /// scripts) doesn't fail; every app creation path assigns one.
+  mrn               String?
   passwordHash      String?
   appointments      Appointment[]
   encounters        Encounter[]
@@ -305,6 +313,7 @@ model Patient {
   // Mirrors User's (organizationId, email) constraint — see its comment
   // for why scoped to org, not global.
   @@unique([organizationId, email])
+  @@unique([organizationId, mrn])
   @@index([organizationId, deletedAt])
   @@index([clinicId])
   @@index([phone])
@@ -1220,10 +1229,34 @@ model QueueEntry {
   completedAt    DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  events         QueueEvent[]
 
   @@unique([organizationId, queueDate, tokenNumber])
   @@index([organizationId, queueDate, station, status])
   @@map("queue_entries")
+}
+
+/// Append-only stage history of a queue token: one row per station/status
+/// change (token issued, call, start, complete, skip, move, discharge),
+/// written in the same transaction as the change. The app role may not
+/// UPDATE or DELETE rows (REVOKE in the migration). Cascades with its
+/// token only so test/demo teardown of queue_entries keeps working; the
+/// app never deletes queue entries.
+model QueueEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  queueEntryId   String
+  queueEntry     QueueEntry   @relation(fields: [queueEntryId], references: [id], onDelete: Cascade)
+  station        QueueStation
+  status         QueueStatus
+  at             DateTime     @default(now())
+  actorId        String?
+  actor          User?        @relation("QueueEventActor", fields: [actorId], references: [id])
+
+  @@index([queueEntryId, at])
+  @@index([organizationId])
+  @@map("queue_events")
 }
 
 /// Patient-level history (not per visit): allergies, conditions, past
@@ -2223,6 +2256,23 @@ model Message {
 // sender ids, modes) live in `config`. Nothing here talks to a provider:
 // the integrations/* ports stay stubs until a provider is contracted.
 // =============================================================================
+
+/// The clinic's weekly opening hours (dayOfWeek 0 = Sunday, clinic-local
+/// "HH:MM"). A weekday with no row is closed. Replaced as a whole week by
+/// PUT /clinic/hours; CHECK opensAt < closesAt in the migration.
+model ClinicHour {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  dayOfWeek      Int
+  opensAt        String
+  closesAt       String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, dayOfWeek])
+  @@map("clinic_hours")
+}
 
 model IntegrationSetting {
   id               String       @id @default(cuid())

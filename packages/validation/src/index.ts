@@ -22,3 +22,4 @@ export * from './templates';
 export * from './command-centre';
 export * from './messages';
 export * from './integrations';
+export * from './clinic-hours';

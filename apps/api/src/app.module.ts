@@ -59,6 +59,8 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { IntegrationSettingsModule } from './integration-settings/integration-settings.module';
 import { AuditModule } from './audit/audit.module';
 import { ReportsModule } from './reports/reports.module';
+import { InboxModule } from './inbox/inbox.module';
+import { ClinicHoursModule } from './clinic-hours/clinic-hours.module';
 
 @Module({
   imports: [
@@ -152,6 +154,8 @@ import { ReportsModule } from './reports/reports.module';
     IntegrationSettingsModule,
     AuditModule,
     ReportsModule,
+    InboxModule,
+    ClinicHoursModule,
   ],
   controllers: [AppController],
   providers: [

@@ -344,12 +344,15 @@ describe('OPD registration, queue and intake (e2e)', () => {
       expect(mine.body.length).toBeGreaterThan(0);
       expect(Object.keys(mine.body[0]).sort()).toEqual([
         'ahead',
+        'history',
         'id',
         'queueDate',
         'station',
         'status',
         'tokenNumber',
       ]);
+      expect(mine.body[0].history.length).toBeGreaterThan(0);
+      expect(Object.keys(mine.body[0].history[0]).sort()).toEqual(['at', 'station', 'status']);
     });
   });
 

@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import type { DischargeEncounterInput } from '@serenemed/validation';
 import { PrismaService } from '../prisma/prisma.service';
+import { recordQueueEvent } from '../queue/queue.service';
 import { AuditService } from '../audit/audit.service';
 import { CarePlansService } from '../care-plans/care-plans.service';
 
@@ -65,10 +66,17 @@ export class EncountersService {
         where: { id: encounter.appointmentId },
         data: { status: AppointmentStatus.COMPLETED },
       });
-      await tx.queueEntry.updateMany({
+      const openTokens = await tx.queueEntry.findMany({
         where: { encounterId, status: { not: QueueStatus.COMPLETED } },
-        data: { status: QueueStatus.COMPLETED, completedAt: new Date() },
+        select: { id: true },
       });
+      for (const token of openTokens) {
+        const completed = await tx.queueEntry.update({
+          where: { id: token.id },
+          data: { status: QueueStatus.COMPLETED, completedAt: new Date() },
+        });
+        await recordQueueEvent(tx, organizationId, completed, actorId);
+      }
       const carePlan = input.carePlan
         ? await this.carePlansService.createInTx(
             tx,
@@ -109,7 +117,14 @@ export class EncountersService {
         where: { id: encounterId },
         include: {
           patient: {
-            select: { id: true, firstName: true, lastName: true, dateOfBirth: true, phone: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              mrn: true,
+              dateOfBirth: true,
+              phone: true,
+            },
           },
           vitals: { orderBy: { recordedAt: 'desc' } },
           metabolicWorkups: { orderBy: { createdAt: 'desc' } },

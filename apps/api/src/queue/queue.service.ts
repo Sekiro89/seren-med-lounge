@@ -4,12 +4,40 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { QueueStation, QueueStatus, type Encounter, type QueueEntry } from '@prisma/client';
+import { Prisma, QueueStation, QueueStatus, type Encounter, type QueueEntry } from '@prisma/client';
 import { canActAtStation, managesWholeQueue, stationsServedBy } from '@serenemed/permissions';
 import type { StaffRole } from '@serenemed/types';
 import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { clinicDateString, toDbDate } from '../common/clinic-time';
+
+/** A token's stage history as it leaves the API: oldest first, no actor. */
+const QUEUE_HISTORY_SELECT = {
+  select: { station: true, status: true, at: true },
+  orderBy: [{ at: 'asc' }, { id: 'asc' }],
+} satisfies Prisma.QueueEntry$eventsArgs;
+
+/**
+ * Appends one row to the token's stage history (queue_events) — call it
+ * in the same transaction as the change it records, with the token's
+ * NEW station/status. Append-only: the app role can't update or delete.
+ */
+export async function recordQueueEvent(
+  tx: ExtendedPrismaClient,
+  organizationId: string,
+  entry: Pick<QueueEntry, 'id' | 'station' | 'status'>,
+  actorId: string | null,
+): Promise<void> {
+  await tx.queueEvent.create({
+    data: {
+      organizationId,
+      queueEntryId: entry.id,
+      station: entry.station,
+      status: entry.status,
+      actorId,
+    },
+  });
+}
 
 /** Which statuses each queue action may start from. */
 const ALLOWED_FROM: Record<'call' | 'start' | 'complete' | 'skip', QueueStatus[]> = {
@@ -44,6 +72,7 @@ export class QueueService {
     organizationId: string,
     encounter: Encounter,
     station: QueueStation,
+    actorId: string | null,
   ): Promise<QueueEntry> {
     const date = clinicDateString();
     const key = `queue-token:${organizationId}:${date}`;
@@ -52,7 +81,7 @@ export class QueueService {
       where: { organizationId, queueDate: toDbDate(date) },
       _max: { tokenNumber: true },
     });
-    return tx.queueEntry.create({
+    const entry = await tx.queueEntry.create({
       data: {
         organizationId,
         clinicId: encounter.clinicId,
@@ -63,6 +92,8 @@ export class QueueService {
         station,
       },
     });
+    await recordQueueEvent(tx, organizationId, entry, actorId);
+    return entry;
   }
 
   async list(
@@ -79,7 +110,7 @@ export class QueueService {
       stations = filter.station ? [filter.station] : served;
     }
 
-    return this.prisma.withTenant(organizationId, (tx) =>
+    const entries = await this.prisma.withTenant(organizationId, (tx) =>
       tx.queueEntry.findMany({
         where: {
           queueDate: toDbDate(filter.date ?? clinicDateString()),
@@ -87,16 +118,18 @@ export class QueueService {
           status: filter.status,
         },
         include: {
-          patient: { select: { id: true, firstName: true, lastName: true } },
+          patient: { select: { id: true, firstName: true, lastName: true, mrn: true } },
           encounter: {
             select: {
               appointment: { select: { doctor: { select: { id: true, fullName: true } } } },
             },
           },
+          events: QUEUE_HISTORY_SELECT,
         },
         orderBy: { tokenNumber: 'asc' },
       }),
     );
+    return entries.map(({ events, ...entry }) => ({ ...entry, history: events }));
   }
 
   /**
@@ -116,12 +149,14 @@ export class QueueService {
           status: true,
           queueDate: true,
           waitingSince: true,
+          events: QUEUE_HISTORY_SELECT,
         },
         orderBy: { tokenNumber: 'asc' },
       });
       return Promise.all(
-        entries.map(async ({ waitingSince, ...entry }) => ({
+        entries.map(async ({ waitingSince, events, ...entry }) => ({
           ...entry,
+          history: events,
           ahead:
             entry.status === QueueStatus.WAITING
               ? await tx.queueEntry.count({
@@ -200,6 +235,7 @@ export class QueueService {
       }
 
       const updated = await tx.queueEntry.update({ where: { id: entryId }, data });
+      await recordQueueEvent(tx, organizationId, updated, actorId);
 
       await this.auditService.record(tx, organizationId, {
         actorType: 'USER',

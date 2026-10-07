@@ -45,6 +45,7 @@ const PASSWORD = 'dev-password-123';
 const WIPE_ORDER = [
   'auditLog',
   'integrationSetting',
+  'clinicHour',
   'message',
   'messageThread',
   'notification',
@@ -71,6 +72,7 @@ const WIPE_ORDER = [
   'payment',
   'invoiceItem',
   'invoice',
+  'queueEvent',
   'queueEntry',
   'registration',
   'metabolicWorkup',
@@ -164,9 +166,12 @@ async function main() {
   }
 
   const patients: string[] = [];
-  for (const [firstName, lastName, dob, phone] of PATIENTS) {
+  for (const [index, [firstName, lastName, dob, phone]] of PATIENTS.entries()) {
+    // The org was just wiped, so patient numbers start again at SM-000001
+    // (the app allocates the same format in PatientsService.allocateMrn).
+    const mrn = `SM-${String(index + 1).padStart(6, '0')}`;
     const patient = await db.patient.create({
-      data: { organizationId: ORG_ID, firstName, lastName, dateOfBirth: new Date(dob), phone },
+      data: { organizationId: ORG_ID, firstName, lastName, dateOfBirth: new Date(dob), phone, mrn },
     });
     patients.push(patient.id);
   }
@@ -232,7 +237,7 @@ async function main() {
           : index === 2
             ? 'IN_SERVICE'
             : 'WAITING';
-    await db.queueEntry.create({
+    const entry = await db.queueEntry.create({
       data: {
         organizationId: ORG_ID,
         patientId,
@@ -243,6 +248,25 @@ async function main() {
         status: queueStatus as 'WAITING',
       },
     });
+    // Stage history: issued at Vitals, then wherever the plan has them now.
+    const issuedAt = at(time);
+    const steps: Array<[string, string]> = [['VITALS', 'WAITING']];
+    if (station !== 'VITALS' || queueStatus !== 'WAITING') {
+      if (station !== 'VITALS') steps.push(['VITALS', 'COMPLETED'], [station, 'WAITING']);
+      if (queueStatus !== 'WAITING') steps.push([station, queueStatus]);
+    }
+    for (const [stepIndex, [stepStation, stepStatus]] of steps.entries()) {
+      await db.queueEvent.create({
+        data: {
+          organizationId: ORG_ID,
+          queueEntryId: entry.id,
+          station: stepStation as 'VITALS',
+          status: stepStatus as 'WAITING',
+          at: new Date(issuedAt.getTime() + stepIndex * 10 * 60 * 1000),
+          actorId: stepIndex === 0 ? users.reception! : null,
+        },
+      });
+    }
   }
 
   // Prescriptions waiting at the pharmacy.
@@ -958,6 +982,16 @@ async function main() {
       });
     }
   }
+
+  // ---- Clinic opening hours: Mon to Sat, 09:00-20:00 (Sunday closed).
+  await db.clinicHour.createMany({
+    data: [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      organizationId: ORG_ID,
+      dayOfWeek,
+      opensAt: '09:00',
+      closesAt: '20:00',
+    })),
+  });
 
   console.log(`Demo clinic ready.\n  Clinic ID: ${ORG_ID}\n  Password:  ${PASSWORD}`);
   console.log('  Sign in as: ' + STAFF.map(([key]) => `${key}@demo.local`).join(', '));

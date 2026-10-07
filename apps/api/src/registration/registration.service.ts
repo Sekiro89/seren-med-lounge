@@ -83,6 +83,7 @@ export class RegistrationService {
         organizationId,
         encounter,
         QueueStation.VITALS,
+        actorId,
       );
 
       await this.auditService.record(tx, organizationId, {

@@ -34,3 +34,18 @@ export function clinicDayRange(date: string): { from: Date; to: Date } {
 export function toDbDate(date: string): Date {
   return new Date(`${date}T00:00:00.000Z`);
 }
+
+/** Clinic-local weekday (0 = Sunday) and wall-clock time ("HH:MM") of an instant. */
+export function clinicDayAndTime(at: Date = new Date()): { dayOfWeek: number; time: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLINIC_TIMEZONE,
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return { dayOfWeek: weekdays.indexOf(get('weekday')), time: `${get('hour')}:${get('minute')}` };
+}

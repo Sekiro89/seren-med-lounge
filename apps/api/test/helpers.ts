@@ -14,6 +14,7 @@ import { AppModule } from '../src/app.module';
 const WIPE_ORDER = [
   'auditLog',
   'integrationSetting',
+  'clinicHour',
   'message',
   'messageThread',
   'notification',
@@ -40,6 +41,7 @@ const WIPE_ORDER = [
   'payment',
   'invoiceItem',
   'invoice',
+  'queueEvent',
   'queueEntry',
   'registration',
   'metabolicWorkup',

@@ -44,8 +44,31 @@ const PATIENT_PROFILE_SELECT = {
   dateOfBirth: true,
   phone: true,
   email: true,
+  mrn: true,
   createdAt: true,
 } as const;
+
+/**
+ * Next patient number for an organization: "SM-" + a zero-padded 6-digit
+ * per-organization sequence (it simply grows past 6 digits after
+ * SM-999999). Caller's transaction: the advisory lock serializes
+ * concurrent allocations for the same org so max+1 can't repeat (same
+ * pattern as queue tokens and invoice numbers); the
+ * (organizationId, mrn) unique constraint is the backstop.
+ */
+export async function allocateMrn(
+  tx: Pick<ExtendedPrismaClient, '$executeRaw' | '$queryRaw'>,
+  organizationId: string,
+): Promise<string> {
+  const key = `patient-mrn:${organizationId}`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+  const rows = await tx.$queryRaw<Array<{ max: number | null }>>`
+    SELECT MAX(CAST(substring("mrn" FROM 4) AS integer)) AS max
+    FROM "patients"
+    WHERE "organizationId" = ${organizationId} AND "mrn" ~ '^SM-[0-9]+$'`;
+  const next = Number(rows[0]?.max ?? 0) + 1;
+  return `SM-${String(next).padStart(6, '0')}`;
+}
 
 export type SelfRegisterResult =
   { kind: 'active'; patient: PatientProfile } | { kind: 'pending'; claimRequestId: string };
@@ -67,6 +90,7 @@ export interface PatientProfile {
   dateOfBirth: Date;
   phone: string;
   email: string | null;
+  mrn: string | null;
   createdAt: Date;
 }
 
@@ -550,9 +574,11 @@ export class PatientsService {
     passwordHash?: string,
   ): Promise<PatientProfile> {
     try {
+      const mrn = await allocateMrn(tx, organizationId);
       return await tx.patient.create({
         data: {
           organizationId,
+          mrn,
           firstName: input.firstName,
           lastName: input.lastName,
           dateOfBirth:
@@ -564,7 +590,11 @@ export class PatientsService {
         select: PATIENT_PROFILE_SELECT,
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        !String(error.meta?.target ?? '').includes('mrn')
+      ) {
         throw new ConflictException('An account with this email already exists.');
       }
       throw error;
@@ -794,6 +824,7 @@ export class PatientsService {
                 { firstName: { contains: trimmed, mode: 'insensitive' } },
                 { lastName: { contains: trimmed, mode: 'insensitive' } },
                 { phone: { contains: trimmed } },
+                { mrn: { contains: trimmed, mode: 'insensitive' } },
                 ...(words.length > 1
                   ? [
                       {
@@ -820,6 +851,7 @@ export class PatientsService {
           lastName: true,
           phone: true,
           email: true,
+          mrn: true,
           dateOfBirth: true,
         },
       }),
@@ -883,6 +915,7 @@ function toProfile(patient: {
   dateOfBirth: Date;
   phone: string;
   email: string | null;
+  mrn: string | null;
   createdAt: Date;
 }): PatientProfile {
   return {
@@ -892,6 +925,7 @@ function toProfile(patient: {
     dateOfBirth: patient.dateOfBirth,
     phone: patient.phone,
     email: patient.email,
+    mrn: patient.mrn,
     createdAt: patient.createdAt,
   };
 }
