@@ -3,6 +3,7 @@ import {
   Bed,
   CalendarBlank,
   CalendarCheck,
+  CalendarDots,
   CheckSquare,
   ChartLineUp,
   ChatsCircle,
@@ -80,6 +81,13 @@ export const NAV: NavGroup[] = [
           'invoice:manage',
           'pharmacy:dispense',
         ],
+        ready: true,
+      },
+      {
+        label: 'Doctor schedules',
+        href: '/schedules',
+        icon: CalendarDots,
+        anyOf: ['schedule:manage'],
         ready: true,
       },
       {
