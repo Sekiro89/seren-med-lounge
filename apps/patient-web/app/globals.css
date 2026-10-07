@@ -3,7 +3,7 @@
 /*
  * Patient app tokens: docs/design/DESIGN_SYSTEM.md sections 2 and 18 (Clinical Ink).
  * Same values and semantic names as staff-web, so a component reads the
- * same in both apps; the patient app is airier (17px Atkinson body, 48px
+ * same in both apps; the patient app is airier (17px body, 48px
  * controls). Components use the semantic classes (bg-surface,
  * text-fg-muted, bg-primary, ...) and never raw palette classes or hex
  * values. Light only.
@@ -70,7 +70,7 @@
   --color-neutral-fg: var(--neutral-fg);
   --color-neutral-bg: var(--neutral-bg);
 
-  --font-sans: var(--font-atkinson);
+  --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-plex-mono);
 
   /* Sharp and flat (design system 4): no shadows. */
@@ -87,7 +87,7 @@ html {
 body {
   background: var(--bg);
   color: var(--fg);
-  font-family: var(--font-atkinson), system-ui, sans-serif;
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;

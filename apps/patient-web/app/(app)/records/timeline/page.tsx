@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   CalendarCheck,
   CaretRight,
   ClockCounterClockwise,
@@ -21,6 +20,7 @@ import {
   type Icon,
 } from '@phosphor-icons/react';
 import {
+  BackLink,
   CardsSkeleton,
   Chip,
   EmptyState,
@@ -223,18 +223,12 @@ export default function TimelinePage() {
 
   return (
     <div>
-      <Link
-        href="/records"
-        className="-ml-2 mb-6 inline-flex min-h-12 items-center gap-2 rounded-xl px-2 font-semibold text-primary"
-      >
-        <ArrowLeft size={20} aria-hidden="true" />
-        Records
-      </Link>
+      <BackLink href="/records">Records</BackLink>
 
       <PageTitle title="Your timeline" description="Everything in your record, newest first." />
 
       <div className="flex flex-col gap-8">
-        <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
+        <div role="group" aria-label="Show" className="-mx-1 flex overflow-x-auto px-1 py-1">
           {FILTERS.map((f) => {
             const active = f.id === filter;
             return (
@@ -243,10 +237,10 @@ export default function TimelinePage() {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setFilter(f.id)}
-                className={`min-h-12 cursor-pointer rounded-full border px-5 font-semibold transition-colors active:scale-[0.98] ${
+                className={`-ml-px min-h-12 flex-auto shrink-0 cursor-pointer whitespace-nowrap border px-2.5 text-[0.94rem] font-medium transition-colors first:ml-0 first:rounded-l-control last:rounded-r-control ${
                   active
-                    ? 'border-primary bg-primary text-on-primary'
-                    : 'border-line bg-surface text-fg hover:bg-surface-muted'
+                    ? 'relative z-10 border-primary bg-primary text-on-primary'
+                    : 'border-control bg-surface text-fg hover:bg-surface-muted'
                 }`}
               >
                 {f.label}
@@ -273,10 +267,13 @@ export default function TimelinePage() {
           <div className="flex flex-col gap-10">
             {months.map((month) => (
               <section key={month.key} aria-labelledby={`month-${month.key}`}>
-                <h2 id={`month-${month.key}`} className="mb-4 text-[1.12rem] font-bold text-fg">
+                <h2
+                  id={`month-${month.key}`}
+                  className="flex min-h-12 items-baseline border-t border-fg pt-3 text-[1.06rem] font-semibold text-fg"
+                >
                   {formatMonthYear(month.at)}
                 </h2>
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-5">
                   {month.days.map((day) => (
                     <DayGroup key={day.key} day={day} />
                   ))}
@@ -293,10 +290,10 @@ export default function TimelinePage() {
 function DayGroup({ day }: { day: Day }) {
   return (
     <div>
-      <h3 className="mb-3 font-semibold text-fg-muted">{formatDay(day.at)}</h3>
-      <ol className="relative flex flex-col gap-3 pl-14 before:absolute before:bottom-5 before:left-5 before:top-5 before:w-0.5 before:bg-line">
+      <h3 className="text-sm font-semibold text-fg-muted">{formatDay(day.at)}</h3>
+      <ol className="divide-y divide-line border-b border-line">
         {day.entries.map((entry) => (
-          <li key={entry.id} className="relative">
+          <li key={entry.id}>
             <Row entry={entry} />
           </li>
         ))}
@@ -304,15 +301,6 @@ function DayGroup({ day }: { day: Day }) {
     </div>
   );
 }
-
-const DOT_TONES: Record<Tone, string> = {
-  neutral: 'bg-neutral-bg text-neutral-fg',
-  primary: 'bg-primary-subtle text-primary-subtle-fg',
-  success: 'bg-success-bg text-success-fg',
-  warning: 'bg-warning-bg text-warning-fg',
-  danger: 'bg-danger-bg text-danger-fg',
-  info: 'bg-info-bg text-info-fg',
-};
 
 function Row({ entry }: { entry: TimelineEntry }) {
   const look = LOOK[entry.kind] ?? { icon: Notepad, tone: 'neutral' as Tone };
@@ -322,17 +310,23 @@ function Row({ entry }: { entry: TimelineEntry }) {
 
   const body = (
     <>
+      <time
+        dateTime={entry.at}
+        className="tabular w-12 shrink-0 pt-0.5 font-mono text-sm text-fg-muted"
+      >
+        {formatTime(entry.at)}
+      </time>
+      <look.icon size={20} className="mt-0.5 shrink-0 text-fg" aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="font-bold text-fg">{title}</p>
-          <time dateTime={entry.at} className="shrink-0 text-sm text-fg-subtle">
-            {formatTime(entry.at)}
-          </time>
-        </div>
-        {detail && <p className="text-fg-muted">{detail}</p>}
-        {code && <p className="text-sm text-fg-subtle">Code {code}</p>}
+        <p className="font-medium text-fg">{title}</p>
+        {detail && <p className="text-sm text-fg-muted">{detail}</p>}
+        {code && (
+          <p className="text-sm text-fg-subtle">
+            Code <span className="font-mono">{code}</span>
+          </p>
+        )}
         {status && (
-          <div className="mt-2">
+          <div className="mt-1.5">
             <Chip tone={status.tone}>{status.label}</Chip>
           </div>
         )}
@@ -343,26 +337,11 @@ function Row({ entry }: { entry: TimelineEntry }) {
     </>
   );
 
-  return (
-    <>
-      <span
-        className={`absolute -left-14 top-2 flex size-10 items-center justify-center rounded-full ring-4 ring-bg ${DOT_TONES[look.tone]}`}
-        aria-hidden="true"
-      >
-        <look.icon size={20} />
-      </span>
-      {href ? (
-        <Link
-          href={href}
-          className="flex gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card transition-transform active:scale-[0.99]"
-        >
-          {body}
-        </Link>
-      ) : (
-        <div className="flex gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card">
-          {body}
-        </div>
-      )}
-    </>
+  return href ? (
+    <Link href={href} className="flex gap-3 py-3 transition-colors hover:bg-surface-muted">
+      {body}
+    </Link>
+  ) : (
+    <div className="flex gap-3 py-3">{body}</div>
   );
 }

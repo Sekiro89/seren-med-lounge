@@ -3,8 +3,8 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, LockSimple, PaperPlaneRight } from '@phosphor-icons/react';
-import { Button, Card, CardsSkeleton, ErrorNote, Skeleton } from '../../../../components/ui';
+import { LockSimple, PaperPlaneRight } from '@phosphor-icons/react';
+import { BackLink, Button, CardsSkeleton, ErrorNote, Skeleton } from '../../../../components/ui';
 import { Field, TextArea } from '../../../../components/form';
 import { EmergencyNote } from '../emergency-note';
 import { apiClient } from '../../../../lib/api-client';
@@ -26,13 +26,9 @@ export default function ThreadPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link
-        href="/messages"
-        className="-ml-2 inline-flex min-h-12 items-center gap-2 self-start rounded-xl px-2 font-semibold text-primary"
-      >
-        <ArrowLeft size={20} aria-hidden="true" />
-        All messages
-      </Link>
+      <div className="-mb-6">
+        <BackLink href="/messages">All messages</BackLink>
+      </div>
 
       {thread.loading ? (
         <>
@@ -44,27 +40,27 @@ export default function ThreadPage() {
       ) : (
         thread.data && (
           <>
-            <h1 className="text-[1.65rem] font-bold leading-tight tracking-tight text-fg">
+            <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
               {thread.data.subject}
             </h1>
 
-            <ol className="flex flex-col gap-4" aria-label="Messages">
+            <ol className="border-t border-fg" aria-label="Messages">
               {thread.data.messages.map((m) => (
                 <Bubble key={m.id} message={m} />
               ))}
             </ol>
 
             {closed ? (
-              <Card className="flex items-center gap-3 text-fg-muted">
+              <div className="flex items-center gap-3 text-fg-muted">
                 <LockSimple size={22} aria-hidden="true" />
                 <p>
                   This conversation is closed. To ask something new,{' '}
-                  <Link href="/messages" className="font-semibold text-primary underline">
+                  <Link href="/messages" className="font-medium text-primary underline">
                     start a new message
                   </Link>
                   .
                 </p>
-              </Card>
+              </div>
             ) : (
               <>
                 <ReplyBox threadId={id} onSent={thread.reload} />
@@ -78,27 +74,29 @@ export default function ThreadPage() {
   );
 }
 
+/**
+ * One message as a ruled entry: who wrote it and when on one line, the
+ * text under it. The patient's own messages carry a cobalt rule at the
+ * left so the two voices are easy to tell apart.
+ */
 function Bubble({ message }: { message: ThreadMessage }) {
   const mine = message.senderType === 'PATIENT';
   return (
-    <li className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-      <p className="mb-1 px-1 text-sm font-semibold text-fg-muted">
-        {mine ? 'You' : 'SereneMed clinic'}
-      </p>
+    <li className="border-b border-line py-4">
       <div
-        className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 ${
-          mine
-            ? 'rounded-br-md bg-primary-subtle text-primary-subtle-fg'
-            : 'rounded-bl-md border border-line bg-surface text-fg shadow-card'
-        }`}
+        className={`flex flex-col gap-1 ${mine ? 'border-l-2 border-primary pl-4' : 'pl-[18px]'}`}
       >
-        {message.body}
+        <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+          <span className={`font-semibold ${mine ? 'text-primary' : 'text-fg'}`}>
+            {mine ? 'You' : 'SereneMed clinic'}
+          </span>
+          <time dateTime={message.createdAt} className="text-fg-muted">
+            {formatDate(message.createdAt)},{' '}
+            <span className="tabular font-mono">{formatTime(message.createdAt)}</span>
+          </time>
+        </p>
+        <p className="whitespace-pre-wrap break-words text-fg">{message.body}</p>
       </div>
-      <p className="mt-1 px-1 text-sm text-fg-subtle">
-        <time dateTime={message.createdAt}>
-          {formatDate(message.createdAt)}, {formatTime(message.createdAt)}
-        </time>
-      </p>
     </li>
   );
 }

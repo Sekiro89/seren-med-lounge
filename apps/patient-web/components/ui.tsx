@@ -2,16 +2,29 @@
 
 import Link from 'next/link';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { CaretRight, CircleNotch, WarningCircle, type Icon } from '@phosphor-icons/react';
+import {
+  ArrowLeft,
+  CaretRight,
+  CircleNotch,
+  Info,
+  WarningCircle,
+  type Icon,
+} from '@phosphor-icons/react';
 import { formatDayNumber, formatMonthShort } from '../lib/format';
 
 /**
- * The patient app's small component set (design system 18.5): 16px cards,
- * 12px controls at 48px tall, pill chips. Client components (Phosphor
- * icons need React context); every patient page is a client page anyway,
- * since the session lives in the browser.
+ * The patient app's small component set in Clinical Ink (design system
+ * 4 and 18): no cards. Sections open with a 1px ink rule, lists are
+ * divided by hairlines, controls are sharp (2px) and 48px tall, and a
+ * status is a square tag with a word. Client components (Phosphor icons
+ * need React context); every patient page is a client page anyway, since
+ * the session lives in the browser.
  */
 
+/**
+ * A plain block for grouped content. Kept for the few places that need a
+ * wrapper; it draws no box, only a hairline above.
+ */
 export function Card({
   children,
   className = '',
@@ -21,16 +34,10 @@ export function Card({
   className?: string;
   as?: 'section' | 'article' | 'div';
 }) {
-  return (
-    <Tag
-      className={`rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6 ${className}`}
-    >
-      {children}
-    </Tag>
-  );
+  return <Tag className={`border-t border-line py-5 ${className}`}>{children}</Tag>;
 }
 
-/** A tappable card row that opens a detail route. */
+/** A ruled row that opens a detail route: content, then a caret. */
 export function LinkCard({
   href,
   children,
@@ -43,7 +50,7 @@ export function LinkCard({
   return (
     <Link
       href={href}
-      className={`group flex items-center gap-4 rounded-2xl border border-line bg-surface p-5 shadow-card transition-transform active:scale-[0.99] sm:p-6 ${className}`}
+      className={`group flex min-h-16 items-center gap-4 py-4 transition-colors hover:bg-surface-muted/60 ${className}`}
     >
       <div className="min-w-0 flex-1">{children}</div>
       <CaretRight
@@ -55,17 +62,33 @@ export function LinkCard({
   );
 }
 
+/** A list divided by hairlines, closed by one below the last row. */
+export function Rows({
+  children,
+  className = '',
+  label,
+}: {
+  children: ReactNode;
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <ul aria-label={label} className={`divide-y divide-line border-b border-line ${className}`}>
+      {children}
+    </ul>
+  );
+}
+
 const BUTTON_VARIANTS = {
   primary: 'bg-primary text-on-primary hover:bg-primary-hover',
-  secondary: 'border border-line bg-surface text-fg hover:bg-surface-muted',
+  secondary: 'border border-control bg-surface text-fg hover:bg-surface-muted',
   quiet: 'text-primary hover:bg-primary-subtle',
-  onDeep: 'bg-brand-deep-fg text-brand-deep hover:bg-white',
 } as const;
 
 type ButtonVariant = keyof typeof BUTTON_VARIANTS;
 
 const buttonClass = (variant: ButtonVariant, full: boolean) =>
-  `inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl px-5 text-base font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${
+  `inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-control px-5 text-base font-medium transition-[background-color,transform] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${
     BUTTON_VARIANTS[variant]
   } ${full ? 'w-full' : ''}`;
 
@@ -117,27 +140,53 @@ export function ButtonLink({
   );
 }
 
-export function PageTitle({ title, description }: { title: string; description?: string }) {
+/** "← Records": the way back from a detail page. */
+export function BackLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="-ml-2 mb-4 inline-flex min-h-12 items-center gap-2 rounded-control px-2 font-medium text-primary hover:bg-primary-subtle"
+    >
+      <ArrowLeft size={20} aria-hidden="true" />
+      {children}
+    </Link>
+  );
+}
+
+/** The one large title of a tab page (28px, no serif in the patient app). */
+export function PageTitle({
+  title,
+  description,
+  eyebrow,
+}: {
+  title: string;
+  description?: string;
+  eyebrow?: string;
+}) {
   return (
     <header className="mb-8">
-      <h1 className="text-[1.65rem] font-bold leading-tight tracking-tight text-fg">{title}</h1>
-      {description && <p className="mt-2 text-fg-muted">{description}</p>}
+      {eyebrow && <p className="mb-1 text-sm text-fg-muted">{eyebrow}</p>}
+      <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
+        {title}
+      </h1>
+      {description && <p className="mt-1.5 text-fg-muted">{description}</p>}
     </header>
   );
 }
 
+/** A section heading under the 1px ink rule; `action` sits at the right (a count, a link). */
 export function SectionHeading({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-4 flex items-baseline justify-between gap-4">
-      <h2 className="text-[1.12rem] font-bold text-fg">{children}</h2>
-      {action}
+    <div className="mb-1 flex min-h-12 items-baseline justify-between gap-4 border-t border-fg pt-3">
+      <h2 className="text-[1.06rem] font-semibold text-fg">{children}</h2>
+      {action && <div className="text-sm text-fg-muted">{action}</div>}
     </div>
   );
 }
 
 export type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
-const CHIP_TONES: Record<Tone, string> = {
+const TAG_TONES: Record<Tone, string> = {
   neutral: 'bg-neutral-bg text-neutral-fg',
   primary: 'bg-primary-subtle text-primary-subtle-fg',
   success: 'bg-success-bg text-success-fg',
@@ -146,30 +195,63 @@ const CHIP_TONES: Record<Tone, string> = {
   info: 'bg-info-bg text-info-fg',
 };
 
-/** A status in words (never colour alone). */
+const TEXT_TONES: Record<Tone, string> = {
+  neutral: 'text-fg-muted',
+  primary: 'text-primary',
+  success: 'text-success-fg',
+  warning: 'text-warning-fg',
+  danger: 'text-danger-fg',
+  info: 'text-info-fg',
+};
+
+/** A status in words (never colour alone): a square tag with a small marker. */
 export function Chip({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold ${CHIP_TONES[tone]}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-control px-2 py-0.5 text-sm font-medium ${TAG_TONES[tone]}`}
     >
+      <span aria-hidden="true" className="size-1.5 shrink-0 bg-current" />
       {children}
     </span>
   );
 }
 
-/** Round icon badge used at the start of rows and empty states. */
-export function IconBadge({ icon: IconComponent, tone = 'primary' }: { icon: Icon; tone?: Tone }) {
+/** A plain coloured word for a status at the end of a row ("Low", "Paid"). */
+export function StatusWord({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+  return <span className={`text-sm font-semibold ${TEXT_TONES[tone]}`}>{children}</span>;
+}
+
+/** The icon at the start of a row: a light glyph, no circle behind it. */
+export function IconBadge({ icon: IconComponent, tone = 'neutral' }: { icon: Icon; tone?: Tone }) {
   return (
-    <span
-      className={`flex size-12 shrink-0 items-center justify-center rounded-full ${CHIP_TONES[tone]}`}
-    >
-      <IconComponent size={24} aria-hidden="true" />
-    </span>
+    <IconComponent
+      size={24}
+      className={`shrink-0 ${tone === 'neutral' ? 'text-fg' : TEXT_TONES[tone]}`}
+      aria-hidden="true"
+    />
+  );
+}
+
+/** A calm note with a 2px rule at its left: cobalt for information. */
+export function Note({
+  children,
+  icon = true,
+  className = '',
+}: {
+  children: ReactNode;
+  icon?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`flex gap-3 border-l-2 border-primary py-1 pl-4 ${className}`}>
+      {icon && <Info size={22} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />}
+      <div className="min-w-0 text-fg">{children}</div>
+    </div>
   );
 }
 
 export function EmptyState({
-  icon,
+  icon: IconComponent,
   title,
   description,
   action,
@@ -180,12 +262,12 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <Card className="flex flex-col items-center px-6 py-10 text-center">
-      <IconBadge icon={icon} tone="neutral" />
-      <p className="mt-4 font-bold text-fg">{title}</p>
-      <p className="mt-1 max-w-sm text-fg-muted">{description}</p>
-      {action && <div className="mt-6">{action}</div>}
-    </Card>
+    <div className="flex flex-col items-start border-b border-line py-8">
+      <IconComponent size={28} className="text-fg-muted" aria-hidden="true" />
+      <p className="mt-3 font-semibold text-fg">{title}</p>
+      <p className="mt-1 max-w-md text-fg-muted">{description}</p>
+      {action && <div className="mt-5">{action}</div>}
+    </div>
   );
 }
 
@@ -193,15 +275,15 @@ export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () 
   return (
     <div
       role="alert"
-      className="flex flex-wrap items-center gap-3 rounded-2xl bg-danger-bg px-5 py-4 text-danger-fg"
+      className="flex flex-wrap items-center gap-3 border-l-2 border-danger-fg bg-danger-bg py-3 pl-4 pr-2 text-danger-fg"
     >
       <WarningCircle size={22} aria-hidden="true" />
-      <p className="flex-1 font-semibold">{message}</p>
+      <p className="flex-1 font-medium">{message}</p>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="min-h-12 cursor-pointer rounded-xl px-4 font-semibold underline underline-offset-4"
+          className="min-h-12 cursor-pointer rounded-control px-4 font-semibold underline underline-offset-4"
         >
           Try again
         </button>
@@ -211,34 +293,37 @@ export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () 
 }
 
 export function Skeleton({ className = '' }: { className?: string }) {
-  return (
-    <div className={`animate-pulse rounded-2xl bg-surface-muted ${className}`} aria-hidden="true" />
-  );
+  return <div className={`animate-pulse bg-surface-muted ${className}`} aria-hidden="true" />;
 }
 
 /**
- * Month and day number in a rounded tile, for visit cards. `muted` for
- * visits that are over, so upcoming ones stand out.
+ * The day number set large in Plex Mono with the month under it, closed by
+ * a hairline on the right. `muted` for visits that are over.
  */
 export function DateTile({ iso, muted = false }: { iso: string; muted?: boolean }) {
   return (
     <div
-      className={`flex w-16 shrink-0 flex-col items-center justify-center self-start rounded-2xl py-3 ${
-        muted ? 'bg-surface-muted text-fg-muted' : 'bg-primary-subtle text-primary-subtle-fg'
+      className={`flex w-14 shrink-0 flex-col items-center self-start border-r border-line pr-4 ${
+        muted ? 'text-fg-muted' : 'text-fg'
       }`}
     >
-      <span className="text-sm font-bold uppercase">{formatMonthShort(iso)}</span>
-      <span className="tabular text-3xl font-bold leading-none">{formatDayNumber(iso)}</span>
+      <span className="tabular font-mono text-[2rem] font-medium leading-none">
+        {formatDayNumber(iso)}
+      </span>
+      <span className="mt-1 text-sm text-fg-muted">{formatMonthShort(iso)}</span>
     </div>
   );
 }
 
-/** Loading placeholder shaped like a stack of cards. */
+/** Loading placeholder shaped like ruled rows. */
 export function CardsSkeleton({ count = 3 }: { count?: number }) {
   return (
-    <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading">
+    <div className="flex flex-col divide-y divide-line" aria-busy="true" aria-label="Loading">
       {Array.from({ length: count }, (_, i) => (
-        <Skeleton key={i} className="h-28" />
+        <div key={i} className="py-4">
+          <Skeleton className="h-5 w-1/2" />
+          <Skeleton className="mt-2 h-4 w-3/4" />
+        </div>
       ))}
     </div>
   );

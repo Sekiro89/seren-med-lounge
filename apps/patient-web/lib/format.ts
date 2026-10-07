@@ -4,10 +4,11 @@
  */
 const CLINIC_TZ = 'Asia/Kolkata';
 
+// Newer ICU data abbreviates September as "Sept" in en-GB; the design system uses "Sep".
 const fmt = (options: Intl.DateTimeFormatOptions, iso: string | Date) =>
-  new Intl.DateTimeFormat('en-GB', { timeZone: CLINIC_TZ, ...options }).format(
-    typeof iso === 'string' ? new Date(iso) : iso,
-  );
+  new Intl.DateTimeFormat('en-GB', { timeZone: CLINIC_TZ, ...options })
+    .format(typeof iso === 'string' ? new Date(iso) : iso)
+    .replace(/\bSept\b/, 'Sep');
 
 /** `14:30` */
 export const formatTime = (iso: string) =>
@@ -20,6 +21,9 @@ export const formatDate = (iso: string) =>
 /** `Wednesday, 14 October` */
 export const formatDay = (iso: string) =>
   fmt({ weekday: 'long', day: 'numeric', month: 'long' }, iso);
+
+/** `5 September` */
+export const formatDayMonth = (iso: string) => fmt({ day: 'numeric', month: 'long' }, iso);
 
 /** `October 2026` */
 export const formatMonthYear = (iso: string) => fmt({ month: 'long', year: 'numeric' }, iso);

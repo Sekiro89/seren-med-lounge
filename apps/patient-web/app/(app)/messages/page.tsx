@@ -6,12 +6,12 @@ import { ChatCircleText, PencilSimple } from '@phosphor-icons/react';
 import {
   Button,
   CardsSkeleton,
-  Card,
   Chip,
   EmptyState,
   ErrorNote,
   LinkCard,
   PageTitle,
+  Rows,
   SectionHeading,
 } from '../../../components/ui';
 import { Field, TextArea, TextInput } from '../../../components/form';
@@ -81,13 +81,15 @@ export default function MessagesPage() {
               description="Questions about your visits, medicines or bills can be sent here."
             />
           ) : (
-            <ul className="flex flex-col gap-3">
+            <Rows>
               {sorted.map((t) => (
                 <li key={t.id}>
                   <LinkCard href={`/messages/${t.id}`}>
-                    <p className="font-bold">{t.subject}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                      <span className="text-fg-muted">
+                    <p className={t.unreadCount > 0 ? 'font-semibold' : 'font-medium'}>
+                      {t.subject}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <span className="text-sm text-fg-muted">
                         Last message {relativeDay(t.lastMessageAt)}, {formatDate(t.lastMessageAt)}
                       </span>
                       {t.unreadCount > 0 && (
@@ -100,7 +102,7 @@ export default function MessagesPage() {
                   </LinkCard>
                 </li>
               ))}
-            </ul>
+            </Rows>
           )}
         </section>
       </div>
@@ -145,9 +147,9 @@ function NewMessageForm({
   }
 
   return (
-    <Card>
+    <div className="border-t border-fg pt-3">
       <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-        <h2 className="text-[1.12rem] font-bold">New message</h2>
+        <h2 className="text-[1.06rem] font-semibold">New message</h2>
         <Field label="Subject" htmlFor="subject" error={errors.subject} required>
           <TextInput
             id="subject"
@@ -186,6 +188,6 @@ function NewMessageForm({
           </Button>
         </div>
       </form>
-    </Card>
+    </div>
   );
 }

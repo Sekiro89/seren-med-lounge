@@ -64,10 +64,7 @@ function LoginForm() {
         <>
           <p>
             New to SereneMed?{' '}
-            <Link
-              href="/signup"
-              className="font-semibold text-primary underline underline-offset-4"
-            >
+            <Link href="/signup" className="font-medium text-primary underline underline-offset-4">
               Create an account
             </Link>
           </p>
@@ -75,7 +72,7 @@ function LoginForm() {
             Got a code from the clinic?{' '}
             <Link
               href="/activate"
-              className="font-semibold text-primary underline underline-offset-4"
+              className="font-medium text-primary underline underline-offset-4"
             >
               Activate your account
             </Link>
@@ -84,7 +81,7 @@ function LoginForm() {
       }
     >
       {expired && (
-        <p className="mb-6 rounded-xl bg-info-bg px-4 py-3 font-semibold text-info-fg">
+        <p className="mb-6 border-l-2 border-primary py-1 pl-4 font-medium text-fg">
           You were signed out to keep your records safe. Please sign in again.
         </p>
       )}
@@ -125,7 +122,7 @@ function LoginForm() {
             setValue('email', 'patient@demo.local');
             setValue('password', 'dev-password-123');
           }}
-          className="mt-6 min-h-12 w-full cursor-pointer rounded-xl border border-dashed border-control px-4 text-fg-muted hover:bg-surface-muted"
+          className="mt-6 min-h-12 w-full cursor-pointer rounded-control border border-dashed border-control px-4 text-fg-muted hover:bg-surface-muted"
         >
           Fill in the demo patient (development only)
         </button>

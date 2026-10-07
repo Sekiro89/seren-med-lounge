@@ -82,7 +82,7 @@ export default function PatientSignupPage() {
         description="We need to check a few details before your account is ready."
       >
         <div className="flex flex-col items-start gap-4">
-          <CheckCircle size={40} weight="fill" className="text-success-fg" aria-hidden="true" />
+          <CheckCircle size={40} className="text-success-fg" aria-hidden="true" />
           <p className="text-fg-muted">
             It looks like the clinic may already have a record for you. Our front desk will match it
             to your new account so your history stays in one place. Try signing in again later, or
@@ -103,7 +103,7 @@ export default function PatientSignupPage() {
       footer={
         <p>
           Already have an account?{' '}
-          <Link href="/login" className="font-semibold text-primary underline underline-offset-4">
+          <Link href="/login" className="font-medium text-primary underline underline-offset-4">
             Sign in
           </Link>
         </p>

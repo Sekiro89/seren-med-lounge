@@ -6,7 +6,6 @@ import { ChatCenteredText, CheckCircle, Star } from '@phosphor-icons/react';
 import { Field, FormError, TextArea, apiMessage } from '../../../components/form';
 import {
   Button,
-  Card,
   CardsSkeleton,
   Chip,
   EmptyState,
@@ -72,7 +71,7 @@ export default function FeedbackPage() {
               description="After some visits we will ask how it went. Your answer helps us care for you better."
             />
           ) : (
-            <ul className="flex flex-col gap-4">
+            <ul className="flex flex-col divide-y divide-line border-b border-line">
               {open.map((request) => (
                 <li key={request.id}>
                   {sent.includes(request.id) ? (
@@ -102,7 +101,7 @@ export default function FeedbackPage() {
             ) : reviews.error ? (
               <ErrorNote message={reviews.error} onRetry={reviews.reload} />
             ) : (
-              <ul className="flex flex-col gap-4">
+              <ul className="flex flex-col divide-y divide-line border-b border-line">
                 {past.map((review) => (
                   <li key={review.id}>
                     <PastReview review={review} />
@@ -153,8 +152,8 @@ function ReviewForm({ request, onSent }: { request: ReviewRequest; onSent: () =>
   }
 
   return (
-    <Card as="article">
-      <h3 className="text-lg font-bold">How was your visit?</h3>
+    <article className="py-5">
+      <h3 className="text-[1.06rem] font-semibold">How was your visit?</h3>
       <p className="text-fg-muted">
         {STAGE[request.stage] ?? 'About your recent visit.'} Please answer by{' '}
         {formatDate(request.expiresAt)}.
@@ -162,7 +161,7 @@ function ReviewForm({ request, onSent }: { request: ReviewRequest; onSent: () =>
 
       <form onSubmit={submit} noValidate className="mt-5 flex flex-col gap-6">
         <fieldset aria-describedby={ratingError ? `${id}-rating-error` : undefined}>
-          <legend className="mb-2 font-semibold text-fg">
+          <legend className="mb-1.5 font-medium text-fg">
             Your rating
             <span aria-hidden="true" className="ml-1 text-danger-fg">
               *
@@ -174,7 +173,7 @@ function ReviewForm({ request, onSent }: { request: ReviewRequest; onSent: () =>
               return (
                 <label
                   key={value}
-                  className="flex size-13 cursor-pointer items-center justify-center rounded-xl text-warning-fg hover:bg-surface-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary"
+                  className="flex size-13 cursor-pointer items-center justify-center rounded-control text-fg hover:bg-surface-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary"
                 >
                   <input
                     type="radio"
@@ -190,15 +189,20 @@ function ReviewForm({ request, onSent }: { request: ReviewRequest; onSent: () =>
                   />
                   <Star
                     size={36}
-                    weight={filled ? 'fill' : 'regular'}
-                    className={filled ? '' : 'text-fg-subtle'}
+                    weight={filled ? 'fill' : 'light'}
+                    className={filled ? 'text-primary' : 'text-fg-muted'}
                     aria-hidden="true"
                   />
                 </label>
               );
             })}
           </div>
-          {rating > 0 && <p className="mt-1 text-fg-muted">{rating} out of 5</p>}
+          {rating > 0 && (
+            <p className="mt-1 text-fg-muted">
+              <span className="font-mono">{rating}</span> out of{' '}
+              <span className="font-mono">5</span>
+            </p>
+          )}
           {ratingError && (
             <p
               id={`${id}-rating-error`}
@@ -239,35 +243,35 @@ function ReviewForm({ request, onSent }: { request: ReviewRequest; onSent: () =>
           Send review
         </Button>
       </form>
-    </Card>
+    </article>
   );
 }
 
 function ThankYou() {
   return (
-    <Card className="flex items-center gap-4" as="div">
+    <div className="flex items-center gap-4 py-5">
       <IconBadge icon={CheckCircle} tone="success" />
       <div role="status">
-        <p className="font-bold">Thank you for your review</p>
+        <p className="font-semibold">Thank you for your review</p>
         <p className="text-fg-muted">It helps us look after you and others better.</p>
       </div>
-    </Card>
+    </div>
   );
 }
 
 function PastReview({ review }: { review: PatientReview }) {
   const status = reviewStatus(review);
   return (
-    <Card as="article">
+    <article className="py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="flex items-center gap-1 text-warning-fg">
+        <p className="flex items-center gap-1 text-primary">
           <span className="sr-only">{review.rating} out of 5 stars</span>
           {[1, 2, 3, 4, 5].map((value) => (
             <Star
               key={value}
               size={22}
-              weight={value <= review.rating ? 'fill' : 'regular'}
-              className={value <= review.rating ? '' : 'text-fg-subtle'}
+              weight={value <= review.rating ? 'fill' : 'light'}
+              className={value <= review.rating ? '' : 'text-fg-muted'}
               aria-hidden="true"
             />
           ))}
@@ -275,7 +279,7 @@ function PastReview({ review }: { review: PatientReview }) {
         <Chip tone={status.tone}>{status.label}</Chip>
       </div>
       {review.comment && <p className="mt-3 whitespace-pre-line">{review.comment}</p>}
-      <p className="mt-3 text-fg-muted">Sent {formatDate(review.createdAt)}</p>
-    </Card>
+      <p className="mt-2 text-sm text-fg-muted">Sent {formatDate(review.createdAt)}</p>
+    </article>
   );
 }

@@ -3,7 +3,7 @@
 import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
 
 const CONTROL =
-  'w-full rounded-xl border border-control bg-surface px-4 text-lg text-fg placeholder:text-fg-subtle aria-[invalid=true]:border-danger-fg disabled:opacity-60';
+  'w-full rounded-control border border-control bg-surface px-3.5 text-base text-fg placeholder:text-fg-subtle hover:border-fg focus-visible:border-primary aria-[invalid=true]:border-danger-fg disabled:opacity-60';
 
 /**
  * Label above, hint and error below; required fields carry a visible
@@ -26,7 +26,7 @@ export function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-2 block font-semibold text-fg">
+      <label htmlFor={htmlFor} className="mb-1.5 block font-medium text-fg">
         {label}
         {required && (
           <span aria-hidden="true" className="ml-1 text-danger-fg">
@@ -67,7 +67,7 @@ export function TextInput({
       {...props}
       aria-invalid={invalid || undefined}
       aria-describedby={invalid && props.id ? `${props.id}-error` : undefined}
-      className={`h-13 ${CONTROL} ${className}`}
+      className={`h-12 ${CONTROL} ${className}`}
     />
   );
 }
@@ -93,7 +93,10 @@ export function TextArea({
 export function FormError({ message }: { message: string | null | undefined }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-xl bg-danger-bg px-4 py-3 font-semibold text-danger-fg">
+    <p
+      role="alert"
+      className="border-l-2 border-danger-fg bg-danger-bg py-3 pl-4 pr-3 font-medium text-danger-fg"
+    >
       {message}
     </p>
   );

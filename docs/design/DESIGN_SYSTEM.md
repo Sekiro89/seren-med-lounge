@@ -136,14 +136,14 @@ warm beige paper.
 
 ## 3. Typography
 
-| Role                      | Font                           | Why                                                                                                                                                            |
-| ------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Staff UI and body         | **IBM Plex Sans** 400/500/600  | ui-ux-pro-max: "conveys trust, excellent for data". Neutral, technical, legible at 13 to 15px.                                                                 |
-| Every number, token, code | **IBM Plex Mono** 400/500/600  | Tokens (012), times (19:02), vitals (128/84), money in tables, ICD codes, MRNs. Mono numerals line up in columns and read as data.                             |
-| Big page titles (staff)   | **IBM Plex Serif** 500         | Only the one large title per page and the patient name on the consultation letterhead. A clinical record has a letterhead voice; same superfamily as the sans. |
-| Patient app (all text)    | **Atkinson Hyperlegible Next** | Kept from version 1 for unwell, older and second-language readers; Plex Mono for the token and result numbers (section 18).                                    |
+| Role                      | Font                          | Why                                                                                                                                                            |
+| ------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Staff UI and body         | **IBM Plex Sans** 400/500/600 | ui-ux-pro-max: "conveys trust, excellent for data". Neutral, technical, legible at 13 to 15px.                                                                 |
+| Every number, token, code | **IBM Plex Mono** 400/500/600 | Tokens (012), times (19:02), vitals (128/84), money in tables, ICD codes, MRNs. Mono numerals line up in columns and read as data.                             |
+| Big page titles (staff)   | **IBM Plex Serif** 500        | Only the one large title per page and the patient name on the consultation letterhead. A clinical record has a letterhead voice; same superfamily as the sans. |
+| Patient app               | **IBM Plex Sans + Plex Mono** | The same fonts as staff, by decision (both apps must match). Readability comes from a 17px base and generous sizes, not a different face. No serif.            |
 
-All fonts load through `next/font/google` (self-hosted, no external request).
+Both apps use the **same fonts** (a standing decision): IBM Plex Sans and Plex Mono everywhere, Plex Serif only for staff page titles. All load through `next/font/google` (self-hosted, no external request).
 
 **Serif discipline (taste-skill):** serif is used for at most one title per
 page, never for body text, labels, buttons or tables, and never in the
@@ -514,8 +514,8 @@ restyle from the token swap alone; a sweep then removes the remaining
 hard-coded radius and shadow classes.
 
 **Fonts:** `next/font/google` (`IBM_Plex_Sans`, `IBM_Plex_Mono`,
-`IBM_Plex_Serif` for staff; `Atkinson_Hyperlegible_Next` and
-`IBM_Plex_Mono` for patients).
+`IBM_Plex_Serif` for staff; `IBM_Plex_Sans` and `IBM_Plex_Mono` for
+patients: the same faces in both apps).
 
 **Build order (version 2):**
 
@@ -567,13 +567,14 @@ older or reading in a second language. Same brand, different job.
 
 Reading this as: a mobile-first health companion for patients and their
 families, in the same Clinical Ink language as staff (white, ink, hairline
-rules, one cobalt accent, large Plex Mono figures) but with Atkinson
-Hyperlegible Next for reading comfort. Dials: variance 3, motion 2,
+rules, one cobalt accent, large Plex Mono figures), in the same IBM Plex
+fonts, set larger for reading comfort. Dials: variance 3, motion 2,
 density 3.
 
 From the ui-ux-pro-max run (`patient portal healthcare clinic mobile
-calm trustworthy`): kept **Atkinson Hyperlegible**, the spacious density
-and subtle motion. Rejected **neumorphism** (the tool itself flags it
+calm trustworthy`): kept the spacious density and subtle motion. Its font
+suggestion (Atkinson Hyperlegible) was used in version 1 and replaced in
+version 2 by the same IBM Plex as staff, at the user's request. Rejected **neumorphism** (the tool itself flags it
 high accessibility risk: low-contrast edges), the landing-page
 "hero + testimonials" pattern (this is a signed-in app, not marketing)
 and its cyan palette. Version 2 replaced the teal with the Clinical Ink cobalt.
@@ -628,8 +629,8 @@ away.
 
 | Token / rule      | Patient app                                                              |
 | ----------------- | ------------------------------------------------------------------------ |
-| Body text         | 17px / 1.55 Atkinson Hyperlegible Next (`html` font-size 106.25%)        |
-| Title             | 28px / 1.2, weight 700, Atkinson (no serif in the patient app)           |
+| Body text         | 17px / 1.55 IBM Plex Sans (`html` font-size 106.25%), same font as staff |
+| Title             | 28px / 1.2, Plex Sans 600 (no serif in the patient app)                  |
 | Figures           | IBM Plex Mono: the token (64 to 96px), result values (40 to 72px), times |
 | Small text        | never under 14px                                                         |
 | Sections          | no cards: 1px ink rule above, hairline rows, white space                 |

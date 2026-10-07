@@ -12,14 +12,14 @@ import {
   type Icon,
 } from '@phosphor-icons/react';
 import {
-  Card,
+  Chip,
   ErrorNote,
   IconBadge,
   LinkCard,
   PageTitle,
+  Rows,
   SectionHeading,
   Skeleton,
-  type Tone,
 } from '../../../components/ui';
 import { formatDayNumber, formatMonthShort } from '../../../lib/format';
 import type {
@@ -89,7 +89,6 @@ export default function RecordsPage() {
   const hubs: Array<{
     href: string;
     icon: Icon;
-    tone: Tone;
     title: string;
     state: ApiState<unknown>;
     summary: string;
@@ -97,7 +96,6 @@ export default function RecordsPage() {
     {
       href: '/medicines',
       icon: Pill,
-      tone: 'primary',
       title: 'Medicines',
       state: prescriptions,
       summary: takingNow > 0 ? `${takingNow} taking now` : 'Nothing to take right now',
@@ -105,7 +103,6 @@ export default function RecordsPage() {
     {
       href: '/results',
       icon: Flask,
-      tone: 'info',
       title: 'Test results',
       state: labs,
       summary:
@@ -118,7 +115,6 @@ export default function RecordsPage() {
     {
       href: '/care',
       icon: ClipboardText,
-      tone: 'success',
       title: 'Care plan',
       state: plans,
       summary: activePlan?.title ?? 'No care plan',
@@ -126,10 +122,36 @@ export default function RecordsPage() {
     {
       href: '/appointments',
       icon: CalendarCheck,
-      tone: 'neutral',
       title: 'Past visits',
       state: appointments,
       summary: pastVisits > 0 ? plural(pastVisits, 'visit', 'visits') : 'No visits yet',
+    },
+  ];
+
+  const rows: Array<{
+    href: string;
+    icon: Icon;
+    title: string;
+    /** The load behind the summary line; none for a plain link. */
+    state?: ApiState<unknown>;
+    summary: string;
+  }> = [
+    ...hubs,
+    {
+      href: '/records/timeline',
+      icon: ClockCounterClockwise,
+      title: 'Your timeline',
+      summary: 'Everything in order, newest first',
+    },
+    {
+      href: '/records/documents',
+      icon: Folder,
+      title: 'Documents',
+      state: documents,
+      summary:
+        documentCount > 0
+          ? plural(documentCount, 'document on file', 'documents on file')
+          : 'No documents yet',
     },
   ];
 
@@ -137,65 +159,37 @@ export default function RecordsPage() {
     <div>
       <PageTitle title="Records" description="Your health record in one place." />
 
-      <div className="flex flex-col gap-4">
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {hubs.map((hub) => (
-            <li key={hub.href}>
-              <LinkCard href={hub.href} className="h-full">
-                <div className="flex items-center gap-4">
-                  <IconBadge icon={hub.icon} tone={hub.tone} />
-                  <div className="min-w-0">
-                    <p className="font-bold">{hub.title}</p>
-                    {hub.state.loading ? (
-                      <Skeleton className="mt-1 h-5 w-32" />
-                    ) : hub.state.error ? (
-                      <p className="text-fg-muted">Tap to open</p>
-                    ) : (
-                      <p className="text-fg-muted">{hub.summary}</p>
-                    )}
+      <div className="flex flex-col gap-10">
+        <nav aria-label="Your record" className="border-t border-fg">
+          <Rows>
+            {rows.map((row) => (
+              <li key={row.href}>
+                <LinkCard href={row.href}>
+                  <div className="flex items-center gap-4">
+                    <IconBadge icon={row.icon} />
+                    <div className="min-w-0">
+                      <p className="font-medium">{row.title}</p>
+                      {row.state?.loading ? (
+                        <Skeleton className="mt-1 h-4 w-32" />
+                      ) : row.state?.error ? (
+                        <p className="text-sm text-fg-muted">Tap to open</p>
+                      ) : (
+                        <p className="text-sm text-fg-muted">{row.summary}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </LinkCard>
-            </li>
-          ))}
-        </ul>
+                </LinkCard>
+              </li>
+            ))}
+          </Rows>
+        </nav>
 
-        <LinkCard href="/records/timeline">
-          <div className="flex items-center gap-4">
-            <IconBadge icon={ClockCounterClockwise} tone="primary" />
-            <div className="min-w-0">
-              <p className="font-bold">Your timeline</p>
-              <p className="text-fg-muted">Everything in order, newest first</p>
-            </div>
-          </div>
-        </LinkCard>
-
-        <LinkCard href="/records/documents">
-          <div className="flex items-center gap-4">
-            <IconBadge icon={Folder} tone="neutral" />
-            <div className="min-w-0">
-              <p className="font-bold">Documents</p>
-              {documents.loading ? (
-                <Skeleton className="mt-1 h-5 w-32" />
-              ) : documents.error ? (
-                <p className="text-fg-muted">Tap to open</p>
-              ) : (
-                <p className="text-fg-muted">
-                  {documentCount > 0
-                    ? plural(documentCount, 'document on file', 'documents on file')
-                    : 'No documents yet'}
-                </p>
-              )}
-            </div>
-          </div>
-        </LinkCard>
-
-        <section aria-labelledby="health-summary" className="mt-6">
+        <section aria-labelledby="health-summary">
           <SectionHeading>
             <span id="health-summary">Health summary</span>
           </SectionHeading>
           {diagnoses.loading || history.loading ? (
-            <Skeleton className="h-56" />
+            <Skeleton className="h-40" />
           ) : diagnoses.error || history.error ? (
             <ErrorNote
               message={diagnoses.error ?? history.error ?? ''}
@@ -230,61 +224,55 @@ function HealthSummary({
   const allergies = history.filter((h) => h.category === 'ALLERGY');
 
   return (
-    <Card>
-      <div className="flex flex-col gap-6">
-        <div>
-          <h3 className="flex items-center gap-2 font-bold text-fg-muted">
-            <Heartbeat size={20} aria-hidden="true" />
-            Conditions your doctor has noted
-          </h3>
-          {conditions.length === 0 ? (
-            <p className="mt-2 text-fg-muted">None recorded.</p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-3">
-              {conditions.map(({ id, version }) => (
-                <li key={id}>
-                  <p className="font-semibold">{version.description}</p>
-                  {version.icdCode && (
-                    <p className="text-[0.88rem] text-fg-subtle">Code {version.icdCode}</p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="border-t border-line pt-6">
-          <h3 className="flex items-center gap-2 font-bold text-fg-muted">
-            <Warning size={20} aria-hidden="true" />
-            Allergies
-          </h3>
-          {allergies.length === 0 ? (
-            <p className="mt-2 text-fg-muted">No allergies recorded.</p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-2">
-              {allergies.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-start gap-3 rounded-xl bg-warning-bg px-4 py-3 text-warning-fg"
-                >
-                  <Warning size={22} weight="fill" className="mt-0.5 shrink-0" aria-hidden="true" />
-                  <span className="font-semibold">
-                    <span className="sr-only">Allergy: </span>
-                    {a.description}
-                    {a.status === 'RESOLVED' && (
-                      <span className="font-normal"> · no longer a problem</span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <p className="border-t border-line pt-5 text-fg-muted">
-          Show this screen to any doctor who needs your history.
-        </p>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h3 className="flex items-center gap-2 pt-1 text-sm font-semibold text-fg-muted">
+          <Heartbeat size={20} aria-hidden="true" />
+          Conditions your doctor has noted
+        </h3>
+        {conditions.length === 0 ? (
+          <p className="mt-2 text-fg-muted">None recorded.</p>
+        ) : (
+          <Rows className="mt-1">
+            {conditions.map(({ id, version }) => (
+              <li key={id} className="py-3">
+                <p className="font-medium">{version.description}</p>
+                {version.icdCode && (
+                  <p className="text-sm text-fg-subtle">
+                    Code <span className="font-mono">{version.icdCode}</span>
+                  </p>
+                )}
+              </li>
+            ))}
+          </Rows>
+        )}
       </div>
-    </Card>
+
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-fg-muted">
+          <Warning size={20} aria-hidden="true" />
+          Allergies
+        </h3>
+        {allergies.length === 0 ? (
+          <p className="mt-2 text-fg-muted">No allergies recorded.</p>
+        ) : (
+          <Rows className="mt-1">
+            {allergies.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-3 py-3">
+                <Chip tone="danger">Allergy</Chip>
+                <span className="font-medium">
+                  {a.description}
+                  {a.status === 'RESOLVED' && (
+                    <span className="font-normal text-fg-muted"> · no longer a problem</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </Rows>
+        )}
+      </div>
+
+      <p className="text-fg-muted">Show this screen to any doctor who needs your history.</p>
+    </div>
   );
 }

@@ -1,14 +1,15 @@
 'use client';
 
-import { CalendarPlus, CheckCircle, ClipboardText, Info } from '@phosphor-icons/react';
+import { CalendarPlus, ClipboardText } from '@phosphor-icons/react';
 import {
   ButtonLink,
-  Card,
   CardsSkeleton,
   Chip,
   EmptyState,
   ErrorNote,
+  Note,
   PageTitle,
+  Rows,
   SectionHeading,
 } from '../../../components/ui';
 import { formatDate, formatDayNumber, formatMonthShort, relativeDay } from '../../../lib/format';
@@ -64,7 +65,7 @@ export default function CarePage() {
       ) : (
         <div className="flex flex-col gap-10">
           {current.length > 0 && (
-            <ul className="flex flex-col gap-4">
+            <ul className="flex flex-col gap-10">
               {current.map((plan) => (
                 <li key={plan.id}>
                   <PlanCard plan={plan} />
@@ -77,13 +78,13 @@ export default function CarePage() {
               <SectionHeading>
                 <span id="earlier-plans">Earlier plans</span>
               </SectionHeading>
-              <ul className="flex flex-col gap-4">
+              <Rows>
                 {earlier.map((plan) => (
-                  <li key={plan.id}>
-                    <PlanCard plan={plan} />
+                  <li key={plan.id} className="py-4">
+                    <PlanCard plan={plan} compact />
                   </li>
                 ))}
-              </ul>
+              </Rows>
             </section>
           )}
         </div>
@@ -92,42 +93,61 @@ export default function CarePage() {
   );
 }
 
-function PlanCard({ plan }: { plan: CarePlan }) {
+function PlanCard({ plan, compact = false }: { plan: CarePlan; compact?: boolean }) {
   const done = plan.status === 'COMPLETED';
   const stopped = plan.status === 'CANCELLED';
   const followUps = [...plan.followUps].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  const counted = followUps.filter((f) => f.status !== 'CANCELLED');
+  const doneCount = counted.filter((f) => f.status === 'DONE').length;
 
   return (
-    <Card as="article">
+    <article className={compact ? '' : 'border-t border-fg pt-4'}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-bold">{plan.title}</h2>
-          <p className="text-fg-muted">From your visit on {shortDate(plan.createdAt)}</p>
+          <h2 className={compact ? 'font-medium' : 'text-[1.18rem] font-semibold'}>{plan.title}</h2>
+          <p className="text-sm text-fg-muted">From your visit on {shortDate(plan.createdAt)}</p>
         </div>
+        {!compact && counted.length > 0 && (
+          <p className="text-sm font-semibold text-success-fg">
+            <span className="font-mono">{doneCount}</span> of{' '}
+            <span className="font-mono">{counted.length}</span> done
+          </p>
+        )}
         {done && <Chip tone="success">Finished</Chip>}
         {stopped && <Chip>Stopped by the clinic</Chip>}
       </div>
 
-      {plan.dischargeInstructions && (
-        <div className="mt-5 flex items-start gap-3 rounded-xl bg-primary-subtle px-4 py-4 text-primary-subtle-fg">
-          <Info size={22} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <p className="whitespace-pre-line">{plan.dischargeInstructions}</p>
+      {!compact && counted.length > 0 && counted.length <= 8 && (
+        <div
+          aria-hidden="true"
+          className="mt-3 grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${counted.length}, 1fr)` }}
+        >
+          {counted.map((f, i) => (
+            <span key={f.id} className={`h-1 ${i < doneCount ? 'bg-success-fg' : 'bg-line'}`} />
+          ))}
         </div>
       )}
 
+      {plan.dischargeInstructions && (
+        <Note className="mt-5">
+          <p className="whitespace-pre-line">{plan.dischargeInstructions}</p>
+        </Note>
+      )}
+
       {followUps.length > 0 && (
-        <div className="mt-5 border-t border-line pt-5">
-          <h3 className="font-bold">Next steps</h3>
-          <ul className="mt-3 flex flex-col gap-4">
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold text-fg-muted">Next steps</h3>
+          <Rows className="mt-1">
             {followUps.map((f) => (
-              <li key={f.id}>
+              <li key={f.id} className="py-3">
                 <FollowUpRow followUp={f} />
               </li>
             ))}
-          </ul>
+          </Rows>
         </div>
       )}
-    </Card>
+    </article>
   );
 }
 
@@ -140,17 +160,12 @@ function FollowUpRow({ followUp }: { followUp: FollowUp }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p className="font-semibold">{FOLLOW_UP[followUp.type] ?? 'Follow-up'}</p>
-        {done && (
-          <Chip tone="success">
-            <CheckCircle size={16} weight="fill" className="mr-1" aria-hidden="true" />
-            Done
-          </Chip>
-        )}
+        <p className="font-medium">{FOLLOW_UP[followUp.type] ?? 'Follow-up'}</p>
+        {done && <Chip tone="success">Done</Chip>}
         {pending && followUp.appointmentId && <Chip tone="primary">Booked</Chip>}
         {other && <Chip tone={followUp.status === 'ESCALATED' ? 'info' : 'neutral'}>{other}</Chip>}
       </div>
-      <p className="text-fg-muted">
+      <p className="text-sm text-fg-muted">
         Around {formatDate(followUp.dueAt)}
         {pending && ` · ${relativeDay(followUp.dueAt)}`}
       </p>

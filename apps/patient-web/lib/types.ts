@@ -32,6 +32,15 @@ export interface QueueToken {
   status: 'WAITING' | 'CALLED' | 'IN_SERVICE' | 'COMPLETED' | 'SKIPPED';
   /** People waiting ahead at the same desk (0 unless waiting). */
   ahead: number;
+  /** The token's stage history, oldest first (absent on older API builds). */
+  history?: QueueEvent[];
+}
+
+/** One step of a token's day: where it was and what happened, when. */
+export interface QueueEvent {
+  station: QueueStation;
+  status: QueueToken['status'];
+  at: string;
 }
 
 export interface PrescriptionItem {

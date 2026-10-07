@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from 'next';
-import { Atkinson_Hyperlegible_Next, IBM_Plex_Mono } from 'next/font/google';
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import './globals.css';
 
-// Atkinson Hyperlegible for all patient-facing text (design system 18.5);
-// IBM Plex Mono for the token, result values and times (Clinical Ink figures).
-const atkinson = Atkinson_Hyperlegible_Next({
-  variable: '--font-atkinson',
+// The same fonts as the staff app (design system 3): IBM Plex Sans for text,
+// IBM Plex Mono for the token, result values, times and money. No serif here.
+const plexSans = IBM_Plex_Sans({
+  variable: '--font-plex-sans',
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
 });
 
@@ -28,7 +29,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${atkinson.variable} ${plexMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );

@@ -59,7 +59,7 @@ export default function PatientActivatePage() {
       footer={
         <p>
           Already activated?{' '}
-          <Link href="/login" className="font-semibold text-primary underline underline-offset-4">
+          <Link href="/login" className="font-medium text-primary underline underline-offset-4">
             Sign in
           </Link>
         </p>

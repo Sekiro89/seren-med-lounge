@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarX } from '@phosphor-icons/react';
-import { EmptyState, ErrorNote, SectionHeading, Skeleton } from '../../../../../components/ui';
+import { EmptyState, ErrorNote, Skeleton } from '../../../../../components/ui';
 import {
   formatDay,
   formatDayNumber,
@@ -37,9 +37,18 @@ const PERIODS = [
   { label: 'Evening', test: (h: number) => h >= 17 },
 ];
 
+/** A day's word under its number: from what the clinic told us about it, never guessed. */
+function dayWord(works: boolean, free: number | undefined): { word: string; tone: string } {
+  if (!works) return { word: 'Closed', tone: 'text-fg-subtle' };
+  if (free === 0) return { word: 'Full', tone: 'text-fg-subtle' };
+  if (free !== undefined && free <= 3) return { word: 'Few left', tone: 'text-warning-fg' };
+  return { word: 'Open', tone: 'text-success-fg' };
+}
+
 /**
- * Step 3: a row of the next 14 days, then the doctor's free times on the
- * chosen day, grouped by part of the day. Until the patient picks a day
+ * Step 3: the next 14 days as a ruled strip (five to a screen), then the
+ * doctor's times on the chosen day, grouped by part of the day; taken
+ * times stay in place, struck through. Until the patient picks a day
  * themselves, a day with nothing left (say, this evening) moves on to the
  * doctor's next working day, so the first screen shows real times.
  */
@@ -59,6 +68,8 @@ export function DayTimeStep({
   onSlot: (slot: Slot) => void;
 }) {
   const [picked, setPicked] = useState(false);
+  // Free times per day, learned as each day is opened ("Few left", "Full").
+  const [freeByDay, setFreeByDay] = useState<Record<string, number>>({});
   const nextWorkingDay = (after: string) =>
     days.find((d) => d.date > after && doctor.days.includes(d.weekday))?.date;
   const advance = () => {
@@ -66,14 +77,23 @@ export function DayTimeStep({
     if (next) onDate(next);
   };
 
+  // Keep the chosen day in view inside the strip (scrolls the strip only, not the page).
+  const strip = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    const list = strip.current;
+    const cell = list?.querySelector<HTMLElement>('[aria-pressed="true"]')?.parentElement;
+    if (!list || !cell) return;
+    if (cell.offsetLeft < list.scrollLeft) list.scrollLeft = cell.offsetLeft;
+    else if (cell.offsetLeft + cell.offsetWidth > list.scrollLeft + list.clientWidth)
+      list.scrollLeft = cell.offsetLeft + cell.offsetWidth - list.clientWidth;
+  }, [date]);
+
   return (
-    <div className="flex flex-col gap-10">
-      <section aria-labelledby="pick-day">
-        <SectionHeading>
-          <span id="pick-day">Day</span>
-        </SectionHeading>
+    <div className="flex flex-col gap-6">
+      <section aria-label="Day">
         <ul
-          className="-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-2 sm:-mx-6 sm:scroll-px-6 sm:px-6"
+          ref={strip}
+          className="relative flex overflow-x-auto border border-line"
           aria-label="Next two weeks"
         >
           {days.map((day, i) => {
@@ -82,31 +102,38 @@ export function DayTimeStep({
             const iso = dayIso(day.date);
             const showMonth =
               i === 0 || formatMonthShort(iso) !== formatMonthShort(dayIso(days[i - 1]!.date));
+            const { word, tone } = dayWord(works, freeByDay[day.date]);
             return (
-              <li key={day.date} className="snap-start">
+              <li
+                key={day.date}
+                className={`w-1/5 shrink-0 ${i > 0 ? 'border-l border-line' : ''}`}
+              >
                 <button
                   type="button"
                   aria-pressed={selected}
                   aria-disabled={!works || undefined}
-                  aria-label={`${formatDay(iso)}${works ? '' : ', the doctor is not in'}`}
+                  aria-label={`${formatDay(iso)}, ${works ? word.toLowerCase() : 'the doctor is not in'}`}
                   onClick={() => {
                     if (!works) return;
                     setPicked(true);
                     onDate(day.date);
                   }}
-                  className={`flex min-h-20 w-16 flex-col items-center justify-center rounded-xl border transition active:scale-[0.98] ${
+                  className={`flex h-full min-h-20 w-full flex-col items-center justify-center py-2 transition-colors ${
                     selected
-                      ? 'border-primary bg-primary text-on-primary'
+                      ? 'bg-primary text-on-primary'
                       : works
-                        ? 'cursor-pointer border-line bg-surface text-fg hover:bg-surface-muted'
-                        : 'cursor-not-allowed border-line bg-surface-muted text-fg-subtle line-through'
+                        ? 'cursor-pointer bg-surface text-fg hover:bg-surface-muted'
+                        : 'cursor-not-allowed bg-surface-muted text-fg-subtle'
                   }`}
                 >
-                  <span className="text-sm font-semibold">{formatWeekdayShort(iso)}</span>
-                  <span className="tabular text-xl font-bold leading-tight">
+                  <span className={`text-sm ${selected ? '' : 'text-fg-muted'}`}>
+                    {formatWeekdayShort(iso)}
+                    {showMonth && ` ${formatMonthShort(iso)}`}
+                  </span>
+                  <span className="tabular font-mono text-[1.3rem] leading-tight">
                     {formatDayNumber(iso)}
                   </span>
-                  {showMonth && <span className="text-sm">{formatMonthShort(iso)}</span>}
+                  <span className={`text-sm ${selected ? 'font-medium' : tone}`}>{word}</span>
                 </button>
               </li>
             );
@@ -121,6 +148,7 @@ export function DayTimeStep({
           date={date}
           slot={slot}
           onSlot={onSlot}
+          onFree={(free) => setFreeByDay((m) => (m[date] === free ? m : { ...m, [date]: free }))}
           onNoTimes={picked ? undefined : advance}
         />
       ) : (
@@ -140,40 +168,46 @@ function TimeGrid({
   date,
   slot,
   onSlot,
+  onFree,
   onNoTimes,
 }: {
   doctorId: string;
   date: string;
   slot: Slot | undefined;
   onSlot: (slot: Slot) => void;
+  /** Told how many times are free once the day's answer arrives. */
+  onFree: (free: number) => void;
   /** Called once when the day turns out to have no free times. */
   onNoTimes?: () => void;
 }) {
   const slots = useApi<Array<Slot & { available?: boolean }>>(
     `/patients/me/booking/doctors/${doctorId}/slots?date=${date}`,
   );
-  const free = (slots.data ?? []).filter((s) => s.available !== false);
+  const all = slots.data ?? [];
+  const free = all.filter((s) => s.available !== false);
   const empty = slots.data !== undefined && free.length === 0;
+  const anyTaken = free.length < all.length;
 
   useEffect(() => {
+    if (slots.data !== undefined) onFree(free.length);
     if (empty) onNoTimes?.();
-    // Only when this day's answer arrives; onNoTimes changes identity each render.
+    // Only when this day's answer arrives; the callbacks change identity each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empty]);
+  }, [slots.data]);
 
   return (
     <section aria-labelledby="pick-time">
-      <SectionHeading>
-        <span id="pick-time">Time on {formatDay(dayIso(date))}</span>
-      </SectionHeading>
+      <h2 id="pick-time" className="sr-only">
+        Times on {formatDay(dayIso(date))}
+      </h2>
       {slots.loading ? (
         <div
-          className="grid grid-cols-3 gap-3 sm:grid-cols-4"
+          className="grid grid-cols-3 gap-2 sm:grid-cols-4"
           aria-busy="true"
           aria-label="Loading"
         >
           {Array.from({ length: 9 }, (_, i) => (
-            <Skeleton key={i} className="h-12 rounded-xl" />
+            <Skeleton key={i} className="h-12" />
           ))}
         </div>
       ) : slots.error ? (
@@ -185,26 +219,39 @@ function TimeGrid({
           description="Try another day."
         />
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           {PERIODS.map((period) => {
-            const group = free.filter((s) => period.test(Number(formatTime(s.start).slice(0, 2))));
+            const group = all.filter((s) => period.test(Number(formatTime(s.start).slice(0, 2))));
             if (group.length === 0) return null;
+            const open = group.filter((s) => s.available !== false).length;
             return (
               <div key={period.label}>
-                <h3 className="mb-3 font-semibold text-fg-muted">{period.label}</h3>
-                <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                <div className="flex items-baseline justify-between border-b border-fg pb-1.5">
+                  <h3 className="font-semibold">{period.label}</h3>
+                  <p className="text-sm text-fg-muted">
+                    <span className="font-mono">{open}</span> free
+                  </p>
+                </div>
+                <ul className="mt-2.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {group.map((s) => {
-                    const selected = s.start === slot?.start;
+                    const taken = s.available === false;
+                    const selected = !taken && s.start === slot?.start;
                     return (
                       <li key={s.start}>
                         <button
                           type="button"
                           aria-pressed={selected}
-                          onClick={() => onSlot({ start: s.start, end: s.end })}
-                          className={`tabular min-h-12 w-full cursor-pointer rounded-xl border text-lg font-semibold transition active:scale-[0.98] ${
-                            selected
-                              ? 'border-primary bg-primary text-on-primary'
-                              : 'border-line bg-surface text-fg hover:bg-surface-muted'
+                          aria-disabled={taken || undefined}
+                          aria-label={taken ? `${formatTime(s.start)}, taken` : undefined}
+                          onClick={() => {
+                            if (!taken) onSlot({ start: s.start, end: s.end });
+                          }}
+                          className={`tabular h-12 w-full rounded-control font-mono text-base transition-colors ${
+                            taken
+                              ? 'cursor-not-allowed bg-surface-muted text-fg-subtle line-through'
+                              : selected
+                                ? 'cursor-pointer bg-primary font-medium text-on-primary'
+                                : 'cursor-pointer border border-control bg-surface text-fg hover:border-fg'
                           }`}
                         >
                           {formatTime(s.start)}
@@ -216,6 +263,7 @@ function TimeGrid({
               </div>
             );
           })}
+          {anyTaken && <p className="text-sm text-fg-muted">Struck-through times are taken.</p>}
         </div>
       )}
     </section>

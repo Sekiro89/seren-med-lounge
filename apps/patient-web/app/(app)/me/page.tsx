@@ -7,7 +7,6 @@ import {
   ChatCircleText,
   Envelope,
   Star,
-  Heartbeat,
   Phone,
   Receipt,
   ShieldCheck,
@@ -16,13 +15,13 @@ import {
 } from '@phosphor-icons/react';
 import {
   Button,
-  Card,
   CardsSkeleton,
   Chip,
   ErrorNote,
   IconBadge,
   LinkCard,
   PageTitle,
+  Rows,
   SectionHeading,
   Skeleton,
 } from '../../../components/ui';
@@ -91,7 +90,7 @@ export default function MePage() {
 
       <div className="flex flex-col gap-10">
         {profile.loading ? (
-          <Skeleton className="h-44" />
+          <Skeleton className="h-32" />
         ) : profile.error ? (
           <ErrorNote message={profile.error} onRetry={profile.reload} />
         ) : (
@@ -107,31 +106,32 @@ export default function MePage() {
           ) : history.error ? (
             <ErrorNote message={history.error} onRetry={history.reload} />
           ) : allergies.length === 0 ? (
-            <Card className="flex items-center gap-4">
-              <IconBadge icon={Warning} tone="neutral" />
-              <p className="text-fg-muted">
-                No allergies recorded. Tell the clinic if this is wrong.
-              </p>
-            </Card>
+            <p className="border-b border-line py-4 text-fg-muted">
+              No allergies recorded. Tell the clinic if this is wrong.
+            </p>
           ) : (
-            <ul className="flex flex-col gap-3">
+            <Rows>
               {allergies.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-start gap-4 rounded-2xl border border-line bg-warning-bg p-5 text-warning-fg sm:p-6"
-                >
-                  <Warning size={28} weight="fill" className="mt-0.5 shrink-0" aria-hidden="true" />
-                  <div className="min-w-0">
-                    <p className="font-bold">
+                <li key={a.id} className="flex items-start gap-3 py-4">
+                  <Warning
+                    size={24}
+                    className="mt-0.5 shrink-0 text-danger-fg"
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">
                       <span className="sr-only">Allergy: </span>
                       {a.description}
                     </p>
-                    {a.severity && <p>{SEVERITY[a.severity]}</p>}
-                    {a.status === 'RESOLVED' && <p>No longer a problem</p>}
+                    {a.severity && <p className="text-sm text-fg-muted">{SEVERITY[a.severity]}</p>}
+                    {a.status === 'RESOLVED' && (
+                      <p className="text-sm text-fg-muted">No longer a problem</p>
+                    )}
                   </div>
+                  <Chip tone={a.status === 'RESOLVED' ? 'neutral' : 'danger'}>Allergy</Chip>
                 </li>
               ))}
-            </ul>
+            </Rows>
           )}
         </section>
 
@@ -163,20 +163,20 @@ export default function MePage() {
           <SectionHeading>
             <span id="more">More</span>
           </SectionHeading>
-          <ul className="flex flex-col gap-3">
+          <Rows>
             <li>
               <LinkCard href="/bills">
                 <div className="flex items-center gap-4">
-                  <IconBadge icon={Receipt} tone="primary" />
-                  <p className="font-bold">Payments</p>
+                  <IconBadge icon={Receipt} />
+                  <p className="font-medium">Payments</p>
                 </div>
               </LinkCard>
             </li>
             <li>
               <LinkCard href="/feedback">
                 <div className="flex flex-wrap items-center gap-4">
-                  <IconBadge icon={Star} tone="primary" />
-                  <p className="font-bold">Feedback</p>
+                  <IconBadge icon={Star} />
+                  <p className="font-medium">Feedback</p>
                   {toReview > 0 && <Chip tone="primary">{toReview} to do</Chip>}
                 </div>
               </LinkCard>
@@ -184,21 +184,21 @@ export default function MePage() {
             <li>
               <LinkCard href="/notifications">
                 <div className="flex items-center gap-4">
-                  <IconBadge icon={Bell} tone="primary" />
-                  <p className="font-bold">Notifications</p>
+                  <IconBadge icon={Bell} />
+                  <p className="font-medium">Notifications</p>
                 </div>
               </LinkCard>
             </li>
             <li>
               <LinkCard href="/messages">
                 <div className="flex flex-wrap items-center gap-4">
-                  <IconBadge icon={ChatCircleText} tone="primary" />
-                  <p className="font-bold">Messages</p>
+                  <IconBadge icon={ChatCircleText} />
+                  <p className="font-medium">Messages</p>
                   {unread > 0 && <Chip tone="primary">{unread} new</Chip>}
                 </div>
               </LinkCard>
             </li>
-          </ul>
+          </Rows>
         </section>
 
         <div className="flex flex-col gap-6">
@@ -223,16 +223,16 @@ export default function MePage() {
 function IdentityCard({ profile }: { profile: Profile }) {
   const initials = `${profile.firstName.charAt(0)}${profile.lastName.charAt(0)}`.toUpperCase();
   return (
-    <Card>
+    <section aria-label="Whose record this is" className="border-y border-line py-5">
       <div className="flex items-center gap-4">
         <span
-          className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary-subtle text-xl font-bold text-primary-subtle-fg"
+          className="flex size-14 shrink-0 items-center justify-center rounded-full bg-neutral-bg text-lg font-semibold text-neutral-fg"
           aria-hidden="true"
         >
           {initials}
         </span>
         <div className="min-w-0">
-          <p className="text-xl font-bold">
+          <p className="text-[1.18rem] font-semibold">
             {profile.firstName} {profile.lastName}
           </p>
           <p className="text-fg-muted">
@@ -240,13 +240,13 @@ function IdentityCard({ profile }: { profile: Profile }) {
           </p>
         </div>
       </div>
-      <dl className="mt-5 flex flex-col gap-3 border-t border-line pt-5">
+      <dl className="mt-5 flex flex-col gap-3 border-t border-line pt-4">
         <div className="flex items-center gap-3">
           <dt>
             <Phone size={20} className="text-fg-subtle" aria-hidden="true" />
             <span className="sr-only">Phone</span>
           </dt>
-          <dd className="break-all">{profile.phone}</dd>
+          <dd className="break-all font-mono">{profile.phone}</dd>
         </div>
         <div className="flex items-center gap-3">
           <dt>
@@ -258,7 +258,7 @@ function IdentityCard({ profile }: { profile: Profile }) {
           </dd>
         </div>
       </dl>
-    </Card>
+    </section>
   );
 }
 
@@ -271,37 +271,32 @@ const maskPolicy = (number: string) => {
 function InsuranceCard({ policies }: { policies: InsurancePolicy[] }) {
   if (policies.length === 0) {
     return (
-      <Card className="flex items-center gap-4">
-        <IconBadge icon={ShieldCheck} tone="neutral" />
-        <p className="text-fg-muted">
-          No insurance on file. Tell the front desk if you have a policy.
-        </p>
-      </Card>
+      <p className="border-b border-line py-4 text-fg-muted">
+        No insurance on file. Tell the front desk if you have a policy.
+      </p>
     );
   }
   return (
-    <Card as="div" className="p-0 sm:p-0">
-      <ul className="divide-y divide-line">
-        {policies.map((p) => (
-          <li key={p.id} className="flex items-start gap-4 px-5 py-5 sm:px-6">
-            <IconBadge icon={ShieldCheck} tone={p.isActive ? 'primary' : 'neutral'} />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <p className="font-bold">{p.insurerName}</p>
-                {!p.isActive && <Chip>No longer active</Chip>}
-              </div>
-              <p className="text-fg-muted">
-                Policy number <span className="tabular">{maskPolicy(p.policyNumber)}</span>
-              </p>
-              <p className="text-fg-muted">
-                {p.validTo ? `Valid until ${formatDate(p.validTo)}` : 'No end date on file'}
-              </p>
-              {p.tpaName && <p className="text-sm text-fg-subtle">Handled through {p.tpaName}</p>}
+    <Rows>
+      {policies.map((p) => (
+        <li key={p.id} className="flex items-start gap-4 py-4">
+          <IconBadge icon={ShieldCheck} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="font-medium">{p.insurerName}</p>
+              {!p.isActive && <Chip>No longer active</Chip>}
             </div>
-          </li>
-        ))}
-      </ul>
-    </Card>
+            <p className="text-sm text-fg-muted">
+              Policy number <span className="tabular font-mono">{maskPolicy(p.policyNumber)}</span>
+            </p>
+            <p className="text-sm text-fg-muted">
+              {p.validTo ? `Valid until ${formatDate(p.validTo)}` : 'No end date on file'}
+            </p>
+            {p.tpaName && <p className="text-sm text-fg-subtle">Handled through {p.tpaName}</p>}
+          </div>
+        </li>
+      ))}
+    </Rows>
   );
 }
 
@@ -313,32 +308,27 @@ function HealthConditions({ entries }: { entries: HistoryEntry[] }) {
 
   if (groups.length === 0) {
     return (
-      <Card className="flex items-center gap-4">
-        <IconBadge icon={Heartbeat} tone="neutral" />
-        <p className="text-fg-muted">
-          Nothing recorded yet. Tell the clinic if something is missing.
-        </p>
-      </Card>
+      <p className="border-b border-line py-4 text-fg-muted">
+        Nothing recorded yet. Tell the clinic if something is missing.
+      </p>
     );
   }
 
   return (
-    <Card>
-      <div className="flex flex-col gap-5">
-        {groups.map((g) => (
-          <div key={g.category}>
-            <h3 className="font-bold text-fg-muted">{g.title}</h3>
-            <ul className="mt-2 flex flex-col gap-2">
-              {g.items.map((item) => (
-                <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>{item.description}</span>
-                  {item.status === 'RESOLVED' && <Chip>Resolved</Chip>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </Card>
+    <div className="flex flex-col gap-5 pt-1">
+      {groups.map((g) => (
+        <div key={g.category}>
+          <h3 className="text-sm font-semibold text-fg-muted">{g.title}</h3>
+          <ul className="mt-1 divide-y divide-line border-b border-line">
+            {g.items.map((item) => (
+              <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+                <span>{item.description}</span>
+                {item.status === 'RESOLVED' && <Chip>Resolved</Chip>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }

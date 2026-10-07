@@ -3,7 +3,6 @@
 import { CalendarBlank, CalendarPlus } from '@phosphor-icons/react';
 import {
   ButtonLink,
-  Card,
   CardsSkeleton,
   Chip,
   DateTile,
@@ -11,6 +10,7 @@ import {
   ErrorNote,
   LinkCard,
   PageTitle,
+  Rows,
   SectionHeading,
 } from '../../../components/ui';
 import { doctorName, formatDay, formatTime, relativeDay } from '../../../lib/format';
@@ -37,7 +37,7 @@ export default function AppointmentsPage() {
   return (
     <div>
       <PageTitle
-        title="Appointments"
+        title="Visits"
         description="Book a visit at the clinic or by video, and see your visits."
       />
 
@@ -45,7 +45,7 @@ export default function AppointmentsPage() {
         <ButtonLink
           href="/appointments/book"
           full
-          icon={<CalendarPlus size={22} aria-hidden="true" />}
+          icon={<CalendarPlus size={20} aria-hidden="true" />}
         >
           Book a visit
         </ButtonLink>
@@ -69,20 +69,20 @@ export default function AppointmentsPage() {
                 action={
                   <ButtonLink
                     href="/appointments/book"
-                    icon={<CalendarPlus size={22} aria-hidden="true" />}
+                    icon={<CalendarPlus size={20} aria-hidden="true" />}
                   >
                     Book a visit
                   </ButtonLink>
                 }
               />
             ) : (
-              <ul className="flex flex-col gap-4">
+              <Rows>
                 {upcoming.map((a) => (
                   <li key={a.id}>
-                    <UpcomingCard appointment={a} />
+                    <VisitRow appointment={a} upcoming />
                   </li>
                 ))}
-              </ul>
+              </Rows>
             )}
           </section>
 
@@ -91,17 +91,17 @@ export default function AppointmentsPage() {
               <span id="past-visits">Past</span>
             </SectionHeading>
             {past.length === 0 ? (
-              <Card>
-                <p className="text-fg-muted">Your past visits will be listed here.</p>
-              </Card>
+              <p className="border-b border-line py-4 text-fg-muted">
+                Your past visits will be listed here.
+              </p>
             ) : (
-              <ul className="flex flex-col gap-3">
+              <Rows>
                 {past.map((a) => (
                   <li key={a.id}>
-                    <PastCard appointment={a} />
+                    <VisitRow appointment={a} upcoming={false} />
                   </li>
                 ))}
-              </ul>
+              </Rows>
             )}
           </section>
         </div>
@@ -110,41 +110,22 @@ export default function AppointmentsPage() {
   );
 }
 
-function UpcomingCard({ appointment }: { appointment: Appointment }) {
-  const status = visitStatus(appointment.status, true);
+function VisitRow({ appointment, upcoming }: { appointment: Appointment; upcoming: boolean }) {
+  const status = visitStatus(appointment.status, upcoming);
+  const iso = appointment.scheduledAt;
   return (
     <LinkCard href={`/appointments/${appointment.id}`}>
-      <div className="flex gap-5">
-        <DateTile iso={appointment.scheduledAt} />
+      <div className="flex gap-4">
+        <DateTile iso={iso} muted={!upcoming} />
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-bold">
-            {formatDay(appointment.scheduledAt)}, {formatTime(appointment.scheduledAt)}
+          <p className={upcoming ? 'font-semibold' : 'font-medium'}>
+            {formatDay(iso)}, <span className="tabular font-mono">{formatTime(iso)}</span>
           </p>
-          <p className="text-fg-muted">
-            With {doctorName(appointment.doctor)} · {relativeDay(appointment.scheduledAt)}
+          <p className="text-sm text-fg-muted">
+            With {doctorName(appointment.doctor)}
+            {upcoming && <> · {relativeDay(iso)}</>}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <ModeChip entrySource={appointment.entrySource} />
-            <Chip tone={status.tone}>{status.label}</Chip>
-          </div>
-        </div>
-      </div>
-    </LinkCard>
-  );
-}
-
-function PastCard({ appointment }: { appointment: Appointment }) {
-  const status = visitStatus(appointment.status, false);
-  return (
-    <LinkCard href={`/appointments/${appointment.id}`}>
-      <div className="flex gap-5">
-        <DateTile iso={appointment.scheduledAt} muted />
-        <div className="min-w-0 flex-1">
-          <p className="font-bold">
-            {formatDay(appointment.scheduledAt)}, {formatTime(appointment.scheduledAt)}
-          </p>
-          <p className="text-fg-muted">With {doctorName(appointment.doctor)}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <ModeChip entrySource={appointment.entrySource} />
             <Chip tone={status.tone}>{status.label}</Chip>
           </div>

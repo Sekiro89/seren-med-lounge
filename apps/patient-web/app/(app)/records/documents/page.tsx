@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import {
-  ArrowLeft,
   ArrowSquareOut,
   File as FileIcon,
   FileText,
@@ -15,13 +13,14 @@ import {
 } from '@phosphor-icons/react';
 import { ApiError } from '@serenemed/api-client';
 import {
+  BackLink,
   Button,
-  Card,
   CardsSkeleton,
   EmptyState,
   ErrorNote,
   IconBadge,
   PageTitle,
+  Rows,
 } from '../../../../components/ui';
 import { fetchFile } from '../../../../lib/api-client';
 import { formatDate } from '../../../../lib/format';
@@ -48,13 +47,7 @@ export default function DocumentsPage() {
 
   return (
     <div>
-      <Link
-        href="/records"
-        className="-ml-2 mb-6 inline-flex min-h-12 items-center gap-2 rounded-xl px-2 font-semibold text-primary"
-      >
-        <ArrowLeft size={20} aria-hidden="true" />
-        Records
-      </Link>
+      <BackLink href="/records">Records</BackLink>
 
       <PageTitle title="Documents" description="Files the clinic keeps on your record." />
 
@@ -69,13 +62,15 @@ export default function DocumentsPage() {
           description="The clinic hasn't added any documents yet. Your ID, insurance card and consent forms will show up here once they are on file."
         />
       ) : (
-        <ul className="flex flex-col gap-3">
-          {sorted.map((d) => (
-            <li key={d.id}>
-              <DocumentRow document={d} />
-            </li>
-          ))}
-        </ul>
+        <div className="border-t border-fg">
+          <Rows>
+            {sorted.map((d) => (
+              <li key={d.id}>
+                <DocumentRow document={d} />
+              </li>
+            ))}
+          </Rows>
+        </div>
       )}
     </div>
   );
@@ -109,19 +104,16 @@ function DocumentRow({ document }: { document: PatientDocument }) {
   }
 
   return (
-    <Card as="article">
-      <div className="flex items-start gap-4">
-        <IconBadge icon={type.icon} tone="primary" />
+    <article className="py-4">
+      <div className="flex items-center gap-4">
+        <IconBadge icon={type.icon} />
         <div className="min-w-0 flex-1">
-          <p className="font-bold">{type.label}</p>
-          <p className="break-words text-fg-muted">{document.fileName}</p>
+          <p className="font-medium">{type.label}</p>
+          <p className="break-words text-sm text-fg-muted">{document.fileName}</p>
           <p className="text-sm text-fg-subtle">Added {formatDate(document.createdAt)}</p>
         </div>
-      </div>
-      <div className="mt-4">
         <Button
           variant="secondary"
-          full
           loading={opening}
           onClick={open}
           icon={<ArrowSquareOut size={20} aria-hidden="true" />}
@@ -134,6 +126,6 @@ function DocumentRow({ document }: { document: PatientDocument }) {
           <ErrorNote message={error} />
         </div>
       )}
-    </Card>
+    </article>
   );
 }

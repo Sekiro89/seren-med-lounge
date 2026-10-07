@@ -13,6 +13,7 @@ import {
 import {
   Button,
   CardsSkeleton,
+  Chip,
   EmptyState,
   ErrorNote,
   IconBadge,
@@ -128,7 +129,7 @@ export default function NotificationsPage() {
             </div>
           )}
           {error && <ErrorNote message={error} />}
-          <ul className="flex flex-col gap-3">
+          <ul className="divide-y divide-line border-y border-fg border-b-line">
             {list.map((n) => {
               const fresh = isUnread(n);
               const look = ICON[n.entityType ?? ''] ?? { icon: Bell, tone: 'neutral' as Tone };
@@ -139,27 +140,18 @@ export default function NotificationsPage() {
                     type="button"
                     onClick={() => open(n)}
                     disabled={!href && !fresh}
-                    className={`flex w-full items-start gap-4 cursor-pointer rounded-2xl border border-line p-5 text-left shadow-card transition-transform active:scale-[0.99] disabled:cursor-default disabled:active:scale-100 sm:p-6 ${
-                      fresh ? 'bg-surface' : 'bg-surface-muted'
-                    }`}
+                    className="flex w-full cursor-pointer items-start gap-4 py-4 text-left transition-colors hover:bg-surface-muted disabled:cursor-default disabled:hover:bg-transparent"
                   >
-                    <IconBadge icon={look.icon} tone={fresh ? look.tone : 'neutral'} />
+                    <IconBadge icon={look.icon} />
                     <div className="min-w-0 flex-1">
-                      <p className={fresh ? 'font-bold text-fg' : 'text-fg'}>
+                      <p className={fresh ? 'font-semibold text-fg' : 'text-fg'}>
                         {fresh && <span className="sr-only">New: </span>}
                         {n.title}
                       </p>
-                      {n.body && <p className="mt-1 text-fg-muted">{n.body}</p>}
-                      <p className="mt-1 text-[0.88rem] text-fg-subtle">
-                        {timeAgo(n.createdAt, now)}
-                      </p>
+                      {n.body && <p className="mt-0.5 text-fg-muted">{n.body}</p>}
+                      <p className="mt-1 text-sm text-fg-subtle">{timeAgo(n.createdAt, now)}</p>
                     </div>
-                    {fresh && (
-                      <span
-                        className="mt-2 size-3 shrink-0 rounded-full bg-primary"
-                        aria-hidden="true"
-                      />
-                    )}
+                    {fresh && <Chip tone="primary">New</Chip>}
                   </button>
                 </li>
               );

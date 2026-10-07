@@ -1,6 +1,5 @@
 'use client';
 
-import { Buildings, VideoCamera } from '@phosphor-icons/react';
 import { Chip, type Tone } from '../../../components/ui';
 import type { Appointment, AppointmentStatus } from '../../../lib/types';
 
@@ -15,18 +14,12 @@ export function isComingUp(a: Pick<Appointment, 'status' | 'scheduledAt'>, now: 
   return ACTIVE.has(a.status) && clinicDay(a.scheduledAt) >= clinicDay(now);
 }
 
-/** "Video" or "At the clinic", in words and with an icon. */
+/** "Video" or "At the clinic", in words. */
 export function ModeChip({ entrySource }: { entrySource: Appointment['entrySource'] }) {
   return entrySource === 'VIDEO_CONSULTATION' ? (
-    <Chip tone="info">
-      <VideoCamera size={16} className="mr-1.5" aria-hidden="true" />
-      Video
-    </Chip>
+    <Chip tone="info">Video</Chip>
   ) : (
-    <Chip tone="neutral">
-      <Buildings size={16} className="mr-1.5" aria-hidden="true" />
-      At the clinic
-    </Chip>
+    <Chip tone="neutral">At the clinic</Chip>
   );
 }
 

@@ -1,13 +1,10 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  ArrowLeft,
   CheckCircle,
   Flask,
-  Info,
   Pill,
   Receipt,
   Stethoscope,
@@ -17,13 +14,14 @@ import {
 import { ApiError } from '@serenemed/api-client';
 import { apiMessage } from '../../../../components/form';
 import {
+  BackLink,
   Button,
-  Card,
   Chip,
-  DateTile,
   ErrorNote,
   IconBadge,
   LinkCard,
+  Note,
+  Rows,
   SectionHeading,
   Skeleton,
   type Tone,
@@ -67,18 +65,12 @@ export default function AppointmentDetailPage() {
 
   return (
     <div>
-      <Link
-        href="/appointments"
-        className="-ml-2 mb-6 inline-flex min-h-12 items-center gap-2 rounded-xl px-2 font-semibold text-primary"
-      >
-        <ArrowLeft size={20} aria-hidden="true" />
-        All appointments
-      </Link>
+      <BackLink href="/appointments">All visits</BackLink>
 
       {visit.loading ? (
         <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading">
-          <Skeleton className="h-48" />
-          <Skeleton className="h-28" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-20" />
         </div>
       ) : visit.error || !visit.data ? (
         <ErrorNote
@@ -119,14 +111,14 @@ function Visit({
   return (
     <div className="flex flex-col gap-10">
       <header>
-        <h1 className="sr-only">Your visit</h1>
-        <Card className="flex gap-5">
-          <DateTile iso={visit.scheduledAt} muted={!upcoming} />
-          <div className="min-w-0 flex-1">
-            <p className="text-[1.35rem] font-bold leading-tight">
-              {formatDay(visit.scheduledAt)}, {formatTime(visit.scheduledAt)}
-            </p>
-            <p className="mt-1 text-fg-muted">
+        <p className="mb-1 text-sm text-fg-muted">{upcoming ? 'Your visit' : 'Past visit'}</p>
+        <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.01em]">
+          {formatDay(visit.scheduledAt)},{' '}
+          <span className="tabular font-mono font-medium">{formatTime(visit.scheduledAt)}</span>
+        </h1>
+        <div className="mt-5 border-y border-line py-4">
+          <div className="min-w-0">
+            <p className="text-fg-muted">
               With {doctorName(visit.doctor)}
               {upcoming && <> · {relativeDay(visit.scheduledAt)}</>}
             </p>
@@ -136,23 +128,21 @@ function Visit({
             </div>
             {visit.notes && (
               <div className="mt-4 border-t border-line pt-4">
-                <p className="text-sm font-semibold text-fg-subtle">What you told us</p>
+                <p className="text-sm text-fg-muted">What you told us</p>
                 <p className="mt-1 whitespace-pre-line">{visit.notes}</p>
               </div>
             )}
           </div>
-        </Card>
+        </div>
       </header>
 
       {justCancelled && visit.status === 'CANCELLED' && (
         <div
           role="status"
-          className="flex items-center gap-3 rounded-2xl bg-success-bg px-5 py-4 text-success-fg"
+          className="flex items-center gap-3 border-l-2 border-success-fg bg-success-bg py-3 pl-4 pr-3 text-success-fg"
         >
           <CheckCircle size={22} aria-hidden="true" />
-          <p className="font-semibold">
-            Your visit is cancelled. The slot is free for someone else.
-          </p>
+          <p className="font-medium">Your visit is cancelled. The slot is free for someone else.</p>
         </div>
       )}
 
@@ -168,9 +158,9 @@ function Visit({
       ) : (
         !upcoming &&
         visited && (
-          <Card>
-            <p className="text-fg-muted">Nothing was recorded for this visit yet.</p>
-          </Card>
+          <p className="border-t border-fg pt-4 text-fg-muted">
+            Nothing was recorded for this visit yet.
+          </p>
         )
       )}
     </div>
@@ -180,12 +170,10 @@ function Visit({
 /** A calm note for messages that are not errors (too early to join, video not switched on). */
 function InfoNote({ children }: { children: ReactNode }) {
   return (
-    <div
-      role="status"
-      className="flex items-start gap-3 rounded-2xl bg-info-bg px-5 py-4 text-info-fg"
-    >
-      <Info size={22} className="mt-0.5 shrink-0" aria-hidden="true" />
-      <p className="font-semibold">{children}</p>
+    <div role="status">
+      <Note>
+        <p className="font-medium">{children}</p>
+      </Note>
     </div>
   );
 }
@@ -259,8 +247,8 @@ function CancelVisit({ visit, onCancelled }: { visit: VisitDetail; onCancelled: 
   }
 
   return (
-    <Card className="flex flex-col gap-4">
-      <p className="font-bold">
+    <div className="flex flex-col gap-4 border-y border-fg py-5">
+      <p className="font-semibold">
         Cancel your visit on {shortWhen(visit.scheduledAt)} with {doctorName(visit.doctor)}?
       </p>
       {error && <ErrorNote message={error} />}
@@ -280,7 +268,7 @@ function CancelVisit({ visit, onCancelled }: { visit: VisitDetail; onCancelled: 
           Keep it
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -296,25 +284,27 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
 
   if (diagnoses.length + medicines.length + tests.length + bills.length === 0) {
     return (
-      <Card>
-        <p className="text-fg-muted">Nothing was recorded for this visit yet.</p>
-      </Card>
+      <p className="border-t border-fg pt-4 text-fg-muted">
+        Nothing was recorded for this visit yet.
+      </p>
     );
   }
 
   return (
-    <section aria-labelledby="from-this-visit" className="flex flex-col gap-6">
-      <h2 id="from-this-visit" className="text-[1.12rem] font-bold text-fg">
+    <section aria-labelledby="from-this-visit" className="flex flex-col gap-8">
+      <h2 id="from-this-visit" className="-mb-4 text-[1.25rem] font-semibold text-fg">
         From this visit
       </h2>
 
       {diagnoses.length > 0 && (
         <Group icon={Stethoscope} title="Diagnosis">
           {diagnoses.map((d) => (
-            <li key={d.id}>
-              <p className="text-lg font-bold">{d.latest.description}</p>
+            <li key={d.id} className="py-3">
+              <p className="font-semibold">{d.latest.description}</p>
               {d.latest.icdCode && (
-                <p className="text-sm text-fg-subtle">Code {d.latest.icdCode}</p>
+                <p className="text-sm text-fg-subtle">
+                  Code <span className="font-mono">{d.latest.icdCode}</span>
+                </p>
               )}
             </li>
           ))}
@@ -324,9 +314,9 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
       {medicines.length > 0 && (
         <Group icon={Pill} title="Medicines prescribed">
           {medicines.map((m) => (
-            <li key={m.id}>
-              <p className="font-bold">{m.medicationName}</p>
-              <p className="text-fg-muted">
+            <li key={m.id} className="py-3">
+              <p className="font-medium">{m.medicationName}</p>
+              <p className="text-sm text-fg-muted">
                 {m.dosage} · {m.frequency}
               </p>
             </li>
@@ -339,12 +329,14 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
           {tests.map((t) => {
             const result = t.results[0];
             return (
-              <li key={t.id} className="flex flex-wrap items-baseline justify-between gap-x-4">
-                <p className="font-bold">{t.testName}</p>
+              <li key={t.id} className="flex flex-wrap items-baseline justify-between gap-x-4 py-3">
+                <p className="font-medium">{t.testName}</p>
                 {result ? (
-                  <p className="tabular">
+                  <p className="tabular font-mono text-lg">
                     {result.resultValue}
-                    {result.unit && ` ${result.unit}`}
+                    {result.unit && (
+                      <span className="ml-1.5 font-sans text-sm text-fg-muted">{result.unit}</span>
+                    )}
                   </p>
                 ) : (
                   <p className="text-fg-muted">Waiting for results</p>
@@ -363,7 +355,7 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
               Bills
             </span>
           </SectionHeading>
-          <ul className="flex flex-col gap-3">
+          <Rows>
             {bills.map((b) => {
               const status = BILL_STATUS[b.status] ?? { label: 'Bill', tone: 'neutral' as Tone };
               return (
@@ -371,8 +363,12 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
                   <LinkCard href="/bills">
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                       <div>
-                        <p className="font-bold">Bill #{b.number}</p>
-                        <p className="tabular text-fg-muted">{formatMoney(b.totalMinor)}</p>
+                        <p className="font-medium">
+                          Bill <span className="font-mono">#{b.number}</span>
+                        </p>
+                        <p className="tabular font-mono text-fg-muted">
+                          {formatMoney(b.totalMinor)}
+                        </p>
                       </div>
                       <Chip tone={status.tone}>{status.label}</Chip>
                     </div>
@@ -380,7 +376,7 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
                 </li>
               );
             })}
-          </ul>
+          </Rows>
         </div>
       )}
     </section>
@@ -389,12 +385,12 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
 
 function Group({ icon, title, children }: { icon: Icon; title: string; children: ReactNode }) {
   return (
-    <Card>
-      <div className="mb-4 flex items-center gap-3">
-        <IconBadge icon={icon} tone="primary" />
-        <h3 className="font-bold">{title}</h3>
+    <div>
+      <div className="flex min-h-12 items-center gap-2 border-t border-fg pt-3">
+        <IconBadge icon={icon} />
+        <h3 className="text-[1.06rem] font-semibold">{title}</h3>
       </div>
-      <ul className="flex flex-col gap-4">{children}</ul>
-    </Card>
+      <Rows>{children}</Rows>
+    </div>
   );
 }

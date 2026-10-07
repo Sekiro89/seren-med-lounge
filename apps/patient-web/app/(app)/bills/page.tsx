@@ -2,13 +2,13 @@
 
 import { CheckCircle, Receipt, Storefront } from '@phosphor-icons/react';
 import {
-  Card,
   CardsSkeleton,
   Chip,
   EmptyState,
   ErrorNote,
   IconBadge,
   PageTitle,
+  Rows,
   SectionHeading,
   Skeleton,
   type Tone,
@@ -40,7 +40,7 @@ export default function BillsPage() {
       <PageTitle title="Payments" description="Your bills, what you've paid, and what's left." />
       {invoices.loading ? (
         <div className="flex flex-col gap-10">
-          <Skeleton className="h-32" />
+          <Skeleton className="h-24" />
           <CardsSkeleton count={2} />
         </div>
       ) : invoices.error ? (
@@ -59,13 +59,13 @@ export default function BillsPage() {
               <SectionHeading>
                 <span id="to-pay">To pay</span>
               </SectionHeading>
-              <ul className="flex flex-col gap-4">
+              <Rows>
                 {toPay.map((invoice) => (
                   <li key={invoice.id}>
                     <BillCard invoice={invoice} />
                   </li>
                 ))}
-              </ul>
+              </Rows>
             </section>
           )}
           {done.length > 0 && (
@@ -73,13 +73,13 @@ export default function BillsPage() {
               <SectionHeading>
                 <span id="paid">{anyCancelled ? 'Paid and cancelled' : 'Paid'}</span>
               </SectionHeading>
-              <ul className="flex flex-col gap-4">
+              <Rows>
                 {done.map((invoice) => (
                   <li key={invoice.id}>
                     <BillCard invoice={invoice} />
                   </li>
                 ))}
-              </ul>
+              </Rows>
             </section>
           )}
         </div>
@@ -91,24 +91,26 @@ export default function BillsPage() {
 function Summary({ owed }: { owed: number }) {
   if (owed <= 0) {
     return (
-      <Card className="flex items-center gap-4">
+      <div className="flex items-center gap-4 border-y border-line py-5">
         <IconBadge icon={CheckCircle} tone="success" />
         <div>
-          <p className="text-lg font-bold text-success-fg">Nothing to pay</p>
+          <p className="font-semibold text-success-fg">Nothing to pay</p>
           <p className="text-fg-muted">All your bills are settled.</p>
         </div>
-      </Card>
+      </div>
     );
   }
   return (
-    <Card>
-      <p className="font-semibold text-fg-muted">Total to pay</p>
-      <p className="tabular mt-1 text-4xl font-bold leading-tight text-fg">{formatMoney(owed)}</p>
-      <div className="mt-4 flex items-start gap-3 border-t border-line pt-4 text-fg-muted">
+    <div>
+      <p className="text-sm text-fg-muted">Total to pay</p>
+      <p className="tabular mt-1 font-mono text-[3rem] font-medium leading-none tracking-[-0.02em] text-fg">
+        {formatMoney(owed)}
+      </p>
+      <div className="mt-5 flex items-start gap-3 border-t border-line pt-4 text-fg-muted">
         <Storefront size={22} className="mt-0.5 shrink-0" aria-hidden="true" />
         <p>Pay at the clinic desk. Online payment is coming soon.</p>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -118,38 +120,42 @@ function BillCard({ invoice }: { invoice: Invoice }) {
   const balance = invoice.totalMinor - invoice.paidMinor;
 
   return (
-    <Card as="article">
+    <article className="py-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-bold">Bill #{invoice.number}</h3>
-          <p className="text-fg-muted">{formatDate(invoice.createdAt)}</p>
+          <h3 className="font-semibold">
+            Bill <span className="font-mono">#{invoice.number}</span>
+          </h3>
+          <p className="text-sm text-fg-muted">{formatDate(invoice.createdAt)}</p>
         </div>
         <Chip tone={status.tone}>{status.label}</Chip>
       </div>
 
-      <ul className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+      <ul className="mt-3 flex flex-col gap-1.5">
         {invoice.items.map((item) => (
           <li key={item.id} className="flex justify-between gap-4">
-            <span className="min-w-0">{item.description}</span>
-            <span className="tabular shrink-0">{formatMoney(item.lineTotalMinor)}</span>
+            <span className="min-w-0 text-fg-muted">{item.description}</span>
+            <span className="tabular shrink-0 font-mono">{formatMoney(item.lineTotalMinor)}</span>
           </li>
         ))}
       </ul>
 
-      <dl className="mt-4 flex flex-col gap-1 border-t border-line pt-4">
+      <dl className="mt-3 flex flex-col gap-1 border-t border-dashed border-line pt-3">
         <div className="flex justify-between gap-4">
           <dt className="text-fg-muted">Total</dt>
-          <dd className="tabular font-semibold">{formatMoney(invoice.totalMinor)}</dd>
+          <dd className="tabular font-mono font-medium">{formatMoney(invoice.totalMinor)}</dd>
         </div>
         {!cancelled && (
           <>
             <div className="flex justify-between gap-4">
               <dt className="text-fg-muted">Paid</dt>
-              <dd className="tabular">{formatMoney(invoice.paidMinor)}</dd>
+              <dd className="tabular font-mono">{formatMoney(invoice.paidMinor)}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="font-bold">Balance</dt>
-              <dd className={`tabular font-bold ${balance > 0 ? 'text-warning-fg' : 'text-fg'}`}>
+              <dt className="font-semibold">Balance</dt>
+              <dd
+                className={`tabular font-mono font-semibold ${balance > 0 ? 'text-warning-fg' : 'text-fg'}`}
+              >
                 {formatMoney(Math.max(0, balance))}
               </dd>
             </div>
@@ -159,6 +165,6 @@ function BillCard({ invoice }: { invoice: Invoice }) {
       {cancelled && (
         <p className="mt-3 text-fg-muted">This bill was cancelled. You do not need to pay it.</p>
       )}
-    </Card>
+    </article>
   );
 }

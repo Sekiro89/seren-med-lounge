@@ -3,38 +3,28 @@
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  Bell,
-  CalendarBlank,
-  ChatCircleText,
-  FolderOpen,
-  House,
-  UserCircle,
-  type Icon,
-} from '@phosphor-icons/react';
+import { Bell, IconContext } from '@phosphor-icons/react';
 import { getPatientToken, PATIENT_TOKEN_KEY } from '../lib/auth';
 import type { PatientNotification } from '../lib/types';
 import { useApi } from '../lib/use-api';
+import { Logo } from './logo';
 
 interface Tab {
   label: string;
-  /** Shorter label for the phone tab bar, where five tabs share 360px. */
-  short?: string;
   href: string;
-  icon: Icon;
 }
 
 /**
- * The five tabs (design system 18.4), following the Patient Interface of
- * the SereneMed architecture: appointments (with video), records and
- * reports, messages, and the patient's own space (payments, feedback).
+ * The five tabs (design system 18.4), text only: appointments (with
+ * video), records and reports, messages, and the patient's own space
+ * (payments, feedback).
  */
 const TABS: Tab[] = [
-  { label: 'Home', href: '/home', icon: House },
-  { label: 'Appointments', short: 'Visits', href: '/appointments', icon: CalendarBlank },
-  { label: 'Records', href: '/records', icon: FolderOpen },
-  { label: 'Messages', href: '/messages', icon: ChatCircleText },
-  { label: 'Me', href: '/me', icon: UserCircle },
+  { label: 'Home', href: '/home' },
+  { label: 'Visits', href: '/appointments' },
+  { label: 'Records', href: '/records' },
+  { label: 'Messages', href: '/messages' },
+  { label: 'Me', href: '/me' },
 ];
 
 /** Pages reached from a hub highlight the tab they belong to. */
@@ -63,9 +53,11 @@ const subscribe = (onChange: () => void) => {
 };
 
 /**
- * Signed-in frame: a top bar (brand, and the tabs from `lg` up) and a
- * bottom tab bar on phones. Without a session it sends the patient to
- * sign in; the API re-checks every request regardless.
+ * Signed-in frame: a slim top bar (wordmark and the bell; from `lg` also
+ * the tabs, the active one underlined in cobalt), a white page on the
+ * canvas, and on phones a bottom tab bar with text labels whose active
+ * tab carries a 2px cobalt bar along its top edge. Without a session it
+ * sends the patient to sign in; the API re-checks every request regardless.
  */
 export function PatientShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -81,85 +73,94 @@ export function PatientShell({ children }: { children: ReactNode }) {
   if (!token) return null;
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <a
-        href="#main"
-        className="sr-only z-50 rounded-xl bg-surface px-4 py-3 font-semibold focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
-      >
-        Skip to content
-      </a>
+    <IconContext.Provider value={{ weight: 'light' }}>
+      <div className="flex min-h-dvh flex-col bg-surface lg:bg-bg">
+        <a
+          href="#main"
+          className="sr-only z-50 rounded-control bg-surface px-4 py-3 font-semibold focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+        >
+          Skip to content
+        </a>
 
-      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
-        <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-6 px-5 sm:px-6">
-          <Link href="/home" className="flex items-center gap-2.5" aria-label="SereneMed home">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-lg font-bold text-on-primary">
-              S
-            </span>
-            <span className="text-lg font-bold tracking-tight text-fg">SereneMed</span>
-          </Link>
+        <header className="sticky top-0 z-30 border-b border-line bg-surface">
+          <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-6 px-5 sm:px-6 lg:h-16">
+            <Link href="/home" className="flex min-h-12 items-center" aria-label="SereneMed home">
+              <Logo />
+            </Link>
 
-          <nav aria-label="Main" className="hidden lg:block">
-            <ul className="flex items-center gap-1">
-              {TABS.map((tab) => {
-                const active = current === tab.href;
-                return (
-                  <li key={tab.href}>
-                    <Link
-                      href={tab.href}
-                      aria-current={active ? 'page' : undefined}
-                      className={`flex min-h-11 items-center gap-2 rounded-xl px-4 font-semibold transition-colors ${
-                        active
-                          ? 'bg-primary-subtle text-primary-subtle-fg'
-                          : 'text-fg-muted hover:bg-surface-muted hover:text-fg'
-                      }`}
-                    >
-                      <tab.icon size={20} weight={active ? 'fill' : 'regular'} aria-hidden="true" />
-                      {tab.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+            <nav aria-label="Main" className="hidden h-full lg:block">
+              <ul className="flex h-full items-stretch gap-1">
+                {TABS.map((tab) => {
+                  const active = current === tab.href;
+                  return (
+                    <li key={tab.href} className="relative flex">
+                      <Link
+                        href={tab.href}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex items-center px-4 transition-colors ${
+                          active
+                            ? 'font-semibold text-fg'
+                            : 'font-medium text-fg-muted hover:text-fg'
+                        }`}
+                      >
+                        {tab.label}
+                      </Link>
+                      {active && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-x-3 bottom-0 h-0.5 bg-primary"
+                        />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
 
-          <NotificationBell />
-        </div>
-      </header>
+            <NotificationBell />
+          </div>
+        </header>
 
-      <main
-        id="main"
-        tabIndex={-1}
-        className="pb-tabbar mx-auto w-full max-w-2xl flex-1 px-5 pt-8 outline-none sm:px-6 lg:pb-16 lg:pt-12"
-      >
-        {children}
-      </main>
+        <main
+          id="main"
+          tabIndex={-1}
+          className="pb-tabbar mx-auto w-full max-w-2xl flex-1 bg-surface px-5 pt-6 outline-none sm:px-6 lg:my-8 lg:flex-none lg:px-10 lg:pb-14 lg:pt-10"
+        >
+          {children}
+        </main>
 
-      <nav
-        aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <ul className="mx-auto grid h-16 max-w-2xl grid-cols-5">
-          {TABS.map((tab) => {
-            const active = current === tab.href;
-            return (
-              <li key={tab.href}>
-                <Link
-                  href={tab.href}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex h-full flex-col items-center justify-center gap-0.5 text-[0.83rem] font-semibold transition-colors ${
-                    active ? 'text-primary' : 'text-fg-subtle hover:text-fg'
-                  }`}
-                >
-                  <tab.icon size={24} weight={active ? 'fill' : 'regular'} aria-hidden="true" />
-                  {tab.short ?? tab.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    </div>
+        <nav
+          aria-label="Main"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface lg:hidden"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <ul className="mx-auto grid h-16 max-w-2xl grid-cols-5">
+            {TABS.map((tab) => {
+              const active = current === tab.href;
+              return (
+                <li key={tab.href} className="relative">
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-3 top-0 h-0.5 bg-primary"
+                    />
+                  )}
+                  <Link
+                    href={tab.href}
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex h-full items-center justify-center text-[0.88rem] transition-colors ${
+                      active ? 'font-semibold text-fg' : 'font-medium text-fg-muted hover:text-fg'
+                    }`}
+                  >
+                    {tab.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </div>
+    </IconContext.Provider>
   );
 }
 
@@ -171,11 +172,11 @@ function NotificationBell() {
     <Link
       href="/notifications"
       aria-label={unread ? `Notifications, ${unread} new` : 'Notifications'}
-      className="relative -mr-2 flex size-12 items-center justify-center rounded-full text-fg-muted hover:bg-surface-muted hover:text-fg lg:ml-2"
+      className="relative -mr-2 flex size-12 items-center justify-center rounded-control text-fg hover:bg-surface-muted lg:ml-2"
     >
       <Bell size={24} aria-hidden="true" />
       {unread > 0 && (
-        <span className="tabular absolute right-1.5 top-1.5 flex min-w-5 items-center justify-center rounded-full bg-danger-fg px-1 text-[0.8rem] font-bold leading-5 text-white">
+        <span className="tabular absolute right-1 top-1.5 flex min-w-5 items-center justify-center bg-danger-fg px-1 font-mono text-sm font-medium leading-5 text-on-primary">
           {unread}
         </span>
       )}

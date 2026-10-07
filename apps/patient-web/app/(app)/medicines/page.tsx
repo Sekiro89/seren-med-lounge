@@ -1,14 +1,14 @@
 'use client';
 
-import { Info, Pill } from '@phosphor-icons/react';
+import { Pill } from '@phosphor-icons/react';
 import {
-  Card,
   CardsSkeleton,
   Chip,
   EmptyState,
   ErrorNote,
-  IconBadge,
+  Note,
   PageTitle,
+  Rows,
   SectionHeading,
 } from '../../../components/ui';
 import { courseLength, doctorName, formatDayNumber, formatMonthShort } from '../../../lib/format';
@@ -83,13 +83,13 @@ export default function MedicinesPage() {
                 description="When your doctor prescribes a medicine, it will show up here with how to take it."
               />
             ) : (
-              <ul className="flex flex-col gap-4">
+              <Rows>
                 {current.map((m) => (
                   <li key={m.item.id}>
                     <CurrentMedicine medicine={m} />
                   </li>
                 ))}
-              </ul>
+              </Rows>
             )}
           </section>
 
@@ -98,24 +98,17 @@ export default function MedicinesPage() {
               <SectionHeading>
                 <span id="past-medicines">Past medicines</span>
               </SectionHeading>
-              <Card as="div" className="p-0 sm:p-0">
-                <ul className="divide-y divide-line">
-                  {past.map((m) => (
-                    <li key={m.item.id} className="px-5 py-4 sm:px-6">
-                      <PastMedicine medicine={m} />
-                    </li>
-                  ))}
-                </ul>
-              </Card>
+              <Rows>
+                {past.map((m) => (
+                  <li key={m.item.id} className="py-4">
+                    <PastMedicine medicine={m} />
+                  </li>
+                ))}
+              </Rows>
             </section>
           )}
 
-          <Card className="flex items-center gap-4">
-            <IconBadge icon={Info} tone="info" />
-            <p className="text-fg-muted">
-              Do not stop or change a medicine without talking to your doctor.
-            </p>
-          </Card>
+          <Note>Do not stop or change a medicine without talking to your doctor.</Note>
         </div>
       )}
     </div>
@@ -125,25 +118,23 @@ export default function MedicinesPage() {
 function CurrentMedicine({ medicine }: { medicine: Medicine }) {
   const { item, prescription, lastDay } = medicine;
   return (
-    <Card as="article">
-      <h3 className="text-xl font-bold leading-snug text-fg">{item.medicationName}</h3>
-      <p className="mt-2 text-lg font-semibold text-fg">
+    <article className="py-5">
+      <h3 className="text-[1.18rem] font-semibold leading-snug text-fg">{item.medicationName}</h3>
+      <p className="mt-1 font-medium text-fg">
         {item.dosage} · {item.frequency}
       </p>
-      <p className="mt-1 text-fg-muted">
+      <p className="mt-0.5 text-fg-muted">
         {item.durationDays && lastDay
           ? `For ${courseLength(item.durationDays)} · until ${shortDate(lastDay)}`
           : 'Keep taking until your doctor tells you to stop'}
       </p>
       {item.instructions && (
-        <p className="mt-4 rounded-xl bg-primary-subtle px-4 py-3 text-primary-subtle-fg">
-          {item.instructions}
-        </p>
+        <p className="mt-3 border-l-2 border-primary pl-4">{item.instructions}</p>
       )}
       <p className="mt-4 text-sm text-fg-muted">
         Prescribed by {doctorName(prescription.author)} on {shortDate(prescription.createdAt)}
       </p>
-    </Card>
+    </article>
   );
 }
 
@@ -152,8 +143,8 @@ function PastMedicine({ medicine }: { medicine: Medicine }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
       <div className="min-w-0">
-        <p className="font-bold">{item.medicationName}</p>
-        <p className="text-fg-muted">
+        <p className="font-medium">{item.medicationName}</p>
+        <p className="text-sm text-fg-muted">
           {item.dosage} · {item.frequency}
         </p>
         <p className="mt-1 text-sm text-fg-muted">

@@ -1,15 +1,13 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import {
   ArrowsClockwise,
-  CalendarCheck,
   CalendarPlus,
+  CaretRight,
   ChatCircleText,
-  ClipboardText,
-  CreditCard,
   Flask,
-  Heartbeat,
   Receipt,
   Star,
   VideoCamera,
@@ -17,18 +15,26 @@ import {
 } from '@phosphor-icons/react';
 import {
   ButtonLink,
-  Card,
   CardsSkeleton,
-  DateTile,
   Chip,
   ErrorNote,
   IconBadge,
   LinkCard,
+  Rows,
   SectionHeading,
   Skeleton,
   type Tone,
 } from '../../../components/ui';
-import { doctorName, formatDay, formatMoney, formatTime, relativeDay } from '../../../lib/format';
+import {
+  doctorName,
+  formatDay,
+  formatDayNumber,
+  formatMoney,
+  formatMonthShort,
+  formatTime,
+  formatWeekdayShort,
+  relativeDay,
+} from '../../../lib/format';
 import type {
   Appointment,
   CarePlan,
@@ -41,7 +47,8 @@ import type {
   QueueToken,
 } from '../../../lib/types';
 import { useApi, useNow } from '../../../lib/use-api';
-import { isComingUp, ModeChip, visitStatus } from '../appointments/shared';
+import { isComingUp, visitStatus } from '../appointments/shared';
+import { VisitProgress } from './visit-progress';
 
 const STEP_LABEL: Record<CarePlan['followUps'][number]['type'], string> = {
   REVIEW_APPOINTMENT: 'review visit',
@@ -51,38 +58,6 @@ const STEP_LABEL: Record<CarePlan['followUps'][number]['type'], string> = {
   OTHER: 'follow-up',
 };
 
-/** The Patient Interface of the SereneMed architecture, one tap each. */
-const ACTIONS: Array<{ href: string; label: string; icon: Icon }> = [
-  { href: '/appointments/book', label: 'Book a visit', icon: CalendarPlus },
-  { href: '/appointments/book?mode=video&step=2', label: 'Video consult', icon: VideoCamera },
-  { href: '/bills', label: 'Payments', icon: CreditCard },
-  { href: '/records', label: 'Records', icon: ClipboardText },
-  { href: '/results', label: 'Test results', icon: Flask },
-  { href: '/messages', label: 'Messages', icon: ChatCircleText },
-];
-
-function QuickActions() {
-  return (
-    <nav aria-label="Quick actions">
-      <ul className="grid grid-cols-3 gap-3">
-        {ACTIONS.map(({ href, label, icon: ActionIcon }) => (
-          <li key={label}>
-            <Link
-              href={href}
-              className="flex h-full min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-line bg-surface px-2 py-4 text-center shadow-card transition-transform active:scale-[0.98]"
-            >
-              <span className="flex size-11 items-center justify-center rounded-full bg-primary-subtle text-primary">
-                <ActionIcon size={24} aria-hidden="true" />
-              </span>
-              <span className="text-[0.88rem] font-semibold leading-tight text-fg">{label}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
-
 const DESK: Record<QueueStation, string> = {
   VITALS: 'the nurse for your check-up',
   JUNIOR_DOCTOR: 'the doctor',
@@ -90,6 +65,16 @@ const DESK: Record<QueueStation, string> = {
   LAB: 'the lab',
   BILLING: 'the billing desk',
   PHARMACY: 'the pharmacy',
+};
+
+/** What comes after each desk, in words. */
+const AFTER: Record<QueueStation, string | null> = {
+  VITALS: 'Next: the doctor.',
+  JUNIOR_DOCTOR: 'Your doctor will tell you what comes next.',
+  SENIOR_DOCTOR: 'Your doctor will tell you what comes next.',
+  LAB: 'Next: billing.',
+  BILLING: null,
+  PHARMACY: null,
 };
 
 function greeting(): string {
@@ -102,7 +87,7 @@ function greeting(): string {
 }
 
 /**
- * Home answers, without a tap: where am I in the queue (when at the
+ * Home answers, without a tap: where am I in my visit (when at the
  * clinic), when is my next visit, and is anything waiting for me (a bill,
  * new results, a reply). Design system 18.2.
  */
@@ -139,10 +124,10 @@ export default function HomePage() {
   const pendingReviews = (reviews.data ?? []).filter(
     (r) => r.status === 'REQUESTED' && new Date(r.expiresAt).getTime() > now,
   ).length;
-  // The soonest open step of an active care plan (a review visit, a check-in).
-  const nextStep = (carePlans.data ?? [])
-    .filter((p) => p.status === 'ACTIVE')
-    .flatMap((p) => p.followUps.map((f) => ({ ...f, plan: p.title })))
+  // The plan with the soonest open step (a review visit, a check-in).
+  const activePlans = (carePlans.data ?? []).filter((p) => p.status === 'ACTIVE');
+  const nextStep = activePlans
+    .flatMap((p) => p.followUps.map((f) => ({ ...f, plan: p })))
     .filter((f) => f.status === 'PENDING')
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt))[0];
 
@@ -161,7 +146,7 @@ export default function HomePage() {
     attention.push({
       href: '/results',
       icon: Flask,
-      tone: 'info',
+      tone: 'neutral',
       title: 'Your test results are ready',
       text: 'Your doctor will go through them with you.',
     });
@@ -170,7 +155,7 @@ export default function HomePage() {
     attention.push({
       href: '/messages',
       icon: ChatCircleText,
-      tone: 'primary',
+      tone: 'neutral',
       title: unread === 1 ? 'A reply from the clinic' : `${unread} replies from the clinic`,
       text: 'Tap to read.',
     });
@@ -188,44 +173,49 @@ export default function HomePage() {
   const firstName = profile.data?.firstName;
 
   return (
-    <div className="flex flex-col gap-10">
-      <header>
+    <div className="flex flex-col">
+      <header className="-mx-5 border-b border-line px-5 pb-5 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+        <p className="text-sm text-fg-muted">{formatDay(new Date().toISOString())}</p>
         {firstName ? (
-          <h1 className="text-[1.65rem] font-bold leading-tight tracking-tight text-fg">
+          <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
             {greeting()}, {firstName}
           </h1>
         ) : (
-          <Skeleton className="h-9 w-64" />
+          <Skeleton className="mt-1 h-9 w-64" />
         )}
-        <p className="mt-2 text-fg-muted">{formatDay(new Date().toISOString())}</p>
       </header>
 
       {queue.loading ? (
-        <Skeleton className="h-52" />
+        <Skeleton className="mt-6 h-52" />
       ) : (
-        token && <QueueCard token={token} onRefresh={queue.reload} />
+        token && <LiveVisit token={token} onRefresh={queue.reload} />
       )}
 
-      <QuickActions />
+      <QuickActions
+        newResults={labs.loading ? undefined : recentResults}
+        owed={invoices.loading ? undefined : owed}
+      />
 
-      <section aria-labelledby="next-visit">
-        <SectionHeading>
-          <span id="next-visit">Your next visit</span>
-        </SectionHeading>
+      <section aria-labelledby="next-visit" className="-mx-5 sm:-mx-6 lg:-mx-10">
+        <h2 id="next-visit" className="sr-only">
+          Your next visit
+        </h2>
         {appointments.loading ? (
-          <Skeleton className="h-36" />
+          <div className="px-5 py-4 sm:px-6 lg:px-10">
+            <Skeleton className="h-16" />
+          </div>
         ) : appointments.error ? (
-          <ErrorNote message={appointments.error} onRetry={appointments.reload} />
+          <div className="px-5 py-4 sm:px-6 lg:px-10">
+            <ErrorNote message={appointments.error} onRetry={appointments.reload} />
+          </div>
         ) : next ? (
           <NextVisit appointment={next} />
         ) : (
-          <Card className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <div className="flex flex-1 items-center gap-4">
-              <IconBadge icon={CalendarCheck} tone="neutral" />
-              <div>
-                <p className="font-bold">Nothing booked</p>
-                <p className="text-fg-muted">Pick a doctor and a time that suits you.</p>
-              </div>
+          <div className="flex flex-col gap-4 border-b border-line px-5 py-5 sm:flex-row sm:items-center sm:px-6 lg:px-10">
+            <div className="flex-1">
+              <p className="text-sm text-fg-muted">Next visit</p>
+              <p className="font-semibold">Nothing booked</p>
+              <p className="text-sm text-fg-muted">Pick a doctor and a time that suits you.</p>
             </div>
             <ButtonLink
               href="/appointments/book"
@@ -233,56 +223,39 @@ export default function HomePage() {
             >
               Book a visit
             </ButtonLink>
-          </Card>
+          </div>
         )}
       </section>
 
-      {nextStep && (
-        <section aria-labelledby="care-next">
-          <SectionHeading>
-            <span id="care-next">Your care plan</span>
-          </SectionHeading>
-          <LinkCard href="/care">
-            <div className="flex items-center gap-4">
-              <IconBadge icon={Heartbeat} tone="success" />
-              <div className="min-w-0">
-                <p className="font-bold">{nextStep.plan}</p>
-                <p className="text-fg-muted">
-                  Next: {STEP_LABEL[nextStep.type]} {relativeDay(nextStep.dueAt)}
-                </p>
-              </div>
-            </div>
-          </LinkCard>
-        </section>
-      )}
+      {nextStep && <CarePlanRow plan={nextStep.plan} step={nextStep} />}
 
-      <section aria-labelledby="attention">
+      <section aria-labelledby="attention" className="mt-10">
         <SectionHeading>
           <span id="attention">For you</span>
         </SectionHeading>
         {invoices.loading || labs.loading || threads.loading || reviews.loading ? (
           <CardsSkeleton count={2} />
         ) : attention.length === 0 ? (
-          <Card>
-            <p className="font-bold">You are all caught up</p>
-            <p className="mt-1 text-fg-muted">New results, replies and bills will show up here.</p>
-          </Card>
+          <div className="border-b border-line py-4">
+            <p className="font-medium">You are all caught up</p>
+            <p className="text-fg-muted">New results, replies and bills will show up here.</p>
+          </div>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <Rows>
             {attention.map((item) => (
               <li key={item.href}>
                 <LinkCard href={item.href}>
                   <div className="flex items-center gap-4">
                     <IconBadge icon={item.icon} tone={item.tone} />
                     <div className="min-w-0">
-                      <p className="font-bold">{item.title}</p>
-                      <p className="text-fg-muted">{item.text}</p>
+                      <p className="font-medium">{item.title}</p>
+                      <p className="text-sm text-fg-muted">{item.text}</p>
                     </div>
                   </div>
                 </LinkCard>
               </li>
             ))}
-          </ul>
+          </Rows>
         )}
       </section>
     </div>
@@ -290,16 +263,20 @@ export default function HomePage() {
 }
 
 /**
- * The live token while the patient is at the clinic. Refreshes every 20
- * seconds; the wording says what to do, not the internal status.
+ * The live visit while the patient is at the clinic: the token set very
+ * large, what is happening in words, and the visit-progress ruler.
+ * Refreshes every 20 seconds.
  */
-function QueueCard({ token, onRefresh }: { token: QueueToken; onRefresh: () => void }) {
+function LiveVisit({ token, onRefresh }: { token: QueueToken; onRefresh: () => void }) {
   const desk = DESK[token.station];
   const message =
     token.status === 'CALLED'
       ? { title: "It's your turn", text: `Please go to ${desk} now.` }
       : token.status === 'IN_SERVICE'
-        ? { title: `With ${desk} now`, text: 'We will guide you to the next step.' }
+        ? {
+            title: `With ${desk} now`,
+            text: AFTER[token.station] ?? 'We will guide you to the next step.',
+          }
         : token.status === 'SKIPPED'
           ? {
               title: 'We missed you',
@@ -313,61 +290,186 @@ function QueueCard({ token, onRefresh }: { token: QueueToken; onRefresh: () => v
               };
 
   return (
-    <section
-      aria-label="Your place in the queue"
-      aria-live="polite"
-      className={`rounded-3xl bg-brand-deep p-6 text-brand-deep-fg shadow-lift sm:p-8 ${
-        token.status === 'CALLED' ? 'ring-4 ring-primary-subtle' : ''
-      }`}
-    >
+    <section aria-label="Your visit today" aria-live="polite" className="pb-6 pt-5">
       <div className="flex items-start justify-between gap-4">
-        <p className="font-semibold text-brand-deep-fg/80">You are at the clinic</p>
-        <button
-          type="button"
-          onClick={onRefresh}
-          aria-label="Refresh your place in the queue"
-          className="-m-2 flex size-11 cursor-pointer items-center justify-center rounded-full text-brand-deep-fg/80 hover:bg-white/10"
-        >
-          <ArrowsClockwise size={20} aria-hidden="true" />
-        </button>
-      </div>
-      <div className="mt-4 flex items-end gap-5">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wider text-brand-deep-fg/70">
-            Token
-          </p>
-          <p className="tabular font-mono text-6xl font-semibold leading-none tracking-tight text-white">
-            {String(token.tokenNumber).padStart(3, '0')}
-          </p>
+        <p className="text-sm text-fg-muted">Your token today</p>
+        <div className="-mr-2 -mt-2 flex items-center gap-1">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
+            <span aria-hidden="true" className="size-2 bg-primary" />
+            Live
+          </span>
+          <button
+            type="button"
+            onClick={onRefresh}
+            aria-label="Refresh your place in the queue"
+            className="flex size-11 cursor-pointer items-center justify-center rounded-control text-fg-muted hover:bg-surface-muted hover:text-fg"
+          >
+            <ArrowsClockwise size={20} aria-hidden="true" />
+          </button>
         </div>
       </div>
-      <div className="mt-6 border-t border-white/15 pt-5">
-        <p className="text-xl font-bold text-white">{message.title}</p>
-        <p className="mt-1 text-brand-deep-fg">{message.text}</p>
-      </div>
+      <p className="tabular -mt-1 font-mono text-[5.4rem] font-medium leading-[0.95] tracking-[-0.04em] text-fg">
+        <span className="sr-only">Token </span>
+        {String(token.tokenNumber).padStart(3, '0')}
+      </p>
+      <p
+        className={`mt-3 text-[1.12rem] font-semibold ${
+          token.status === 'CALLED' ? 'text-primary' : 'text-fg'
+        }`}
+      >
+        {message.title}
+      </p>
+      <p className="text-fg-muted">{message.text}</p>
+      <VisitProgress token={token} />
     </section>
+  );
+}
+
+/** The things a patient opens the app for, as a ruled 2×2 grid. */
+function QuickActions({ newResults, owed }: { newResults?: number; owed?: number }) {
+  const actions: Array<{ href: string; title: string; sub: ReactNode; icon: Icon }> = [
+    { href: '/appointments/book', title: 'Book', sub: 'a visit', icon: CalendarPlus },
+    {
+      href: '/appointments/book?mode=video&step=2',
+      title: 'Video',
+      sub: 'call a doctor',
+      icon: VideoCamera,
+    },
+    {
+      href: '/results',
+      title: 'Results',
+      sub:
+        newResults && newResults > 0 ? (
+          <span className="font-semibold text-primary">
+            <span className="font-mono">{newResults}</span> new
+          </span>
+        ) : (
+          'your tests'
+        ),
+      icon: Flask,
+    },
+    {
+      href: '/bills',
+      title: 'Pay',
+      sub:
+        owed && owed > 0 ? (
+          <span className="font-semibold text-warning-fg">
+            <span className="font-mono">{formatMoney(owed)}</span> due
+          </span>
+        ) : (
+          'at the desk'
+        ),
+      icon: Receipt,
+    },
+  ];
+  return (
+    <nav aria-label="Quick actions" className="-mx-5 sm:-mx-6 lg:-mx-10">
+      <ul className="grid grid-cols-2 border-y border-line">
+        {actions.map(({ href, title, sub, icon: ActionIcon }, i) => (
+          <li
+            key={href}
+            className={`${i % 2 === 0 ? 'border-r' : ''} ${i < 2 ? 'border-b' : ''} border-line`}
+          >
+            <Link
+              href={href}
+              className={`flex min-h-[4.6rem] items-center gap-3 py-3.5 transition-colors hover:bg-surface-muted ${
+                i % 2 === 0 ? 'pl-5 pr-3 sm:pl-6 lg:pl-10' : 'pl-5 pr-5 sm:pr-6 lg:pr-10'
+              }`}
+            >
+              <ActionIcon size={26} className="shrink-0 text-fg" aria-hidden="true" />
+              <span className="min-w-0">
+                <span className="block font-medium leading-snug text-fg">{title}</span>
+                <span className="block text-sm text-fg-muted">{sub}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 
 function NextVisit({ appointment }: { appointment: Appointment }) {
   const status = visitStatus(appointment.status, true);
+  const iso = appointment.scheduledAt;
+  const video = appointment.entrySource === 'VIDEO_CONSULTATION';
   return (
-    <LinkCard href={`/appointments/${appointment.id}`}>
-      <div className="flex gap-5">
-        <DateTile iso={appointment.scheduledAt} />
-        <div className="min-w-0 flex-1">
-          <p className="text-lg font-bold">
-            {formatDay(appointment.scheduledAt)}, {formatTime(appointment.scheduledAt)}
-          </p>
-          <p className="text-fg-muted">
-            With {doctorName(appointment.doctor)} · {relativeDay(appointment.scheduledAt)}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <ModeChip entrySource={appointment.entrySource} />
+    <Link
+      href={`/appointments/${appointment.id}`}
+      className="group flex items-center gap-4 border-b border-line px-5 py-4 transition-colors hover:bg-surface-muted sm:px-6 lg:px-10"
+    >
+      <div className="w-12 shrink-0 text-center">
+        <p className="tabular font-mono text-[2.1rem] leading-none">{formatDayNumber(iso)}</p>
+        <p className="text-sm text-fg-muted">{formatMonthShort(iso)}</p>
+      </div>
+      <div className="min-w-0 flex-1 border-l border-line pl-4">
+        <p className="text-sm text-fg-muted">Next visit · {relativeDay(iso)}</p>
+        <p className="font-semibold">
+          {formatWeekdayShort(iso)}, <span className="tabular font-mono">{formatTime(iso)}</span>
+        </p>
+        <p className="text-sm text-fg-muted">
+          {video ? 'Video call' : 'At the clinic'} with {doctorName(appointment.doctor)}
+        </p>
+        {appointment.status !== 'CONFIRMED' && (
+          <div className="mt-1.5">
             <Chip tone={status.tone}>{status.label}</Chip>
           </div>
-        </div>
+        )}
       </div>
-    </LinkCard>
+      <CaretRight
+        size={20}
+        className="shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5"
+        aria-hidden="true"
+      />
+    </Link>
+  );
+}
+
+/** The active care plan: how many steps are done, as a segmented rule, and the next one. */
+function CarePlanRow({ plan, step }: { plan: CarePlan; step: CarePlan['followUps'][number] }) {
+  const steps = plan.followUps.filter((f) => f.status !== 'CANCELLED');
+  const done = steps.filter((f) => f.status === 'DONE').length;
+  // Up to 8 segments; a longer plan shows as one proportional rule.
+  const segmented = steps.length > 0 && steps.length <= 8;
+  return (
+    <section aria-labelledby="care-next" className="-mx-5 sm:-mx-6 lg:-mx-10">
+      <Link
+        href="/care"
+        className="block border-b border-line px-5 py-4 transition-colors hover:bg-surface-muted sm:px-6 lg:px-10"
+      >
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 id="care-next" className="font-semibold">
+            {plan.title}
+          </h2>
+          {steps.length > 0 && (
+            <p className="shrink-0 text-sm font-semibold text-success-fg">
+              <span className="font-mono">{done}</span> of{' '}
+              <span className="font-mono">{steps.length}</span> done
+            </p>
+          )}
+        </div>
+        {steps.length > 0 && (
+          <div
+            aria-hidden="true"
+            className={`mt-2 ${segmented ? 'grid gap-1' : 'flex bg-line'}`}
+            style={segmented ? { gridTemplateColumns: `repeat(${steps.length}, 1fr)` } : undefined}
+          >
+            {segmented ? (
+              steps.map((f, i) => (
+                <span key={f.id} className={`h-1 ${i < done ? 'bg-success-fg' : 'bg-line'}`} />
+              ))
+            ) : (
+              <span
+                className="h-1 bg-success-fg"
+                style={{ width: `${(done / steps.length) * 100}%` }}
+              />
+            )}
+          </div>
+        )}
+        <p className="mt-1.5 text-sm text-fg-muted">
+          Next: {STEP_LABEL[step.type]} {relativeDay(step.dueAt)}
+        </p>
+      </Link>
+    </section>
   );
 }

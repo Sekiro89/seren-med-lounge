@@ -1,12 +1,14 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError } from '@serenemed/api-client';
 import {
   ArrowLeft,
+  ArrowRight,
   Buildings,
+  CaretRight,
   CheckCircle,
   Phone,
   Stethoscope,
@@ -17,7 +19,6 @@ import { Field, FormError, TextArea, apiMessage } from '../../../../components/f
 import {
   Button,
   ButtonLink,
-  Card,
   CardsSkeleton,
   EmptyState,
   ErrorNote,
@@ -163,37 +164,37 @@ function BookingFlow() {
     return <Success id={booked.id} mode={mode} doctor={doctor} slot={slot} />;
   }
 
+  const STEP_NAME = ['Type of visit', 'Doctor', 'Time', 'Confirm'];
+
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex min-h-12 items-center justify-between gap-4">
+    <div className={`flex flex-col gap-6 ${step === 3 && slot ? 'pb-28 lg:pb-24' : ''}`}>
+      <div className="flex items-center gap-3">
         {step > 1 ? (
           <button
             type="button"
             onClick={back}
-            className="-ml-3 inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-xl px-3 font-semibold text-primary hover:bg-primary-subtle"
+            aria-label="Back"
+            className="-ml-3 flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-control text-fg hover:bg-surface-muted"
           >
-            <ArrowLeft size={20} aria-hidden="true" />
-            Back
+            <ArrowLeft size={24} aria-hidden="true" />
           </button>
         ) : (
           <Link
             href="/appointments"
-            className="-ml-3 inline-flex min-h-12 items-center gap-2 rounded-xl px-3 font-semibold text-primary hover:bg-primary-subtle"
+            aria-label="Back to visits"
+            className="-ml-3 flex size-12 shrink-0 items-center justify-center rounded-control text-fg hover:bg-surface-muted"
           >
-            <ArrowLeft size={20} aria-hidden="true" />
-            Back
+            <ArrowLeft size={24} aria-hidden="true" />
           </Link>
         )}
-        <div className="flex items-center gap-3">
-          <p className="whitespace-nowrap font-semibold text-fg-muted" aria-live="polite">
-            Step {step} of {STEPS}
+        <div className="flex-1">
+          <p className="text-sm text-fg-muted" aria-live="polite">
+            Step <span className="font-mono text-fg">{step}</span> of{' '}
+            <span className="font-mono">{STEPS}</span> · {STEP_NAME[step - 1]}
           </p>
-          <div className="flex gap-1" aria-hidden="true">
+          <div className="mt-1.5 grid grid-cols-4 gap-1" aria-hidden="true">
             {Array.from({ length: STEPS }, (_, i) => (
-              <span
-                key={i}
-                className={`h-2 w-5 rounded-full ${i < step ? 'bg-primary' : 'bg-surface-muted'}`}
-              />
+              <span key={i} className={`h-0.5 ${i < step ? 'bg-primary' : 'bg-control'}`} />
             ))}
           </div>
         </div>
@@ -205,9 +206,13 @@ function BookingFlow() {
             title="How would you like to see the doctor?"
             description="You can change this later by messaging the clinic."
           />
-          <div role="radiogroup" aria-label="Type of visit" className="flex flex-col gap-4">
+          <div
+            role="radiogroup"
+            aria-label="Type of visit"
+            className="divide-y divide-line border-y border-line"
+          >
             {MODES.map((option) => (
-              <ChoiceCard
+              <ChoiceRow
                 key={option.mode}
                 icon={option.icon}
                 title={option.title}
@@ -243,7 +248,25 @@ function BookingFlow() {
 
       {step === 3 && doctor && (
         <div>
-          <PageTitle title="Pick a day and time" description={`With ${doctor.fullName}`} />
+          <h1 className="mb-4 text-[1.65rem] font-semibold leading-tight tracking-[-0.01em]">
+            Pick a time
+          </h1>
+          <div className="mb-5 flex items-center gap-3 border-y border-line py-3">
+            <Initials name={doctor.fullName} />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{doctor.fullName}</p>
+              <p className="text-sm text-fg-muted">
+                {ROLE_LABEL[doctor.role]} · {mode === 'VIDEO' ? 'by video' : 'at the clinic'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={back}
+              className="min-h-12 cursor-pointer rounded-control px-2 font-medium text-primary hover:bg-primary-subtle"
+            >
+              Change
+            </button>
+          </div>
           <DayTimeStep
             doctor={doctor}
             days={days}
@@ -256,16 +279,25 @@ function BookingFlow() {
             onSlot={setSlot}
           />
           {slot && (
-            <div className="mt-8">
-              <Button
-                full
-                onClick={() => {
-                  setError(undefined);
-                  go(4);
-                }}
-              >
-                Continue with {formatTime(slot.start)}
-              </Button>
+            <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t border-fg bg-surface lg:bottom-0">
+              <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-5 py-3 sm:px-6 lg:px-10">
+                <div className="min-w-0 flex-1" aria-live="polite">
+                  <p className="text-sm text-fg-muted">{formatDay(slot.start)}</p>
+                  <p className="truncate font-semibold">
+                    <span className="tabular font-mono">{formatTime(slot.start)}</span> with{' '}
+                    {shortDoctor(doctor.fullName)}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setError(undefined);
+                    go(4);
+                  }}
+                >
+                  Continue
+                  <ArrowRight size={20} aria-hidden="true" />
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -315,7 +347,25 @@ function BookingFlow() {
   );
 }
 
-function ChoiceCard({
+/** "Dr. Meera Iyer" -> "Dr. Meera"; a bare name gives its first word. */
+function shortDoctor(name: string): string {
+  const m = name.match(/^(Dr\.?)\s+(\S+)/i);
+  return m ? `${m[1]} ${m[2]}` : (name.split(/\s+/)[0] ?? name);
+}
+
+/** A doctor's initials in a square ink block (people are not avatars here, but entries). */
+function Initials({ name }: { name: string }) {
+  return (
+    <span
+      className="flex size-11 shrink-0 items-center justify-center rounded-control bg-fg text-sm font-semibold text-on-primary"
+      aria-hidden="true"
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
+function ChoiceRow({
   icon: IconComponent,
   title,
   text,
@@ -336,25 +386,25 @@ function ChoiceCard({
       role="radio"
       aria-checked={selected}
       onClick={onSelect}
-      className={`flex w-full cursor-pointer items-start gap-4 rounded-2xl border-2 bg-surface p-5 text-left shadow-card transition active:scale-[0.99] sm:p-6 ${
-        selected ? 'border-primary' : 'border-line hover:border-primary/50'
+      className={`flex w-full cursor-pointer items-start gap-4 px-3 py-5 text-left transition-colors ${
+        selected ? 'bg-primary-subtle' : 'hover:bg-surface-muted'
       }`}
     >
-      <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary-subtle text-primary-subtle-fg">
-        <IconComponent size={28} aria-hidden="true" />
-      </span>
+      <IconComponent size={28} className="mt-0.5 shrink-0 text-fg" aria-hidden="true" />
       <span className="min-w-0 flex-1">
-        <span className="block text-lg font-bold text-fg">{title}</span>
+        <span className="block font-semibold text-fg">{title}</span>
         <span className="block text-fg-muted">{text}</span>
         {note && (
-          <span className="mt-3 flex items-start gap-2 text-[0.88rem] text-fg-muted">
+          <span className="mt-2 flex items-start gap-2 text-sm text-fg-muted">
             <Phone size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
             {note}
           </span>
         )}
       </span>
-      {selected && (
-        <CheckCircle size={26} weight="fill" className="shrink-0 text-primary" aria-hidden="true" />
+      {selected ? (
+        <CheckCircle size={24} className="shrink-0 text-primary" aria-hidden="true" />
+      ) : (
+        <CaretRight size={20} className="mt-1 shrink-0 text-fg-subtle" aria-hidden="true" />
       )}
     </button>
   );
@@ -382,67 +432,72 @@ function DoctorStep({
   }
 
   return (
-    <div role="radiogroup" aria-label="Doctor" className="flex flex-col gap-4">
-      {doctors.data.map((d) => (
-        <button
-          key={d.id}
-          type="button"
-          role="radio"
-          aria-checked={selected?.id === d.id}
-          onClick={() => onSelect(d)}
-          className={`flex w-full cursor-pointer items-center gap-4 rounded-2xl border-2 bg-surface p-5 text-left shadow-card transition active:scale-[0.99] sm:p-6 ${
-            selected?.id === d.id ? 'border-primary' : 'border-line hover:border-primary/50'
-          }`}
-        >
-          <span
-            className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary-subtle text-lg font-bold text-primary-subtle-fg"
-            aria-hidden="true"
+    <div
+      role="radiogroup"
+      aria-label="Doctor"
+      className="divide-y divide-line border-y border-line"
+    >
+      {doctors.data.map((d) => {
+        const isSelected = selected?.id === d.id;
+        return (
+          <button
+            key={d.id}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            onClick={() => onSelect(d)}
+            className={`flex w-full cursor-pointer items-center gap-4 px-3 py-4 text-left transition-colors ${
+              isSelected ? 'bg-primary-subtle' : 'hover:bg-surface-muted'
+            }`}
           >
-            {initials(d.fullName)}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-lg font-bold text-fg">{d.fullName}</span>
-            <span className="block text-fg-muted">{ROLE_LABEL[d.role]}</span>
-            <span className="block text-[0.88rem] text-fg-subtle">{workingDays(d.days)}</span>
-          </span>
-          {selected?.id === d.id && (
-            <CheckCircle
-              size={26}
-              weight="fill"
-              className="shrink-0 text-primary"
-              aria-hidden="true"
-            />
-          )}
-        </button>
-      ))}
+            <Initials name={d.fullName} />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-fg">{d.fullName}</span>
+              <span className="block text-sm text-fg-muted">
+                {ROLE_LABEL[d.role]} · {workingDays(d.days)}
+              </span>
+            </span>
+            {isSelected ? (
+              <CheckCircle size={24} className="shrink-0 text-primary" aria-hidden="true" />
+            ) : (
+              <CaretRight size={20} className="shrink-0 text-fg-subtle" aria-hidden="true" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 function Summary({ mode, doctor, slot }: { mode: BookingMode; doctor: BookingDoctor; slot: Slot }) {
-  const rows: Array<[string, string]> = [
+  const rows: Array<[string, ReactNode]> = [
     ['Type', MODE_LABEL[mode]],
     ['Doctor', doctor.fullName],
     ['Day', formatDay(slot.start)],
-    ['Time', formatTime(slot.start)],
+    [
+      'Time',
+      <span key="time" className="tabular font-mono">
+        {formatTime(slot.start)}
+      </span>,
+    ],
   ];
   return (
-    <Card>
-      <dl className="flex flex-col gap-4">
+    <div className="border-t border-fg">
+      <dl className="divide-y divide-line border-b border-line">
         {rows.map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-[0.88rem] font-semibold text-fg-subtle">{label}</dt>
-            <dd className="text-lg font-bold text-fg">{value}</dd>
+          <div key={label} className="flex items-baseline justify-between gap-4 py-3">
+            <dt className="text-fg-muted">{label}</dt>
+            <dd className="text-right font-semibold text-fg">{value}</dd>
           </div>
         ))}
       </dl>
       {mode === 'VIDEO' && (
-        <p className="mt-5 flex items-start gap-2 border-t border-line pt-4 text-fg-muted">
+        <p className="mt-4 flex items-start gap-2 text-fg-muted">
           <Phone size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
           {VIDEO_NOTE}
         </p>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -459,12 +514,12 @@ function Success({
 }) {
   return (
     <div className="flex flex-col gap-8" role="status">
-      <div className="flex flex-col items-center text-center">
-        <CheckCircle size={72} weight="fill" className="text-success-fg" aria-hidden="true" />
-        <h1 className="mt-4 text-[1.65rem] font-bold leading-tight tracking-tight text-fg">
+      <div>
+        <CheckCircle size={48} className="text-success-fg" aria-hidden="true" />
+        <h1 className="mt-3 text-[1.65rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
           You&apos;re booked
         </h1>
-        <p className="mt-2 text-fg-muted">We look forward to seeing you.</p>
+        <p className="mt-1.5 text-fg-muted">We look forward to seeing you.</p>
       </div>
       <Summary mode={mode} doctor={doctor} slot={slot} />
       <div className="flex flex-col gap-3">
