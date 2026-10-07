@@ -24,7 +24,7 @@ interface AppointmentRow {
   status: string;
   entrySource: string;
   scheduledAt: string;
-  patient: { firstName: string; lastName: string };
+  patient: { id: string; firstName: string; lastName: string };
   doctor: { fullName: string } | null;
   encounter: {
     id: string;
@@ -97,6 +97,7 @@ export default function AppointmentsPage() {
                     onClick={() =>
                       setCheckIn({
                         appointmentId: a.id,
+                        patientId: a.patient.id,
                         patientName,
                         encounterId: a.encounter?.id,
                       })
@@ -120,7 +121,9 @@ export default function AppointmentsPage() {
             <Button
               size="sm"
               icon={<SignIn size={16} aria-hidden="true" />}
-              onClick={() => setCheckIn({ appointmentId: a.id, patientName })}
+              onClick={() =>
+                setCheckIn({ appointmentId: a.id, patientId: a.patient.id, patientName })
+              }
             >
               Check in
             </Button>

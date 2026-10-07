@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Coins, Plus, Receipt, Warning } from '@phosphor-icons/react';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
@@ -25,12 +26,22 @@ type Filter = 'all' | 'unpaid' | 'paid' | 'void';
 
 const isUnpaid = (i: InvoiceRow) => i.status === 'ISSUED' || i.status === 'PARTIALLY_PAID';
 
+/** `?invoice=<id>` (from Payments, Reports) opens that bill's drawer straight away. */
 export default function BillingPage() {
+  return (
+    <Suspense>
+      <BillingDesk />
+    </Suspense>
+  );
+}
+
+function BillingDesk() {
   const user = useStaff();
+  const requested = useSearchParams().get('invoice');
   const allowed = can(user.role, 'invoice:manage');
   const [filter, setFilter] = useState<Filter>('all');
   const [creating, setCreating] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(requested);
 
   const { data, loading, errorStatus, reload } = useApi<InvoiceRow[]>(allowed ? '/invoices' : null);
 

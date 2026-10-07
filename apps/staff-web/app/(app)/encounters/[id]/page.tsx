@@ -2,7 +2,7 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { CaretLeft, Warning } from '@phosphor-icons/react';
+import { CaretLeft, SignOut, Warning, WarningCircle } from '@phosphor-icons/react';
 import { Avatar } from '../../../../components/ui/avatar';
 import { Badge, StatusBadge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
@@ -20,13 +20,13 @@ import { VitalsSection } from './vitals-section';
 import { DiagnosesSection } from './diagnoses-section';
 import { PrescriptionsSection } from './prescriptions-section';
 import { LabOrdersSection } from './lab-orders-section';
-import {
-  MetabolicSection,
-  NotesSection,
-  ProceduresSection,
-  ReferralsSection,
-} from './readonly-sections';
-import type { EncounterDetail, PatientInfo } from './types';
+import { MetabolicSection } from './metabolic-section';
+import { NotesSection } from './notes-section';
+import { ProceduresSection, ReferralsSection } from './readonly-sections';
+import { apiErrorMessage, type EncounterDetail, type PatientInfo } from './types';
+import { isUnsigned } from './types';
+import { Dialog } from '../../../../components/ui/dialog';
+import { apiClient } from '../../../../lib/api-client';
 
 interface HistoryEntry {
   id: string;
@@ -123,6 +123,9 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
   const { id } = use(params);
   const user = useStaff();
   const [tab, setTab] = useState<TabKey>('assessment');
+  const [discharging, setDischarging] = useState(false);
+  const [dischargeBusy, setDischargeBusy] = useState(false);
+  const [dischargeError, setDischargeError] = useState<string>();
 
   const allowed = can(user.role, 'patient-record:read-clinical');
   const {
@@ -188,6 +191,30 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
   }
 
   const role = user.role;
+  const closed = encounter.status !== 'OPEN';
+  // Design system 8.3: a visit with unsigned drafts says so at the top, not only per row.
+  const unsignedCount =
+    encounter.clinicalNotes.filter((n) => isUnsigned(n.status)).length +
+    encounter.diagnoses.filter((dx) => isUnsigned(dx.status)).length;
+  const patientName = patient ? fullName(patient) : 'this patient';
+  const draftCount =
+    encounter.clinicalNotes.filter((n) => n.status === 'DRAFT' || n.status === 'AI_DRAFT').length +
+    encounter.diagnoses.filter((d) => d.status === 'DRAFT' || d.status === 'AI_DRAFT').length;
+
+  const discharge = async () => {
+    setDischargeBusy(true);
+    setDischargeError(undefined);
+    try {
+      await apiClient.post(`/encounters/${encounter.id}/discharge`, {});
+      setDischarging(false);
+      reload();
+    } catch (error) {
+      setDischargeError(apiErrorMessage(error, 'Could not close this visit.'));
+    } finally {
+      setDischargeBusy(false);
+    }
+  };
+
   const tabs = [
     {
       key: 'assessment' as const,
@@ -219,11 +246,23 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
         title={patient ? `Consultation with ${fullName(patient)}` : 'Consultation'}
         description={`Started ${formatDate(encounter.startedAt)} ${formatTime(encounter.startedAt)}`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <StatusBadge
               domain="appointment"
               status={encounter.status === 'OPEN' ? 'IN_PROGRESS' : 'COMPLETED'}
             />
+            {!closed && can(role, 'patient-record:write-clinical') && (
+              <Button
+                variant="secondary"
+                icon={<SignOut size={18} aria-hidden="true" />}
+                onClick={() => {
+                  setDischargeError(undefined);
+                  setDischarging(true);
+                }}
+              >
+                Discharge
+              </Button>
+            )}
           </div>
         }
       />
@@ -244,6 +283,18 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
         </p>
       )}
 
+      {!closed && unsignedCount > 0 && (
+        <p
+          role="status"
+          className="mb-4 flex items-center gap-2 rounded-control bg-warning-bg px-4 py-2.5 text-sm text-warning-fg"
+        >
+          <WarningCircle size={18} aria-hidden="true" />
+          {unsignedCount === 1
+            ? 'One record on this visit is still a draft. A senior doctor must sign it off before discharge.'
+            : `${unsignedCount} records on this visit are still drafts. A senior doctor must sign them off before discharge.`}
+        </p>
+      )}
+
       <Tabs tabs={tabs} value={tab} onChange={setTab} label="Consultation sections" />
 
       <div role="tabpanel" className="mt-6 flex flex-col gap-6">
@@ -252,17 +303,28 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
             <VitalsSection
               encounterId={encounter.id}
               vitals={encounter.vitals}
-              role={role}
+              role={closed ? undefined : role}
               onChange={reload}
             />
-            {encounter.metabolicWorkups.length > 0 && (
-              <MetabolicSection workups={encounter.metabolicWorkups} />
-            )}
-            {encounter.clinicalNotes.length > 0 && <NotesSection notes={encounter.clinicalNotes} />}
+            <MetabolicSection
+              encounterId={encounter.id}
+              workups={encounter.metabolicWorkups}
+              role={role}
+              closed={closed}
+              onChange={reload}
+            />
+            <NotesSection
+              encounterId={encounter.id}
+              notes={encounter.clinicalNotes}
+              role={role}
+              patientName={patientName}
+              closed={closed}
+              onChange={reload}
+            />
             <DiagnosesSection
               encounterId={encounter.id}
               diagnoses={encounter.diagnoses}
-              role={role}
+              role={closed ? undefined : role}
               onChange={reload}
             />
           </>
@@ -272,13 +334,13 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
             <PrescriptionsSection
               encounterId={encounter.id}
               prescriptions={encounter.prescriptions}
-              role={role}
+              role={closed ? undefined : role}
               onChange={reload}
             />
             <LabOrdersSection
               encounterId={encounter.id}
               labOrders={encounter.labOrders}
-              role={role}
+              role={closed ? undefined : role}
               onChange={reload}
             />
           </>
@@ -290,6 +352,41 @@ export default function EncounterWorkspacePage({ params }: { params: Promise<{ i
           </>
         )}
       </div>
+
+      <Dialog
+        open={discharging}
+        onClose={() => !dischargeBusy && setDischarging(false)}
+        title="Discharge patient"
+        description={`Close this visit for ${patientName}? The appointment is marked completed and the queue token is closed. Notes and diagnoses stay on record; nothing more can be added to this visit.`}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setDischarging(false)}
+              disabled={dischargeBusy}
+            >
+              Keep visit open
+            </Button>
+            <Button loading={dischargeBusy} onClick={discharge}>
+              Discharge patient
+            </Button>
+          </>
+        }
+      >
+        {draftCount > 0 ? (
+          <p className="rounded-control bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+            {draftCount} unsigned draft{draftCount === 1 ? '' : 's'} on this visit. Sign them off
+            first, or the discharge is refused.
+          </p>
+        ) : (
+          <p className="text-sm text-fg-muted">Everything on this visit is signed off.</p>
+        )}
+        {dischargeError && (
+          <p role="alert" className="mt-3 text-[13px] text-danger-fg">
+            {dischargeError}
+          </p>
+        )}
+      </Dialog>
     </>
   );
 }

@@ -16,6 +16,7 @@ import {
   IdentificationCard,
   ListNumbers,
   Megaphone,
+  Notebook,
   PlugsConnected,
   Package,
   Receipt,
@@ -137,6 +138,13 @@ export const NAV: NavGroup[] = [
         anyOf: ['follow-up:manage'],
         ready: true,
       },
+      {
+        label: 'Templates',
+        href: '/templates',
+        icon: Notebook,
+        anyOf: ['clinical-template:manage'],
+        ready: true,
+      },
     ],
   },
   {
@@ -173,7 +181,7 @@ export const NAV: NavGroup[] = [
         href: '/payments',
         icon: CurrencyInr,
         anyOf: ['payment:manage'],
-        ready: false,
+        ready: true,
       },
       {
         label: 'Insurance',
@@ -218,8 +226,8 @@ export const NAV: NavGroup[] = [
         label: 'Reports',
         href: '/reports',
         icon: ChartLineUp,
-        anyOf: ['audit-log:read'],
-        ready: false,
+        anyOf: ['report:read'],
+        ready: true,
       },
       {
         label: 'Audit log',

@@ -194,18 +194,21 @@ export function DiagnosesSection({
                           Sign off
                         </Button>
                       )}
-                      {(latest.status === 'FINALIZED' || latest.status === 'AMENDED') &&
-                        can(role, 'diagnosis:write-draft') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setAmendingId(amendingId === diagnosis.id ? null : diagnosis.id)
-                            }
-                          >
-                            {amendingId === diagnosis.id ? 'Cancel' : 'Amend'}
-                          </Button>
-                        )}
+                      {can(role, 'diagnosis:write-draft') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setAmendingId(amendingId === diagnosis.id ? null : diagnosis.id)
+                          }
+                        >
+                          {amendingId === diagnosis.id
+                            ? 'Cancel'
+                            : latest.status === 'DRAFT'
+                              ? 'Edit'
+                              : 'Amend'}
+                        </Button>
+                      )}
                     </div>
                   </div>
                   {amendingId === diagnosis.id && (

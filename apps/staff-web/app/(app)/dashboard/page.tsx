@@ -29,6 +29,7 @@ import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
 import { PatientPicker, type PatientSummary } from './patient-picker';
 import { clearOnEditRhf } from '../../../lib/forms';
+import { CheckInDialog, type CheckInTarget } from '../appointments/_components/check-in-dialog';
 
 interface AppointmentRow {
   id: string;
@@ -157,6 +158,9 @@ export default function ConsultationsPage() {
   const user = useStaff();
   const canReadAppointments = can(user.role, 'appointment:read');
   const canWriteAppointments = can(user.role, 'appointment:write');
+  // Check-in opens the visit (appointment:write) and registers it, which
+  // issues the queue token (patient:write), the same as the front desk.
+  const canCheckIn = canWriteAppointments && can(user.role, 'patient:write');
   const { data, loading, errorStatus, reload } = useApi<AppointmentRow[]>(
     canReadAppointments ? '/appointments' : null,
   );
@@ -164,7 +168,7 @@ export default function ConsultationsPage() {
   const [selectedPatient, setSelectedPatient] = useState<PatientSummary | null>(null);
   const [showRegisterPatient, setShowRegisterPatient] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [checkIn, setCheckIn] = useState<CheckInTarget | null>(null);
   const [registerOutcome, setRegisterOutcome] = useState<RegisterPatientResult | null>(null);
   const [activationOutcome, setActivationOutcome] = useState<ActivationResult | null>(null);
   const [claimBusy, setClaimBusy] = useState(false);
@@ -294,20 +298,6 @@ export default function ConsultationsPage() {
     }
   };
 
-  const handleCheckIn = async (appointmentId: string) => {
-    setCheckingInId(appointmentId);
-    setFormError(null);
-    try {
-      const encounter = await apiClient.post<{ id: string }>(
-        `/appointments/${appointmentId}/check-in`,
-      );
-      router.push(`/encounters/${encounter.id}`);
-    } catch (error) {
-      setFormError(errorMessage(error, 'Could not check in this appointment.'));
-      setCheckingInId(null);
-    }
-  };
-
   const columns: Column<AppointmentRow>[] = [
     {
       header: 'Patient',
@@ -340,13 +330,18 @@ export default function ConsultationsPage() {
             </Link>
           );
         }
-        if (canWriteAppointments && (a.status === 'REQUESTED' || a.status === 'CONFIRMED')) {
+        if (canCheckIn && (a.status === 'REQUESTED' || a.status === 'CONFIRMED')) {
           return (
             <Button
               size="sm"
               variant="secondary"
-              loading={checkingInId === a.id}
-              onClick={() => handleCheckIn(a.id)}
+              onClick={() =>
+                setCheckIn({
+                  appointmentId: a.id,
+                  patientId: a.patient.id,
+                  patientName: fullName(a.patient),
+                })
+              }
             >
               Check in
             </Button>
@@ -360,7 +355,11 @@ export default function ConsultationsPage() {
   const header = (
     <PageHeader
       title="Consultations"
-      description="Register patients, book appointments and open a patient's visit."
+      description={
+        canCheckIn
+          ? "Register patients, book appointments and open a patient's visit."
+          : "Today's consultations. Open a visit once the front desk has checked the patient in."
+      }
       action={
         can(user.role, 'patient:write') ? (
           <Link
@@ -712,6 +711,13 @@ export default function ConsultationsPage() {
           )}
         </Card>
       </div>
+
+      <CheckInDialog
+        target={checkIn}
+        onClose={() => setCheckIn(null)}
+        onDone={reload}
+        onCheckedIn={(encounterId) => router.push(`/encounters/${encounterId}`)}
+      />
     </>
   );
 }

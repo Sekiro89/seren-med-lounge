@@ -54,4 +54,10 @@ WORKDIR /app/apps/staff-web
 ENV PORT=3001 HOSTNAME=0.0.0.0
 EXPOSE 3001
 
+# GET / renders a client-side redirect page (app/page.tsx) with a 200;
+# a 307 from a future server redirect is followed by wget and still
+# passes. Non-2xx after redirects fails the check.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3001/ || exit 1
+
 CMD ["node", "server.js"]
