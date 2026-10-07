@@ -1,30 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Info, UsersThree } from '@phosphor-icons/react';
-import { PersonCell } from '../../../components/ui/avatar';
-import { Badge } from '../../../components/ui/badge';
+import { Info } from '@phosphor-icons/react';
 import { Card } from '../../../components/ui/card';
-import { DataTable, type Column } from '../../../components/ui/data-table';
-import { EmptyState } from '../../../components/ui/empty-state';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { Tabs } from '../../../components/ui/tabs';
-import { formatDate, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
 import { AccessMatrix } from './_components/access-matrix';
-
-interface StaffRow {
-  id: string;
-  email: string;
-  fullName: string;
-  role: string;
-  isActive: boolean;
-  createdAt: string;
-}
+import { TeamTab, type StaffRow } from './_components/team-tab';
 
 type View = 'access' | 'team';
 
@@ -41,17 +28,6 @@ export default function StaffPage() {
       </Card>
     );
   }
-
-  const columns: Column<StaffRow>[] = [
-    { header: 'Name', render: (u) => <PersonCell name={u.fullName} sub={u.email} /> },
-    { header: 'Role', render: (u) => <Badge tone="info">{humanize(u.role)}</Badge> },
-    {
-      header: 'Status',
-      render: (u) =>
-        u.isActive ? <Badge tone="success">Active</Badge> : <Badge tone="neutral">Inactive</Badge>,
-    },
-    { header: 'Added', render: (u) => formatDate(u.createdAt) },
-  ];
 
   return (
     <>
@@ -83,21 +59,7 @@ export default function StaffPage() {
         {view === 'access' ? (
           <AccessMatrix currentRole={user.role} />
         ) : (
-          <Card>
-            <DataTable
-              columns={columns}
-              rows={team.data}
-              getRowKey={(u) => u.id}
-              loading={team.loading}
-              empty={
-                <EmptyState
-                  icon={UsersThree}
-                  title="No staff yet"
-                  description="Staff accounts appear here once they are added."
-                />
-              }
-            />
-          </Card>
+          <TeamTab team={team} currentUserId={user.id} />
         )}
       </div>
     </>
