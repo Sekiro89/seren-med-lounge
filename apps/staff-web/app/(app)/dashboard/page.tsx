@@ -36,7 +36,8 @@ interface AppointmentRow {
   status: string;
   entrySource: string;
   scheduledAt: string;
-  patient: { id: string; firstName: string; lastName: string };
+  patient: { id: string; firstName: string; lastName: string; dateOfBirth: string; phone: string };
+  doctor?: { fullName: string } | null;
   encounter: { id: string } | null;
 }
 
@@ -340,6 +341,11 @@ export default function ConsultationsPage() {
                   appointmentId: a.id,
                   patientId: a.patient.id,
                   patientName: fullName(a.patient),
+                  dateOfBirth: a.patient.dateOfBirth,
+                  phone: a.patient.phone,
+                  scheduledAt: a.scheduledAt,
+                  doctorName: a.doctor?.fullName,
+                  entrySource: a.entrySource,
                 })
               }
             >

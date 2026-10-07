@@ -17,6 +17,7 @@ import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
+import { ageLabel } from '../patients/_components/patient-shared';
 import { CheckInDialog, type CheckInTarget } from './_components/check-in-dialog';
 
 interface AppointmentRow {
@@ -24,12 +25,26 @@ interface AppointmentRow {
   status: string;
   entrySource: string;
   scheduledAt: string;
-  patient: { id: string; firstName: string; lastName: string };
+  patient: { id: string; firstName: string; lastName: string; dateOfBirth: string; phone: string };
   doctor: { fullName: string } | null;
   encounter: {
     id: string;
     queueEntry: { tokenNumber: number; station: string; status: string } | null;
   } | null;
+}
+
+/** Everything the check-in dialog shows to confirm the right patient and booking. */
+function identity(a: AppointmentRow): CheckInTarget {
+  return {
+    appointmentId: a.id,
+    patientId: a.patient.id,
+    patientName: fullName(a.patient),
+    dateOfBirth: a.patient.dateOfBirth,
+    phone: a.patient.phone,
+    scheduledAt: a.scheduledAt,
+    doctorName: a.doctor?.fullName,
+    entrySource: a.entrySource,
+  };
 }
 
 export default function AppointmentsPage() {
@@ -60,7 +75,12 @@ export default function AppointmentsPage() {
     },
     {
       header: 'Patient',
-      render: (a) => <PersonCell name={fullName(a.patient)} />,
+      render: (a) => (
+        <PersonCell
+          name={fullName(a.patient)}
+          sub={`${ageLabel(a.patient.dateOfBirth)} · ${a.patient.phone}`}
+        />
+      ),
     },
     {
       header: 'Doctor',
@@ -75,7 +95,6 @@ export default function AppointmentsPage() {
       header: 'Action',
       align: 'right',
       render: (a) => {
-        const patientName = fullName(a.patient);
         if (a.encounter) {
           const token = a.encounter.queueEntry;
           return (
@@ -96,9 +115,7 @@ export default function AppointmentsPage() {
                     icon={<ListNumbers size={16} aria-hidden="true" />}
                     onClick={() =>
                       setCheckIn({
-                        appointmentId: a.id,
-                        patientId: a.patient.id,
-                        patientName,
+                        ...identity(a),
                         encounterId: a.encounter?.id,
                       })
                     }
@@ -121,9 +138,7 @@ export default function AppointmentsPage() {
             <Button
               size="sm"
               icon={<SignIn size={16} aria-hidden="true" />}
-              onClick={() =>
-                setCheckIn({ appointmentId: a.id, patientId: a.patient.id, patientName })
-              }
+              onClick={() => setCheckIn(identity(a))}
             >
               Check in
             </Button>

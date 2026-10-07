@@ -118,7 +118,11 @@ export default function HomePage() {
   const carePlans = useApi<CarePlan[]>('/patients/me/care-plans');
   const reviews = useApi<ReviewRequest[]>('/patients/me/review-requests');
 
-  const token = queue.data?.find((t) => t.status !== 'COMPLETED');
+  // The newest unfinished token: a patient seen twice in a day must see today's latest visit,
+  // not an earlier token that was never closed.
+  const token = [...(queue.data ?? [])]
+    .sort((a, b) => b.tokenNumber - a.tokenNumber)
+    .find((t) => t.status !== 'COMPLETED');
   const now = useNow();
   // Same rule as the Appointments page, so Home and the list never disagree.
   const next = appointments.data

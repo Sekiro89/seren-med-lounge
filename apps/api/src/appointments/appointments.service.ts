@@ -70,7 +70,11 @@ export class AppointmentsService {
         },
         orderBy: { scheduledAt: 'desc' },
         include: {
-          patient: { select: { id: true, firstName: true, lastName: true } },
+          // Name plus date of birth and phone: the two identifiers the front
+          // desk confirms before checking anyone in (design system 8.2).
+          patient: {
+            select: { id: true, firstName: true, lastName: true, dateOfBirth: true, phone: true },
+          },
           encounter: {
             select: {
               id: true,

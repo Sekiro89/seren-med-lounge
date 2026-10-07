@@ -3,16 +3,25 @@
 import { useState, type FormEvent } from 'react';
 import { CheckCircle } from '@phosphor-icons/react';
 import { ApiError } from '@serenemed/api-client';
+import { Avatar } from '../../../../components/ui/avatar';
 import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Select, Textarea } from '../../../../components/ui/fields';
+import { ageLabel } from '../../patients/_components/patient-shared';
 import { apiClient } from '../../../../lib/api-client';
-import { humanize } from '../../../../lib/format';
+import { formatDate, formatTime, humanize } from '../../../../lib/format';
 
 export interface CheckInTarget {
   appointmentId: string;
   patientId: string;
   patientName: string;
+  /** Second identifier, read back to the patient before checking in. */
+  dateOfBirth?: string;
+  phone?: string;
+  /** What was booked, so a wrong row is obvious. */
+  scheduledAt?: string;
+  doctorName?: string | null;
+  entrySource?: string;
   /** Set when the patient is already checked in but not yet in the queue. */
   encounterId?: string;
 }
@@ -184,6 +193,7 @@ export function CheckInDialog({
         </div>
       ) : (
         <form id="checkin-form" noValidate onSubmit={submit} className="flex flex-col gap-5">
+          {target && <WhoIsCheckingIn target={target} />}
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Field label="Visit type *" htmlFor="checkin-type">
               <Select
@@ -295,5 +305,40 @@ export function CheckInDialog({
         </form>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * The patient and booking being checked in, with two identifiers (design
+ * system 8.2) so the desk confirms the right person before a token is
+ * issued. A wrong row here sends a stranger's token to the patient.
+ */
+function WhoIsCheckingIn({ target }: { target: CheckInTarget }) {
+  return (
+    <div className="rounded-control border border-line bg-surface-muted px-4 py-3">
+      <div className="flex items-center gap-3">
+        <Avatar name={target.patientName} size={40} />
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-fg">{target.patientName}</p>
+          <p className="tabular text-[13px] text-fg-muted">
+            {target.dateOfBirth
+              ? `Born ${formatDate(target.dateOfBirth)} (${ageLabel(target.dateOfBirth)})`
+              : 'Date of birth not on file'}
+            {target.phone ? ` · ${target.phone}` : ''}
+          </p>
+        </div>
+      </div>
+      {target.scheduledAt && (
+        <p className="mt-3 border-t border-line pt-3 text-[13px] text-fg-muted">
+          Booked for{' '}
+          <span className="tabular font-medium text-fg">{formatTime(target.scheduledAt)}</span>
+          {target.doctorName ? ` with ${target.doctorName}` : ''}
+          {target.entrySource ? ` · ${humanize(target.entrySource)}` : ''}
+        </p>
+      )}
+      <p className="mt-2 text-[13px] font-medium text-fg">
+        Ask the patient to confirm their name and date of birth.
+      </p>
+    </div>
   );
 }
