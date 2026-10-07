@@ -10,13 +10,13 @@ import {
 } from '@serenemed/validation';
 import type { StaffRole } from '@serenemed/types';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { clearOnEditRhf } from '../../../../lib/forms';
 import { formatDate, formatTime, humanize } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
+import { LinkButton, SectionHeading } from './document';
 import { apiErrorMessage, type MetabolicWorkup } from './types';
 
 type NumberKey = Exclude<
@@ -228,10 +228,13 @@ export function MetabolicSection({
   workups,
   role,
   closed,
+  number,
   onChange,
 }: {
   encounterId: string;
   workups: MetabolicWorkup[];
+  /** Section number in the document. */
+  number: number;
   role: StaffRole | undefined;
   /** A discharged visit: read only. */
   closed: boolean;
@@ -241,31 +244,31 @@ export function MetabolicSection({
   const canWrite = !closed && can(role, 'vitals:write');
 
   return (
-    <Card>
-      <CardHeader
+    <div className="pt-4">
+      <SectionHeading
+        number={number}
         title="Metabolic workup"
-        description="Blood sugar, lipids and body composition."
         action={
           canWrite ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<Plus size={16} aria-hidden="true" />}
+            <LinkButton
+              icon={<Plus size={14} aria-hidden="true" />}
               onClick={() => setRecording(true)}
             >
               Record workup
-            </Button>
+            </LinkButton>
           ) : undefined
         }
       />
-      <div className="p-5">
+      <div className="pl-6">
         {workups.length === 0 ? (
-          <p className="text-sm text-fg-muted">No metabolic workup recorded for this visit.</p>
+          <p className="text-[15px] text-fg-subtle">
+            No blood sugar, lipids or body composition recorded on this visit.
+          </p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="divide-y divide-line border-y border-line">
             {workups.map((w) => (
-              <li key={w.id} className="rounded-control bg-surface-muted px-3 py-2 text-sm text-fg">
-                <span className="tabular mr-2 text-xs text-fg-subtle">
+              <li key={w.id} className="flex flex-wrap gap-x-3 py-2 text-[13px] text-fg">
+                <span className="font-mono text-xs text-fg-subtle">
                   {formatDate(w.createdAt)} {formatTime(w.createdAt)}
                 </span>
                 <span className="tabular">{summarize(w)}</span>
@@ -281,6 +284,6 @@ export function MetabolicSection({
           onSaved={onChange}
         />
       )}
-    </Card>
+    </div>
   );
 }

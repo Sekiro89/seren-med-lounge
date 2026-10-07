@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { recordVitalSchema, type RecordVitalInput } from '@serenemed/validation';
 import type { StaffRole } from '@serenemed/types';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
+import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, formatTime } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
+import { LinkButton } from './document';
 import { apiErrorMessage, type Vital } from './types';
 import { clearOnEditRhf } from '../../../../lib/forms';
 
@@ -54,16 +55,15 @@ function summarize(vital: Vital): string {
     .join(' · ');
 }
 
-export function VitalsSection({
+/** The existing vitals form (nurse desk), in a dialog opened from "Vitals today". */
+function RecordVitalsDialog({
   encounterId,
-  vitals,
-  role,
-  onChange,
+  onClose,
+  onSaved,
 }: {
   encounterId: string;
-  vitals: Vital[];
-  role: StaffRole | undefined;
-  onChange: () => void;
+  onClose: () => void;
+  onSaved: () => void;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
   const { register, handleSubmit, reset, clearErrors, formState } = useForm<RecordVitalInput>({
@@ -77,7 +77,8 @@ export function VitalsSection({
     try {
       await apiClient.post('/vitals', { ...data, encounterId });
       reset({ encounterId });
-      onChange();
+      onSaved();
+      onClose();
     } catch (error) {
       setFormError(apiErrorMessage(error, 'Could not record vitals.'));
     }
@@ -89,83 +90,225 @@ export function VitalsSection({
     ?.message;
 
   return (
-    <Card>
-      <CardHeader title="Vitals" />
-      <div className="p-5">
-        {vitals.length === 0 ? (
-          <p className="mb-4 text-sm text-fg-muted">No vitals recorded yet.</p>
-        ) : (
-          <ul className="mb-5 flex flex-col gap-2">
-            {vitals.map((vital) => (
-              <li
-                key={vital.id}
-                className="rounded-control bg-surface-muted px-3 py-2 text-sm text-fg"
-              >
-                <span className="tabular mr-2 text-xs text-fg-subtle">
-                  {formatDate(vital.recordedAt)} {formatTime(vital.recordedAt)}
-                </span>
-                <span className="tabular">{summarize(vital)}</span>
-              </li>
-            ))}
-          </ul>
+    <Dialog
+      open
+      onClose={() => !formState.isSubmitting && onClose()}
+      title="Record vitals"
+      description="Enter at least one measurement. Leave the others blank."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={formState.isSubmitting}>
+            Cancel
+          </Button>
+          <Button type="submit" form="vitals-form" loading={formState.isSubmitting}>
+            Record vitals
+          </Button>
+        </>
+      }
+    >
+      <form
+        id="vitals-form"
+        onSubmit={handleSubmit(onSubmit)}
+        onChange={clearOnEditRhf(clearErrors, () => setFormError(null), { '*': [''] })}
+        className="flex flex-col gap-4"
+        noValidate
+      >
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          {FIELDS.map((field) => (
+            <Field
+              key={field.key}
+              label={field.label}
+              htmlFor={`vital-${field.key}`}
+              error={
+                formState.errors[field.key]
+                  ? rangeMessage(field.label, field.min, field.max)
+                  : undefined
+              }
+            >
+              <Input
+                id={`vital-${field.key}`}
+                type="number"
+                inputMode="decimal"
+                min={field.min}
+                max={field.max}
+                step={field.step ?? '1'}
+                aria-invalid={formState.errors[field.key] ? true : undefined}
+                {...register(field.key, {
+                  // valueAsNumber turns an empty input into NaN, which
+                  // Zod's z.number().optional() rejects and silently
+                  // blocks every submission with an empty field.
+                  setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
+                })}
+              />
+            </Field>
+          ))}
+        </div>
+        {groupError && (
+          <p role="alert" className="text-[13px] text-danger-fg">
+            {groupError}
+          </p>
         )}
+        {formError && (
+          <p role="alert" className="text-[13px] text-danger-fg">
+            {formError}
+          </p>
+        )}
+      </form>
+    </Dialog>
+  );
+}
 
-        {can(role, 'vitals:write') && (
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            onChange={clearOnEditRhf(clearErrors, () => setFormError(null), { '*': [''] })}
-            className="flex flex-col gap-4"
-            noValidate
-          >
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-              {FIELDS.map((field) => (
-                <Field
-                  key={field.key}
-                  label={field.label}
-                  htmlFor={`vital-${field.key}`}
-                  error={
-                    formState.errors[field.key]
-                      ? rangeMessage(field.label, field.min, field.max)
-                      : undefined
-                  }
-                >
-                  <Input
-                    id={`vital-${field.key}`}
-                    type="number"
-                    inputMode="decimal"
-                    min={field.min}
-                    max={field.max}
-                    step={field.step ?? '1'}
-                    aria-invalid={formState.errors[field.key] ? true : undefined}
-                    {...register(field.key, {
-                      // valueAsNumber turns an empty input into NaN, which
-                      // Zod's z.number().optional() rejects and silently
-                      // blocks every submission with an empty field.
-                      setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
-                    })}
-                  />
-                </Field>
-              ))}
-            </div>
-            <p className="text-[13px] text-fg-subtle">
-              Enter at least one measurement. Leave the others blank.
-            </p>
-            {groupError && (
-              <p role="alert" className="text-[13px] text-danger-fg">
-                {groupError}
-              </p>
+function Row({ label, children, last }: { label: string; children: ReactNode; last?: boolean }) {
+  return (
+    <>
+      <dt className={`flex h-8 items-center text-fg-muted ${last ? '' : 'border-b border-line'}`}>
+        {label}
+      </dt>
+      <dd
+        className={`flex h-8 items-center font-mono tabular text-fg ${last ? '' : 'border-b border-line'}`}
+      >
+        {children}
+      </dd>
+    </>
+  );
+}
+
+const Sep = () => (
+  <span className="mx-1.5 font-sans text-fg-subtle" aria-hidden="true">
+    ·
+  </span>
+);
+
+/**
+ * "Vitals today" in the document's context band: the latest reading as a
+ * ruled list, with the systolic change since the previous visit when we
+ * know it. Nurses (vitals:write) record from here.
+ */
+export function VitalsToday({
+  encounterId,
+  vitals,
+  previous,
+  role,
+  onChange,
+}: {
+  encounterId: string;
+  vitals: Vital[];
+  /** Last reading from the previous visit, for the change shown beside BP. */
+  previous: { vital: Vital; date: string } | undefined;
+  role: StaffRole | undefined;
+  onChange: () => void;
+}) {
+  const [recording, setRecording] = useState(false);
+  const latest = vitals[0];
+  const canRecord = can(role, 'vitals:write');
+  const delta =
+    latest?.bloodPressureSystolic != null && previous?.vital.bloodPressureSystolic != null
+      ? latest.bloodPressureSystolic - previous.vital.bloodPressureSystolic
+      : undefined;
+
+  const rows: { label: string; value: ReactNode }[] = [];
+  if (latest) {
+    if (latest.bloodPressureSystolic && latest.bloodPressureDiastolic) {
+      rows.push({
+        label: 'BP',
+        value: (
+          <>
+            {latest.bloodPressureSystolic}/{latest.bloodPressureDiastolic}
+            {delta !== undefined && delta !== 0 && previous && (
+              <span className="ml-2 font-sans text-[11px] text-fg-muted">
+                <span aria-hidden="true">
+                  {delta < 0 ? '↓' : '↑'} {Math.abs(delta)}
+                </span>
+                <span className="sr-only">
+                  {delta < 0 ? 'down' : 'up'} {Math.abs(delta)} since {formatDate(previous.date)}
+                </span>
+              </span>
             )}
-            {formError && (
-              <p role="alert" className="text-[13px] text-danger-fg">
-                {formError}
-              </p>
-            )}
-            <Button type="submit" loading={formState.isSubmitting} className="self-start">
-              Record vitals
-            </Button>
-          </form>
+          </>
+        ),
+      });
+    }
+    if (latest.pulseBpm) rows.push({ label: 'Pulse', value: latest.pulseBpm });
+    if (latest.spo2Percent || latest.temperatureCelsius) {
+      rows.push({
+        label: 'SpO\u2082 · Temp',
+        value: (
+          <>
+            {latest.spo2Percent ? `${latest.spo2Percent}%` : '-'}
+            <Sep />
+            {latest.temperatureCelsius ? `${latest.temperatureCelsius}°` : '-'}
+          </>
+        ),
+      });
+    }
+    if (latest.respiratoryRate) rows.push({ label: 'Resp. rate', value: latest.respiratoryRate });
+    if (latest.weightKg || latest.bmi) {
+      rows.push({
+        label: 'Wt · BMI',
+        value: (
+          <>
+            {latest.weightKg ?? '-'}
+            {latest.weightKg ? (
+              <span className="ml-1 font-sans text-xs text-fg-muted">kg</span>
+            ) : null}
+            <Sep />
+            {latest.bmi ?? '-'}
+          </>
+        ),
+      });
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between border-b border-fg pb-1.5">
+        <h3 className="text-[13px] font-semibold text-fg">Vitals today</h3>
+        {canRecord && (
+          <LinkButton small onClick={() => setRecording(true)}>
+            {latest ? 'Record again' : 'Record vitals'}
+          </LinkButton>
         )}
       </div>
-    </Card>
+      {latest ? (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 text-[13px]">
+          {rows.map((row, i) => (
+            <Row key={row.label} label={row.label} last={i === rows.length - 1}>
+              {row.value}
+            </Row>
+          ))}
+        </dl>
+      ) : (
+        <p className="py-2 text-[13px] text-fg-muted">Not recorded yet.</p>
+      )}
+      {vitals.length > 1 && (
+        <p className="mt-1 text-xs text-fg-muted">
+          <span className="font-mono">{vitals.length}</span> readings this visit, all under Other
+          records.
+        </p>
+      )}
+      {recording && (
+        <RecordVitalsDialog
+          encounterId={encounterId}
+          onClose={() => setRecording(false)}
+          onSaved={onChange}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Every reading on this visit, newest first (for Other records). */
+export function VitalsLog({ vitals }: { vitals: Vital[] }) {
+  return (
+    <ul className="divide-y divide-line">
+      {vitals.map((vital) => (
+        <li key={vital.id} className="flex flex-wrap gap-x-3 py-2 text-[13px] text-fg">
+          <span className="font-mono text-xs text-fg-subtle">
+            {formatDate(vital.recordedAt)} {formatTime(vital.recordedAt)}
+          </span>
+          <span className="font-mono tabular">{summarize(vital)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

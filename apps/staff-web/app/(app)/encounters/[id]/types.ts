@@ -128,6 +128,9 @@ export interface ClinicalNote {
   id: string;
   status: string;
   noteType: string;
+  /** The template version the note was started from, if any. */
+  templateVersionId?: string | null;
+  createdAt?: string;
   versions: ClinicalNoteVersion[];
 }
 
@@ -147,12 +150,28 @@ export interface QueueEntry {
   status: string;
 }
 
+export interface FollowUp {
+  id: string;
+  type: string;
+  dueAt: string;
+  notes: string | null;
+  status: string;
+}
+
+export interface CarePlan {
+  id: string;
+  title: string;
+  status: string;
+  followUps: FollowUp[];
+}
+
 export interface EncounterDetail {
   id: string;
   status: string;
   startedAt: string;
+  endedAt?: string | null;
   patientId: string;
-  /** Not returned by the API today; used when present (see page.tsx). */
+  /** The API includes the patient's identity with the visit. */
   patient?: PatientInfo;
   registration: Registration | null;
   queueEntry: QueueEntry | null;
@@ -164,6 +183,8 @@ export interface EncounterDetail {
   diagnoses: Diagnosis[];
   prescriptions: Prescription[];
   labOrders: LabOrder[];
+  /** Care plans with their follow-ups (present in the API detail). */
+  carePlans?: CarePlan[];
 }
 
 export interface PatientInfo {
@@ -172,6 +193,19 @@ export interface PatientInfo {
   lastName: string;
   dateOfBirth: string;
   phone: string;
+  /** Patient number; tolerated when the API does not send it yet. */
+  mrn?: string | null;
+  /** Not in the schema today; shown when present. */
+  sex?: string | null;
+}
+
+/** A medical history row (allergies, conditions, current medication). */
+export interface HistoryEntry {
+  id: string;
+  category: string;
+  description: string;
+  severity: string | null;
+  status: string;
 }
 
 /** True for a record that has not been signed off yet. */

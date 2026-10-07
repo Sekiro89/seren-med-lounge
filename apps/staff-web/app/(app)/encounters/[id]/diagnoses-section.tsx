@@ -12,11 +12,11 @@ import {
 import type { StaffRole } from '@serenemed/types';
 import { Badge, StatusBadge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
-import { Card, CardHeader } from '../../../../components/ui/card';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { can } from '../../../../lib/permissions';
+import { LinkButton } from './document';
 import { apiErrorMessage, isUnsigned, type Diagnosis } from './types';
 import { clearOnEditRhf } from '../../../../lib/forms';
 
@@ -58,7 +58,7 @@ function AmendForm({ diagnosisId, onDone }: { diagnosisId: string; onDone: () =>
     <form
       onSubmit={handleSubmit(onSubmit)}
       onChange={clearOnEditRhf(clearErrors, () => setError(null))}
-      className="mt-3 flex flex-col gap-3 border-t border-line pt-3"
+      className="mt-3 flex flex-col gap-3 pb-1"
       noValidate
     >
       <Field
@@ -108,11 +108,13 @@ export function DiagnosesSection({
   encounterId,
   diagnoses,
   role,
+  patientName,
   onChange,
 }: {
   encounterId: string;
   diagnoses: Diagnosis[];
   role: StaffRole | undefined;
+  patientName: string;
   onChange: () => void;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
@@ -158,131 +160,128 @@ export function DiagnosesSection({
   };
 
   const confirmingLatest = confirming?.versions[0];
+  const canWrite = can(role, 'diagnosis:write-draft');
 
   return (
-    <Card>
-      <CardHeader title="Diagnoses" />
-      <div className="p-5">
-        {diagnoses.length === 0 ? (
-          <p className="mb-4 text-sm text-fg-muted">No diagnoses yet.</p>
-        ) : (
-          <ul className="mb-5 flex flex-col gap-2">
-            {diagnoses.map((diagnosis) => {
-              const latest = diagnosis.versions[0];
-              if (!latest) return null;
-              return (
-                <li key={diagnosis.id} className="rounded-control bg-surface-muted px-3 py-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="font-medium text-fg">{latest.description}</span>
-                      {latest.icdCode && (
-                        <span className="tabular text-xs text-fg-muted">{latest.icdCode}</span>
-                      )}
-                      {isUnsigned(latest.status) ? (
-                        <Badge tone="warning">Draft, not signed</Badge>
-                      ) : (
-                        <StatusBadge domain="note" status={latest.status} />
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      {latest.status === 'DRAFT' && can(role, 'diagnosis:sign-off') && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setConfirming(diagnosis)}
-                        >
-                          Sign off
-                        </Button>
-                      )}
-                      {can(role, 'diagnosis:write-draft') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setAmendingId(amendingId === diagnosis.id ? null : diagnosis.id)
-                          }
-                        >
-                          {amendingId === diagnosis.id
-                            ? 'Cancel'
-                            : latest.status === 'DRAFT'
-                              ? 'Edit'
-                              : 'Amend'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {amendingId === diagnosis.id && (
-                    <AmendForm
-                      diagnosisId={diagnosis.id}
-                      onDone={() => {
-                        setAmendingId(null);
-                        onChange();
-                      }}
-                    />
+    <div className="pl-6">
+      {diagnoses.length === 0 ? (
+        <p className="py-1 text-[15px] text-fg-subtle">No diagnosis recorded.</p>
+      ) : (
+        <ul className="mt-1 divide-y divide-line border-y border-line">
+          {diagnoses.map((diagnosis) => {
+            const latest = diagnosis.versions[0];
+            if (!latest) return null;
+            return (
+              <li key={diagnosis.id} className="py-2.5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {latest.icdCode && (
+                    <span className="rounded-control border border-fg px-1.5 font-mono text-[13px] tabular text-fg">
+                      {latest.icdCode}
+                    </span>
                   )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                  <span className="text-[15px] font-medium text-fg">{latest.description}</span>
+                  <span className="ml-auto flex flex-wrap items-center gap-1">
+                    {isUnsigned(latest.status) ? (
+                      <Badge tone="warning">Unsigned draft</Badge>
+                    ) : (
+                      <StatusBadge domain="note" status={latest.status} />
+                    )}
+                    {latest.status === 'DRAFT' && can(role, 'diagnosis:sign-off') && (
+                      <LinkButton onClick={() => setConfirming(diagnosis)}>Sign off</LinkButton>
+                    )}
+                    {canWrite && (
+                      <LinkButton
+                        tone="muted"
+                        onClick={() =>
+                          setAmendingId(amendingId === diagnosis.id ? null : diagnosis.id)
+                        }
+                      >
+                        {amendingId === diagnosis.id
+                          ? 'Cancel'
+                          : latest.status === 'DRAFT'
+                            ? 'Edit'
+                            : 'Amend'}
+                      </LinkButton>
+                    )}
+                  </span>
+                </div>
+                {amendingId === diagnosis.id && (
+                  <AmendForm
+                    diagnosisId={diagnosis.id}
+                    onDone={() => {
+                      setAmendingId(null);
+                      onChange();
+                    }}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        {can(role, 'diagnosis:write-draft') && (
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            onChange={clearOnEditRhf(clearErrors, () => setFormError(null))}
-            className="flex flex-col gap-4"
-            noValidate
-          >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_1fr]">
-              <Field
-                label="ICD code (optional)"
-                htmlFor="dx-icd"
-                error={formState.errors.icdCode && 'ICD code can be at most 20 characters.'}
-              >
-                <Input
-                  id="dx-icd"
-                  maxLength={20}
-                  aria-invalid={formState.errors.icdCode ? true : undefined}
-                  {...register('icdCode', { setValueAs: trimValue })}
-                />
-              </Field>
-              <Field
-                label="Diagnosis description"
-                htmlFor="dx-description"
-                error={descriptionError(formState.errors.description)}
-              >
-                <Input
-                  id="dx-description"
-                  required
-                  aria-required="true"
-                  maxLength={DESCRIPTION_MAX}
-                  aria-invalid={formState.errors.description ? true : undefined}
-                  {...register('description', { setValueAs: trimValue })}
-                />
-              </Field>
-            </div>
-            {formError && (
-              <p role="alert" className="text-[13px] text-danger-fg">
-                {formError}
-              </p>
-            )}
-            <Button type="submit" loading={formState.isSubmitting} className="self-start">
+      {canWrite && (
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          onChange={clearOnEditRhf(clearErrors, () => setFormError(null))}
+          className="mt-4 flex flex-col gap-3"
+          noValidate
+        >
+          <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[8.5rem_minmax(0,1fr)_auto]">
+            <Field
+              label="ICD code (optional)"
+              htmlFor="dx-icd"
+              error={formState.errors.icdCode && 'ICD code can be at most 20 characters.'}
+            >
+              <Input
+                id="dx-icd"
+                maxLength={20}
+                className="font-mono"
+                aria-invalid={formState.errors.icdCode ? true : undefined}
+                {...register('icdCode', { setValueAs: trimValue })}
+              />
+            </Field>
+            <Field
+              label="Diagnosis description"
+              htmlFor="dx-description"
+              error={descriptionError(formState.errors.description)}
+            >
+              <Input
+                id="dx-description"
+                required
+                aria-required="true"
+                maxLength={DESCRIPTION_MAX}
+                aria-invalid={formState.errors.description ? true : undefined}
+                {...register('description', { setValueAs: trimValue })}
+              />
+            </Field>
+            <Button
+              type="submit"
+              variant="secondary"
+              loading={formState.isSubmitting}
+              className="sm:mt-7"
+            >
               Add diagnosis
             </Button>
-          </form>
-        )}
-        {!can(role, 'diagnosis:write-draft') && formError && (
-          <p role="alert" className="mt-3 text-[13px] text-danger-fg">
-            {formError}
-          </p>
-        )}
-      </div>
+          </div>
+          {formError && (
+            <p role="alert" className="text-[13px] text-danger-fg">
+              {formError}
+            </p>
+          )}
+        </form>
+      )}
+      {!canWrite && formError && (
+        <p role="alert" className="mt-3 text-[13px] text-danger-fg">
+          {formError}
+        </p>
+      )}
 
       <Dialog
         open={confirming !== null}
         onClose={() => setConfirming(null)}
         title="Sign off diagnosis"
-        description="Signing off finalizes this diagnosis. Later changes are recorded as amendments."
+        description={`Signing off finalizes this diagnosis for ${patientName}. Later changes are recorded as amendments.`}
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirming(null)}>
@@ -301,6 +300,6 @@ export function DiagnosesSection({
           </p>
         )}
       </Dialog>
-    </Card>
+    </div>
   );
 }
