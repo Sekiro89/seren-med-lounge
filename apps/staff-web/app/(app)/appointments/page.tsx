@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CalendarBlank, CaretLeft, CaretRight, SignIn } from '@phosphor-icons/react';
-import { ApiError } from '@serenemed/api-client';
+import { CalendarBlank, CaretLeft, CaretRight, ListNumbers, SignIn } from '@phosphor-icons/react';
 import { Button } from '../../../components/ui/button';
 import { PersonCell } from '../../../components/ui/avatar';
 import { Badge } from '../../../components/ui/badge';
@@ -13,12 +12,12 @@ import { EmptyState } from '../../../components/ui/empty-state';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { StatusBadge } from '../../../components/ui/badge';
-import { apiClient } from '../../../lib/api-client';
 import { clinicToday, formatLongDate, formatTime, fullName, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
+import { CheckInDialog, type CheckInTarget } from './_components/check-in-dialog';
 
 interface AppointmentRow {
   id: string;
@@ -27,20 +26,24 @@ interface AppointmentRow {
   scheduledAt: string;
   patient: { firstName: string; lastName: string };
   doctor: { fullName: string } | null;
-  encounter: { id: string } | null;
+  encounter: {
+    id: string;
+    queueEntry: { tokenNumber: number; station: string; status: string } | null;
+  } | null;
 }
 
 export default function AppointmentsPage() {
   const user = useStaff();
   const [date, setDate] = useState(clinicToday());
-  const [busyId, setBusyId] = useState<string>();
-  const [error, setError] = useState<string>();
+  const [checkIn, setCheckIn] = useState<CheckInTarget | null>(null);
 
   const allowed = can(user.role, 'appointment:read');
   const { data, loading, reload } = useApi<AppointmentRow[]>(
     allowed ? `/appointments?date=${date}` : null,
   );
-  const canCheckIn = can(user.role, 'appointment:write');
+  // Check-in opens the visit (appointment:write) and registers it, which
+  // issues the queue token (patient:write).
+  const canCheckIn = can(user.role, 'appointment:write') && can(user.role, 'patient:write');
 
   if (!allowed) {
     return (
@@ -49,23 +52,6 @@ export default function AppointmentsPage() {
       </Card>
     );
   }
-
-  const checkIn = async (id: string) => {
-    setBusyId(id);
-    setError(undefined);
-    try {
-      await apiClient.post(`/appointments/${id}/check-in`);
-      reload();
-    } catch (e) {
-      setError(
-        e instanceof ApiError && e.status === 409
-          ? 'This appointment can no longer be checked in.'
-          : 'Check-in did not go through. Please try again.',
-      );
-    } finally {
-      setBusyId(undefined);
-    }
-  };
 
   const columns: Column<AppointmentRow>[] = [
     {
@@ -89,14 +75,44 @@ export default function AppointmentsPage() {
       header: 'Action',
       align: 'right',
       render: (a) => {
+        const patientName = fullName(a.patient);
         if (a.encounter) {
+          const token = a.encounter.queueEntry;
           return (
-            <Link
-              href={`/encounters/${a.encounter.id}`}
-              className="text-[13px] font-medium text-primary hover:text-primary-hover"
-            >
-              Open visit
-            </Link>
+            <div className="flex items-center justify-end gap-4">
+              {token ? (
+                <span className="text-[13px] text-fg-muted">
+                  Token{' '}
+                  <span className="tabular font-mono font-semibold text-fg">
+                    {String(token.tokenNumber).padStart(3, '0')}
+                  </span>
+                  {token.status === 'COMPLETED' ? ' · Done' : ` · ${humanize(token.station)}`}
+                </span>
+              ) : (
+                canCheckIn && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<ListNumbers size={16} aria-hidden="true" />}
+                    onClick={() =>
+                      setCheckIn({
+                        appointmentId: a.id,
+                        patientName,
+                        encounterId: a.encounter?.id,
+                      })
+                    }
+                  >
+                    Add to queue
+                  </Button>
+                )
+              )}
+              <Link
+                href={`/encounters/${a.encounter.id}`}
+                className="text-[13px] font-medium text-primary hover:text-primary-hover"
+              >
+                Open visit
+              </Link>
+            </div>
           );
         }
         if (canCheckIn && (a.status === 'REQUESTED' || a.status === 'CONFIRMED')) {
@@ -104,8 +120,7 @@ export default function AppointmentsPage() {
             <Button
               size="sm"
               icon={<SignIn size={16} aria-hidden="true" />}
-              loading={busyId === a.id}
-              onClick={() => checkIn(a.id)}
+              onClick={() => setCheckIn({ appointmentId: a.id, patientName })}
             >
               Check in
             </Button>
@@ -182,15 +197,6 @@ export default function AppointmentsPage() {
         </div>
       )}
 
-      {error && (
-        <p
-          role="alert"
-          className="mb-4 rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
-        >
-          {error}
-        </p>
-      )}
-
       <Card>
         <DataTable
           columns={columns}
@@ -206,6 +212,8 @@ export default function AppointmentsPage() {
           }
         />
       </Card>
+
+      <CheckInDialog target={checkIn} onClose={() => setCheckIn(null)} onDone={reload} />
     </>
   );
 }

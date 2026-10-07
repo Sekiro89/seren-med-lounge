@@ -218,8 +218,7 @@ export function ConfigDrawer({
 
           {fields.map((field) => {
             const id = fieldId(field.key);
-            const required = field.required ? 'Required' : 'Optional';
-            const label = `${field.label} (${required})`;
+            const label = field.required ? `${field.label} *` : `${field.label} (optional)`;
             const fieldError = errors[id];
             const ariaProps = {
               ...(field.required ? requiredProps : {}),

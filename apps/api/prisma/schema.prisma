@@ -1213,6 +1213,9 @@ model QueueEntry {
   tokenNumber    Int
   station        QueueStation
   status         QueueStatus  @default(WAITING)
+  /// When the token arrived at its current station (reset on every
+  /// hand-off), so each desk can see how long someone has waited there.
+  waitingSince   DateTime     @default(now())
   calledAt       DateTime?
   completedAt    DateTime?
   createdAt      DateTime     @default(now())

@@ -1,5 +1,12 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { QueueStation, QueueStatus, type Encounter, type QueueEntry } from '@prisma/client';
+import { canActAtStation, managesWholeQueue, stationsServedBy } from '@serenemed/permissions';
+import type { StaffRole } from '@serenemed/types';
 import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { clinicDateString, toDbDate } from '../common/clinic-time';
@@ -16,8 +23,8 @@ const ALLOWED_FROM: Record<'call' | 'start' | 'complete' | 'skip', QueueStatus[]
  * OPD token queue. One QueueEntry per encounter, issued at registration
  * (RegistrationService), numbered per organization per clinic-local
  * day. The patient keeps the same token and moves between stations
- * (vitals -> doctor -> billing -> pharmacy); each desk lists its own
- * station's WAITING entries.
+ * (vitals -> doctor -> lab -> billing -> pharmacy). Each desk sees the
+ * stations it serves; the front desk (`queue:manage`) sees them all.
  */
 @Injectable()
 export class QueueService {
@@ -60,16 +67,33 @@ export class QueueService {
 
   async list(
     organizationId: string,
+    role: StaffRole,
     filter: { date?: string; station?: QueueStation; status?: QueueStatus },
   ) {
+    let stations: QueueStation[] | undefined = filter.station ? [filter.station] : undefined;
+    if (!managesWholeQueue(role)) {
+      const served = stationsServedBy(role) as QueueStation[];
+      if (filter.station && !served.includes(filter.station)) {
+        throw new ForbiddenException('Insufficient permissions for this operation.');
+      }
+      stations = filter.station ? [filter.station] : served;
+    }
+
     return this.prisma.withTenant(organizationId, (tx) =>
       tx.queueEntry.findMany({
         where: {
           queueDate: toDbDate(filter.date ?? clinicDateString()),
-          station: filter.station,
+          station: stations ? { in: stations } : undefined,
           status: filter.status,
         },
-        include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+        include: {
+          patient: { select: { id: true, firstName: true, lastName: true } },
+          encounter: {
+            select: {
+              appointment: { select: { doctor: { select: { id: true, fullName: true } } } },
+            },
+          },
+        },
         orderBy: { tokenNumber: 'asc' },
       }),
     );
@@ -89,6 +113,7 @@ export class QueueService {
   async transition(
     organizationId: string,
     actorId: string,
+    role: StaffRole,
     entryId: string,
     action: keyof typeof ALLOWED_FROM,
   ) {
@@ -99,26 +124,36 @@ export class QueueService {
       complete: { status: QueueStatus.COMPLETED, completedAt: now },
       skip: { status: QueueStatus.SKIPPED },
     }[action];
-    return this.update(organizationId, actorId, entryId, ALLOWED_FROM[action], data);
+    return this.update(organizationId, actorId, role, entryId, ALLOWED_FROM[action], data);
   }
 
   /**
    * Hands the patient to the next desk: new station, back to WAITING.
-   * Also how a SKIPPED (stepped-away) patient is put back in line.
+   * Also how a SKIPPED (stepped-away) patient is put back in line. The
+   * sender must serve the token's current station; any station may
+   * receive it, and its wait clock starts again.
    */
-  async move(organizationId: string, actorId: string, entryId: string, station: QueueStation) {
+  async move(
+    organizationId: string,
+    actorId: string,
+    role: StaffRole,
+    entryId: string,
+    station: QueueStation,
+  ) {
     return this.update(
       organizationId,
       actorId,
+      role,
       entryId,
       [QueueStatus.WAITING, QueueStatus.CALLED, QueueStatus.IN_SERVICE, QueueStatus.SKIPPED],
-      { station, status: QueueStatus.WAITING, calledAt: null },
+      { station, status: QueueStatus.WAITING, calledAt: null, waitingSince: new Date() },
     );
   }
 
   private async update(
     organizationId: string,
     actorId: string,
+    role: StaffRole,
     entryId: string,
     allowedFrom: QueueStatus[],
     data: Partial<QueueEntry>,
@@ -128,6 +163,9 @@ export class QueueService {
       const entry = await tx.queueEntry.findUnique({ where: { id: entryId } });
       if (!entry) {
         throw new NotFoundException('Queue entry not found.');
+      }
+      if (!canActAtStation(role, entry.station)) {
+        throw new ForbiddenException('This token is waiting at a desk you do not work at.');
       }
       if (!allowedFrom.includes(entry.status)) {
         throw new ConflictException(`Not allowed while the token is ${entry.status}.`);

@@ -70,7 +70,16 @@ export const NAV: NavGroup[] = [
         label: 'Queue',
         href: '/queue',
         icon: ListNumbers,
-        anyOf: ['queue:manage'],
+        // The front desk, plus every desk a token passes through
+        // (STATION_PERMISSION in @serenemed/permissions).
+        anyOf: [
+          'queue:manage',
+          'vitals:write',
+          'clinical-note:write-draft',
+          'lab-result:write',
+          'invoice:manage',
+          'pharmacy:dispense',
+        ],
         ready: true,
       },
       {

@@ -1,0 +1,234 @@
+'use client';
+
+import { useState, type FormEvent } from 'react';
+import { CheckCircle } from '@phosphor-icons/react';
+import { ApiError } from '@serenemed/api-client';
+import { Button } from '../../../../components/ui/button';
+import { Dialog } from '../../../../components/ui/dialog';
+import { Field, Select, Textarea } from '../../../../components/ui/fields';
+import { apiClient } from '../../../../lib/api-client';
+import { humanize } from '../../../../lib/format';
+
+export interface CheckInTarget {
+  appointmentId: string;
+  patientName: string;
+  /** Set when the patient is already checked in but not yet in the queue. */
+  encounterId?: string;
+}
+
+interface Issued {
+  tokenNumber: number;
+  station: string;
+}
+
+const VISIT_TYPES = ['NEW_CONSULTATION', 'FOLLOW_UP', 'REPORT_REVIEW', 'PROCEDURE'] as const;
+
+/**
+ * Front desk check-in: opens the visit and registers it in one go, which
+ * issues the patient's queue token and sends them to Vitals. If check-in
+ * succeeded but registration failed, the appointment row offers
+ * "Add to queue", which reopens this dialog for the registration step only.
+ */
+export function CheckInDialog({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: CheckInTarget | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [visitType, setVisitType] = useState<string>('NEW_CONSULTATION');
+  const [route, setRoute] = useState<'JUNIOR_ASSESSMENT' | 'DIRECT_SENIOR'>('JUNIOR_ASSESSMENT');
+  const [idChecked, setIdChecked] = useState(false);
+  const [screening, setScreening] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [idError, setIdError] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [issued, setIssued] = useState<Issued>();
+  // Kept when check-in worked but registration failed, so a retry doesn't check in twice.
+  const [openedEncounterId, setOpenedEncounterId] = useState<string>();
+
+  const reset = () => {
+    setVisitType('NEW_CONSULTATION');
+    setRoute('JUNIOR_ASSESSMENT');
+    setIdChecked(false);
+    setScreening(false);
+    setNotes('');
+    setIdError(undefined);
+    setError(undefined);
+    setIssued(undefined);
+    setOpenedEncounterId(undefined);
+  };
+
+  const close = () => {
+    if (busy) return;
+    if (issued) onDone();
+    reset();
+    onClose();
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!target || busy) return;
+    if (!idChecked) {
+      setIdError("Check the patient's ID before adding them to the queue.");
+      document.getElementById('checkin-id')?.focus();
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      let encounterId = target.encounterId ?? openedEncounterId;
+      if (!encounterId) {
+        const encounter = await apiClient.post<{ id: string }>(
+          `/appointments/${target.appointmentId}/check-in`,
+        );
+        encounterId = encounter.id;
+        setOpenedEncounterId(encounterId);
+      }
+      const result = await apiClient.post<{ queueEntry: Issued }>(
+        `/encounters/${encounterId}/registration`,
+        {
+          visitType,
+          consultationRoute: route,
+          idProofVerified: true,
+          cancerScreeningRequired: screening,
+          notes: notes.trim() || undefined,
+        },
+      );
+      setIssued(result.queueEntry);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 409
+          ? 'This visit is already checked in or in the queue. The list has been refreshed.'
+          : 'Check-in did not go through. Please try again.',
+      );
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={target !== null}
+      onClose={close}
+      title={issued ? 'Added to the queue' : 'Check in'}
+      description={target?.patientName}
+      footer={
+        issued ? (
+          <Button onClick={close}>Done</Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={close} disabled={busy}>
+              Cancel
+            </Button>
+            <Button type="submit" form="checkin-form" loading={busy}>
+              {target?.encounterId || openedEncounterId ? 'Add to queue' : 'Check in'}
+            </Button>
+          </>
+        )
+      }
+    >
+      {issued ? (
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
+          <CheckCircle size={40} weight="fill" className="text-success-fg" aria-hidden="true" />
+          <p className="text-sm text-fg-muted">Token</p>
+          <p className="tabular font-mono text-4xl font-semibold tracking-tight text-fg">
+            {String(issued.tokenNumber).padStart(3, '0')}
+          </p>
+          <p className="text-sm text-fg-muted">
+            Please ask {target?.patientName} to wait for {humanize(issued.station)}.
+          </p>
+        </div>
+      ) : (
+        <form id="checkin-form" noValidate onSubmit={submit} className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Field label="Visit type *" htmlFor="checkin-type">
+              <Select
+                id="checkin-type"
+                value={visitType}
+                onChange={(e) => setVisitType(e.target.value)}
+              >
+                {VISIT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {humanize(type)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Seen first by *" htmlFor="checkin-route">
+              <Select
+                id="checkin-route"
+                value={route}
+                onChange={(e) => setRoute(e.target.value as typeof route)}
+              >
+                <option value="JUNIOR_ASSESSMENT">Junior doctor, then senior</option>
+                <option value="DIRECT_SENIOR">Senior doctor directly</option>
+              </Select>
+            </Field>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-control bg-surface-muted px-4 py-4">
+            <label htmlFor="checkin-id" className="flex cursor-pointer items-start gap-3">
+              <input
+                id="checkin-id"
+                type="checkbox"
+                checked={idChecked}
+                aria-required="true"
+                aria-invalid={idError ? true : undefined}
+                aria-describedby={idError ? 'checkin-id-error' : undefined}
+                onChange={(e) => {
+                  setIdChecked(e.target.checked);
+                  setIdError(undefined);
+                }}
+                className="mt-0.5 size-5 shrink-0 cursor-pointer accent-primary"
+              />
+              <span className="text-sm text-fg">
+                I have checked the patient&apos;s photo ID
+                <span aria-hidden="true" className="ml-0.5 text-danger-fg">
+                  *
+                </span>
+              </span>
+            </label>
+            {idError && (
+              <p id="checkin-id-error" role="alert" className="text-[13px] text-danger-fg">
+                {idError}
+              </p>
+            )}
+            <label htmlFor="checkin-screening" className="flex cursor-pointer items-start gap-3">
+              <input
+                id="checkin-screening"
+                type="checkbox"
+                checked={screening}
+                onChange={(e) => setScreening(e.target.checked)}
+                className="mt-0.5 size-5 shrink-0 cursor-pointer accent-primary"
+              />
+              <span className="text-sm text-fg">Cancer screening needed at this visit</span>
+            </label>
+          </div>
+
+          <Field label="Note for the clinical team (optional)" htmlFor="checkin-notes">
+            <Textarea
+              id="checkin-notes"
+              value={notes}
+              maxLength={2000}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </Field>
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg"
+            >
+              {error}
+            </p>
+          )}
+        </form>
+      )}
+    </Dialog>
+  );
+}

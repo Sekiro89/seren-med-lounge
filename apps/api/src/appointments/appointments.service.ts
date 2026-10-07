@@ -71,7 +71,12 @@ export class AppointmentsService {
         orderBy: { scheduledAt: 'desc' },
         include: {
           patient: { select: { id: true, firstName: true, lastName: true } },
-          encounter: { select: { id: true } },
+          encounter: {
+            select: {
+              id: true,
+              queueEntry: { select: { tokenNumber: true, station: true, status: true } },
+            },
+          },
           doctor: { select: { id: true, fullName: true } },
         },
       }),

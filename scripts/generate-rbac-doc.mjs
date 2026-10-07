@@ -89,6 +89,11 @@ line(
 );
 line('5. **Patients see only their own record**, through their own login, never any staff screen.');
 line('6. **Clinics are kept apart.** Staff of one clinic can never see another clinic.');
+line(
+  '7. **The queue follows the patient.** Each desk sees the patients waiting at its own ' +
+    'station (vitals, doctor, lab, billing, pharmacy) and hands them on to the next. The front ' +
+    'desk sees the whole clinic and can move anyone.',
+);
 line();
 line('## 2. The roles at a glance');
 line();

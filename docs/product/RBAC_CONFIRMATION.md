@@ -16,6 +16,7 @@ You can also see all of this live in the product, under **Staff and roles**.
 4. **Every change is recorded.** Who did what and when is kept in an audit trail that administrators can read.
 5. **Patients see only their own record**, through their own login, never any staff screen.
 6. **Clinics are kept apart.** Staff of one clinic can never see another clinic.
+7. **The queue follows the patient.** Each desk sees the patients waiting at its own station (vitals, doctor, lab, billing, pharmacy) and hands them on to the next. The front desk sees the whole clinic and can move anyone.
 
 ## 2. The roles at a glance
 

@@ -291,8 +291,41 @@ describe('OPD registration, queue and intake (e2e)', () => {
         .send({ station: 'BILLING' })
         .expect(409);
 
-      await http().get('/queue').set(as('billing')).expect(403);
       await http().get('/queue?station=NOWHERE').set(as('nurse')).expect(400);
+    });
+
+    it('shows each desk only the stations it serves', async () => {
+      const encounterId = await checkedInEncounter();
+      const { body } = await register(encounterId, verified).expect(201);
+      const id = body.queueEntry.id;
+      const ids = (res: { body: Array<{ id: string }> }) => res.body.map((e) => e.id);
+
+      // Billing doesn't serve Vitals: the token is invisible and untouchable there.
+      const before = await http().get('/queue').set(as('billing')).expect(200);
+      expect(ids(before)).not.toContain(id);
+      expect(before.body.every((e: { station: string }) => e.station === 'BILLING')).toBe(true);
+      await http().get('/queue?station=VITALS').set(as('billing')).expect(403);
+      await http().post(`/queue/${id}/call`).set(as('billing')).expect(403);
+      await http()
+        .post(`/queue/${id}/move`)
+        .set(as('billing'))
+        .send({ station: 'BILLING' })
+        .expect(403);
+
+      // Once the nurse hands the patient to billing, billing sees and works it.
+      const sent = await http()
+        .post(`/queue/${id}/move`)
+        .set(as('nurse'))
+        .send({ station: 'BILLING' })
+        .expect(201);
+      expect(new Date(sent.body.waitingSince).getTime()).toBeGreaterThanOrEqual(
+        new Date(body.queueEntry.waitingSince).getTime(),
+      );
+      const after = await http().get('/queue').set(as('billing')).expect(200);
+      expect(ids(after)).toContain(id);
+      expect(after.body.find((e: { id: string }) => e.id === id).encounter).toBeDefined();
+      await http().post(`/queue/${id}/call`).set(as('billing')).expect(201);
+      await http().post(`/queue/${id}/complete`).set(as('billing')).expect(201);
     });
 
     it('shows a patient their own token today', async () => {
