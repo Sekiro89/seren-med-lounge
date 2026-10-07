@@ -157,11 +157,11 @@ decoration (taste-skill AI tells).
 
 ## 3. Typography
 
-| Role                           | Font                  | Why                                                                                                                                                                |
-| ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| UI and body                    | **Geist Sans**        | Compact, highly legible at 13 to 14px, tabular figures. Loaded with `next/font` (self-hosted, no external request). Taste-skill pairing; avoids the default Inter. |
-| Numbers, IDs, codes            | **Geist Mono**        | Invoice numbers, token numbers, batch numbers, amounts in tables.                                                                                                  |
-| Patient portal body (optional) | Atkinson Hyperlegible | ui-ux-pro-max healthcare recommendation for patient-facing, accessibility-critical text. Decide when patient-web is redesigned.                                    |
+| Role                   | Font                  | Why                                                                                                                                                                |
+| ---------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| UI and body            | **Geist Sans**        | Compact, highly legible at 13 to 14px, tabular figures. Loaded with `next/font` (self-hosted, no external request). Taste-skill pairing; avoids the default Inter. |
+| Numbers, IDs, codes    | **Geist Mono**        | Invoice numbers, token numbers, batch numbers, amounts in tables.                                                                                                  |
+| Patient app (all text) | Atkinson Hyperlegible | ui-ux-pro-max healthcare recommendation for patient-facing, accessibility-critical text. Decided for patient-web; see section 18.                                  |
 
 No serif anywhere (taste-skill: not for dashboards).
 
@@ -564,8 +564,101 @@ package.
 ## 17. Open decisions
 
 - **Dark mode timing:** tokens are defined; ship after the light workspace.
-- **Patient portal font:** Geist vs Atkinson Hyperlegible for body text.
+- ~~**Patient portal font:**~~ decided: Atkinson Hyperlegible (section 18).
 - **Sidebar style:** light sidebar (default) vs dark `serene-950`
   sidebar. Both pass contrast.
 - **Logo:** the official SereneMed logo file is needed (SVG) for the
   shell; until then the wordmark is set in Geist 600.
+
+## 18. Patient app (`apps/patient-web`)
+
+The staff app is a desk tool used all day. The patient app is opened a
+few times a month, on a phone, often by someone who is unwell, anxious,
+older or reading in a second language. Same brand, different job.
+
+### 18.1 Design read
+
+Reading this as: a mobile-first health companion for patients and their
+families, with a calm, trust-first language, leaning toward Tailwind v4 +
+Atkinson Hyperlegible + very restrained motion. Dials: variance 4,
+motion 3, density 3 (airier than staff-web's 4).
+
+From the ui-ux-pro-max run (`patient portal healthcare clinic mobile
+calm trustworthy`): kept **Atkinson Hyperlegible**, the spacious density
+and subtle motion. Rejected **neumorphism** (the tool itself flags it
+high accessibility risk: low-contrast edges), the landing-page
+"hero + testimonials" pattern (this is a signed-in app, not marketing)
+and its cyan palette (we already have the SereneMed teal).
+
+### 18.2 What a patient opens the app to do (in order)
+
+1. **"Where am I in the queue?"** while at the clinic: token, desk,
+   people ahead. This is the most anxious moment, so it owns the top of
+   Home when it applies.
+2. **"When is my next appointment?"** date, time, doctor, what to bring.
+3. **"What do I take, and how?"** medicines in plain words, with how
+   long the course runs.
+4. **"Are my results back, and are they OK?"** each value with its
+   normal range, said in words as well as colour.
+5. **"Do I owe anything?"** outstanding bills and receipts.
+6. **"Can I ask the clinic something?"** messages.
+
+Home answers 1, 2 and anything needing attention (unpaid bill, new
+result, reply from the clinic) without a tap. Everything else is one tap
+away.
+
+### 18.3 Rules
+
+- **Plain language.** "Your results", not "Lab orders". "Once a week for
+  8 weeks", not "freq: QW, 56d". No ICD codes in headings (shown small,
+  secondary). No internal statuses ("IN_SERVICE" becomes "With the
+  doctor now").
+- **Never colour alone.** A high result says "Above the normal range"
+  next to the amber marker.
+- **Reassure, don't diagnose.** Results carry "Your doctor will go
+  through these with you." The app never interprets beyond in/out of
+  range.
+- **No fake features.** Online payment and self-booking have no backend
+  yet, so the app says "Pay at the clinic desk" and "Message us to book
+  or change", never a dead button.
+- **Two identifiers** are not needed (the patient only sees themselves),
+  but the name and date of birth sit on the Me page so a family member
+  using the phone can confirm whose record it is.
+
+### 18.4 Layout and navigation
+
+- Mobile first from 360px. One column, `max-w-2xl` centred on larger
+  screens, with 20px side gutters (24px from `sm`).
+- **Bottom tab bar** on phones (Home, Visits, Medicines, Results, Me),
+  56px plus the safe-area inset, labels always visible under the icons.
+  From `lg` the same five move to a top bar; the bottom bar hides.
+- Every tab page: a large title (28px), a one-line description, then
+  cards. Detail opens on its own route so the browser back button works.
+
+### 18.5 Tokens (in addition to section 2)
+
+| Token / rule      | Patient app                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| Body text         | 17px / 1.55, Atkinson Hyperlegible (`html` font-size 106.25%)                                                  |
+| Title             | 28px / 1.2, weight 700                                                                                         |
+| Section heading   | 19px, weight 700                                                                                               |
+| Small text        | never under 14px                                                                                               |
+| Card              | `rounded-2xl` (16px), white, 1px line border, soft card shadow, 20 to 24px padding                             |
+| Controls, buttons | 12px radius, 48px minimum height (thumb-sized)                                                                 |
+| Chips / status    | full pill                                                                                                      |
+| Hero card         | `brand-deep` background with `brand-deep-fg` text, used only for the live queue token and the next appointment |
+| Numbers           | Geist Mono for the token number only; everything else Atkinson                                                 |
+| Motion            | 150 to 200ms fades and press scale (0.98); none under reduced motion                                           |
+
+### 18.6 Pages
+
+| Route        | Purpose                                                           |
+| ------------ | ----------------------------------------------------------------- |
+| `/login`     | Sign in, links to sign up and to activate a clinic-issued account |
+| `/home`      | Live token, next appointment, things needing attention, shortcuts |
+| `/visits`    | Upcoming and past visits, with the doctor                         |
+| `/medicines` | Current medicines first, then past courses                        |
+| `/results`   | Test results by date, each value against its normal range         |
+| `/bills`     | Outstanding first, then paid receipts                             |
+| `/me`        | Name, date of birth, contact, allergies and conditions, sign out  |
+| `/messages`  | (next) conversations with the clinic                              |

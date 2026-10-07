@@ -1,120 +1,135 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { patientLoginSchema, type PatientLoginInput } from '@serenemed/validation';
-import { Button } from '@serenemed/ui';
 import { ApiError } from '@serenemed/api-client';
+import { AuthFrame } from '../../components/auth-frame';
+import { Field, FormError, TextInput, apiMessage } from '../../components/form';
+import { Button } from '../../components/ui';
 import { apiClient } from '../../lib/api-client';
 import { savePatientToken } from '../../lib/auth';
 
 /**
- * No Clinic ID field — a patient shouldn't have to know an internal
- * organizationId to sign in. The server resolves one automatically
- * (AuthController.resolveOrganizationId, env.DEFAULT_ORGANIZATION_ID)
- * when the request doesn't include it, which this form never does. See
- * patientLoginSchema's comment in @serenemed/validation for why this is
- * an optional field on the schema rather than removed outright — a
- * real multi-clinic resolution (subdomain, custom domain) can still
- * supply it explicitly later without a breaking change here.
+ * No Clinic ID field: a patient shouldn't need an internal organisation
+ * id to sign in. The server resolves it (AuthController
+ * .resolveOrganizationId, env.DEFAULT_ORGANIZATION_ID); see
+ * patientLoginSchema in @serenemed/validation.
  */
 export default function PatientLoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const expired = useSearchParams().get('expired') === '1';
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
-  } = useForm<PatientLoginInput>({
-    resolver: zodResolver(patientLoginSchema),
-  });
+  } = useForm<PatientLoginInput>({ resolver: zodResolver(patientLoginSchema) });
 
   const onSubmit = async (data: PatientLoginInput) => {
     setServerError(null);
     try {
       const result = await apiClient.post<{ accessToken: string }>('/auth/patient/login', data);
       savePatientToken(result.accessToken);
-      router.push('/dashboard');
+      router.push('/home');
     } catch (error) {
-      if (error instanceof ApiError) {
-        const message =
-          typeof error.body === 'object' && error.body && 'message' in error.body
-            ? String((error.body as { message: unknown }).message)
-            : 'Login failed.';
-        setServerError(message);
-      } else {
-        setServerError('Could not reach the server. Please try again.');
-      }
+      setServerError(
+        error instanceof ApiError
+          ? error.status === 429
+            ? 'Too many attempts. Please wait a minute and try again.'
+            : apiMessage(error.body, 'That email and password do not match.')
+          : 'We could not reach SereneMed. Check your connection and try again.',
+      );
     }
   };
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">Sign in</h1>
-        <p className="mb-6 text-sm text-slate-600">
-          Sign in to view your appointments and records.
+    <AuthFrame
+      title="Welcome back"
+      description="Sign in to see your visits, medicines and results."
+      footer={
+        <>
+          <p>
+            New to SereneMed?{' '}
+            <Link
+              href="/signup"
+              className="font-semibold text-primary underline underline-offset-4"
+            >
+              Create an account
+            </Link>
+          </p>
+          <p>
+            Got a code from the clinic?{' '}
+            <Link
+              href="/activate"
+              className="font-semibold text-primary underline underline-offset-4"
+            >
+              Activate your account
+            </Link>
+          </p>
+        </>
+      }
+    >
+      {expired && (
+        <p className="mb-6 rounded-xl bg-info-bg px-4 py-3 font-semibold text-info-fg">
+          You were signed out to keep your records safe. Please sign in again.
         </p>
+      )}
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
+        <Field label="Email" htmlFor="email" error={errors.email?.message} required>
+          <TextInput
+            id="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            aria-required="true"
+            invalid={!!errors.email}
+            {...register('email')}
+          />
+        </Field>
+        <Field label="Password" htmlFor="password" error={errors.password?.message} required>
+          <TextInput
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            aria-required="true"
+            invalid={!!errors.password}
+            {...register('password')}
+          />
+        </Field>
+        <FormError message={serverError} />
+        <Button type="submit" full loading={isSubmitting}>
+          {isSubmitting ? 'Signing in' : 'Sign in'}
+        </Button>
+      </form>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('email')}
-            />
-            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('password')}
-            />
-            {errors.password && (
-              <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
-            )}
-          </div>
-
-          {serverError && (
-            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              {serverError}
-            </p>
-          )}
-
-          <Button type="submit" disabled={isSubmitting} className="mt-2 w-full py-2.5">
-            {isSubmitting ? 'Signing in…' : 'Sign in'}
-          </Button>
-        </form>
-
-        <p className="mt-5 text-center text-sm text-slate-600">
-          New here?{' '}
-          <Link href="/signup" className="font-medium text-slate-900 underline">
-            Create an account
-          </Link>
-        </p>
-        <p className="mt-2 text-center text-sm text-slate-600">
-          Have an activation code from the clinic?{' '}
-          <Link href="/activate" className="font-medium text-slate-900 underline">
-            Activate your account
-          </Link>
-        </p>
-      </div>
-    </main>
+      {/* Local development only: the condition is false in production builds, so the
+          demo account never ships. Same guard as staff-web's demo-logins.tsx. */}
+      {process.env.NODE_ENV !== 'production' && (
+        <button
+          type="button"
+          onClick={() => {
+            setValue('email', 'patient@demo.local');
+            setValue('password', 'dev-password-123');
+          }}
+          className="mt-6 min-h-12 w-full cursor-pointer rounded-xl border border-dashed border-control px-4 text-fg-muted hover:bg-surface-muted"
+        >
+          Fill in the demo patient (development only)
+        </button>
+      )}
+    </AuthFrame>
   );
 }

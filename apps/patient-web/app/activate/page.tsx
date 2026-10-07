@@ -9,18 +9,18 @@ import {
   activatePatientAccountSchema,
   type ActivatePatientAccountInput,
 } from '@serenemed/validation';
-import { Button } from '@serenemed/ui';
 import { ApiError } from '@serenemed/api-client';
+import { AuthFrame } from '../../components/auth-frame';
+import { Field, FormError, TextInput, apiMessage } from '../../components/form';
+import { Button } from '../../components/ui';
 import { apiClient } from '../../lib/api-client';
 import { savePatientToken } from '../../lib/auth';
 
 /**
- * The patient's half of "Send Account Activation" — Reception issues a
- * code (POST /patients/:id/send-activation) and relays it in person;
- * this page is where the patient redeems it themselves and sets their
- * own password. Deliberately never something Reception fills in on the
- * patient's behalf — see PatientsService.createActivationCode's doc
- * comment on why there's no messaging integration behind this either.
+ * The patient's half of "Send Account Activation": reception issues a
+ * code (POST /patients/:id/send-activation) and gives it to the patient in
+ * person; the patient redeems it here and sets their own password. See
+ * PatientsService.createActivationCode for why no message carries it.
  */
 export default function PatientActivatePage() {
   const router = useRouter();
@@ -42,78 +42,68 @@ export default function PatientActivatePage() {
         code: data.code.trim().toUpperCase(),
       });
       savePatientToken(result.accessToken);
-      router.push('/dashboard');
+      router.push('/home');
     } catch (error) {
-      if (error instanceof ApiError) {
-        const message =
-          typeof error.body === 'object' && error.body && 'message' in error.body
-            ? String((error.body as { message: unknown }).message)
-            : 'Could not activate your account.';
-        setServerError(message);
-      } else {
-        setServerError('Could not reach the server. Please try again.');
-      }
+      setServerError(
+        error instanceof ApiError
+          ? apiMessage(error.body, 'That code did not work. Check it, or ask the front desk.')
+          : 'We could not reach SereneMed. Check your connection and try again.',
+      );
     }
   };
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">Activate your account</h1>
-        <p className="mb-6 text-sm text-slate-600">
-          Enter the code given to you at the clinic and choose a password.
-        </p>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-          <div>
-            <label htmlFor="code" className="mb-1 block text-sm font-medium text-slate-700">
-              Activation code
-            </label>
-            <input
-              id="code"
-              type="text"
-              autoComplete="off"
-              autoCapitalize="characters"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm uppercase tracking-widest focus:border-slate-500 focus:outline-none"
-              {...register('code')}
-            />
-            {errors.code && <p className="mt-1 text-xs text-red-600">{errors.code.message}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
-              Choose a password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('password')}
-            />
-            {errors.password && (
-              <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
-            )}
-          </div>
-
-          {serverError && (
-            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              {serverError}
-            </p>
-          )}
-
-          <Button type="submit" disabled={isSubmitting} className="mt-2 w-full py-2.5">
-            {isSubmitting ? 'Activating…' : 'Activate account'}
-          </Button>
-        </form>
-
-        <p className="mt-5 text-center text-sm text-slate-600">
+    <AuthFrame
+      title="Activate your account"
+      description="Enter the code the clinic gave you, then choose a password."
+      footer={
+        <p>
           Already activated?{' '}
-          <Link href="/login" className="font-medium text-slate-900 underline">
+          <Link href="/login" className="font-semibold text-primary underline underline-offset-4">
             Sign in
           </Link>
         </p>
-      </div>
-    </main>
+      }
+    >
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
+        <Field
+          label="Activation code"
+          htmlFor="code"
+          hint="It is on the slip from the front desk."
+          error={errors.code?.message}
+          required
+        >
+          <TextInput
+            id="code"
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            aria-required="true"
+            invalid={!!errors.code}
+            className="font-mono uppercase tracking-[0.3em]"
+            {...register('code')}
+          />
+        </Field>
+        <Field
+          label="Choose a password"
+          htmlFor="password"
+          hint="At least 8 characters."
+          error={errors.password?.message}
+          required
+        >
+          <TextInput
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            aria-required="true"
+            invalid={!!errors.password}
+            {...register('password')}
+          />
+        </Field>
+        <FormError message={serverError} />
+        <Button type="submit" full loading={isSubmitting}>
+          {isSubmitting ? 'Activating' : 'Activate account'}
+        </Button>
+      </form>
+    </AuthFrame>
   );
 }

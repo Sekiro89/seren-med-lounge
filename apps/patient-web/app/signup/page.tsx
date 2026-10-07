@@ -5,21 +5,43 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { patientSignupSchema, type PatientSignupInput } from '@serenemed/validation';
-import { Button } from '@serenemed/ui';
 import { ApiError } from '@serenemed/api-client';
+import { CheckCircle } from '@phosphor-icons/react';
+import { AuthFrame } from '../../components/auth-frame';
+import { Field, FormError, TextInput, apiMessage } from '../../components/form';
+import { Button, ButtonLink } from '../../components/ui';
 import { apiClient } from '../../lib/api-client';
 import { savePatientToken } from '../../lib/auth';
 
 /**
- * The gap the whole feature closes: before this page (and
- * POST /auth/patient/signup behind it) existed, a patient literally
- * could not create their own account — only staff could (POST
- * /patients), or the dev seed script. No Clinic ID field, same
- * reasoning as login/page.tsx's comment.
+ * Self sign-up (POST /auth/patient/signup). If the details match a record
+ * the clinic already has but not confidently enough to link on its own,
+ * the server answers `pending_verification` and the front desk confirms it
+ * (patient claim rules). No Clinic ID field, as on the sign-in page.
  */
 type SignupResponse =
   { status: 'active'; accessToken: string } | { status: 'pending_verification' };
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+// The shared schema plus plain-language messages and the checks a person
+// filling this in on a phone needs.
+const formSchema = patientSignupSchema.extend({
+  firstName: z.string().trim().min(1, 'Enter your first name.').max(100),
+  lastName: z.string().trim().min(1, 'Enter your last name.').max(100),
+  dateOfBirth: z
+    .string()
+    .date('Enter your date of birth.')
+    .refine((d) => d >= '1900-01-01' && d <= today(), 'Enter a real date of birth.'),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+?[\d\s-]{7,20}$/, 'Enter a phone number, digits only.'),
+  email: z.string().trim().email('Enter an email address, like name@example.com.'),
+  password: z.string().min(8, 'Use at least 8 characters.'),
+});
 
 export default function PatientSignupPage() {
   const router = useRouter();
@@ -30,178 +52,149 @@ export default function PatientSignupPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<PatientSignupInput>({
-    resolver: zodResolver(patientSignupSchema),
-  });
+  } = useForm<PatientSignupInput>({ resolver: zodResolver(formSchema) });
 
   const onSubmit = async (data: PatientSignupInput) => {
     setServerError(null);
     try {
       const result = await apiClient.post<SignupResponse>('/auth/patient/signup', data);
       if (result.status === 'pending_verification') {
-        // The details submitted couldn't be confidently matched to an
-        // account on their own (Patient Record Claim Rules — see
-        // PatientsService.selfRegister) — no session was issued, there's
-        // nothing to redirect into yet. A staff member resolves this;
-        // the patient just tries logging in again later.
         setPending(true);
         return;
       }
       savePatientToken(result.accessToken);
-      router.push('/dashboard');
+      router.push('/home');
     } catch (error) {
-      if (error instanceof ApiError) {
-        const message =
-          typeof error.body === 'object' && error.body && 'message' in error.body
-            ? String((error.body as { message: unknown }).message)
-            : 'Could not create your account.';
-        setServerError(message);
-      } else {
-        setServerError('Could not reach the server. Please try again.');
-      }
+      setServerError(
+        error instanceof ApiError
+          ? error.status === 409
+            ? 'An account with this email already exists. Try signing in.'
+            : apiMessage(error.body, 'We could not create your account.')
+          : 'We could not reach SereneMed. Check your connection and try again.',
+      );
     }
   };
 
   if (pending) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">
-        <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="mb-2 text-xl font-semibold text-slate-900">
-            We are verifying a few details
-          </h1>
-          <p className="text-sm text-slate-600">
-            We need to double check a few details before your account is ready. Our team will follow
-            up, or you can visit the clinic in person. Try signing in again later.
+      <AuthFrame
+        title="Almost there"
+        description="We need to check a few details before your account is ready."
+      >
+        <div className="flex flex-col items-start gap-4">
+          <CheckCircle size={40} weight="fill" className="text-success-fg" aria-hidden="true" />
+          <p className="text-fg-muted">
+            It looks like the clinic may already have a record for you. Our front desk will match it
+            to your new account so your history stays in one place. Try signing in again later, or
+            ask at the desk on your next visit.
           </p>
-          <Link
-            href="/login"
-            className="mt-5 inline-block text-sm font-medium text-slate-900 underline"
-          >
+          <ButtonLink href="/login" variant="secondary" full>
             Back to sign in
-          </Link>
+          </ButtonLink>
         </div>
-      </main>
+      </AuthFrame>
     );
   }
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-16">
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">Create your account</h1>
-        <p className="mb-6 text-sm text-slate-600">
-          Sign up to book appointments and see your records.
-        </p>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="firstName" className="mb-1 block text-sm font-medium text-slate-700">
-                First name
-              </label>
-              <input
-                id="firstName"
-                autoComplete="given-name"
-                className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-                {...register('firstName')}
-              />
-              {errors.firstName && (
-                <p className="mt-1 text-xs text-red-600">{errors.firstName.message}</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="lastName" className="mb-1 block text-sm font-medium text-slate-700">
-                Last name
-              </label>
-              <input
-                id="lastName"
-                autoComplete="family-name"
-                className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-                {...register('lastName')}
-              />
-              {errors.lastName && (
-                <p className="mt-1 text-xs text-red-600">{errors.lastName.message}</p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="dateOfBirth" className="mb-1 block text-sm font-medium text-slate-700">
-              Date of birth
-            </label>
-            <input
-              id="dateOfBirth"
-              type="date"
-              autoComplete="bday"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('dateOfBirth')}
-            />
-            {errors.dateOfBirth && (
-              <p className="mt-1 text-xs text-red-600">{errors.dateOfBirth.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="phone" className="mb-1 block text-sm font-medium text-slate-700">
-              Phone
-            </label>
-            <input
-              id="phone"
-              type="tel"
-              autoComplete="tel"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('phone')}
-            />
-            {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone.message}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('email')}
-            />
-            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              className="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm focus:border-slate-500 focus:outline-none"
-              {...register('password')}
-            />
-            {errors.password && (
-              <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>
-            )}
-          </div>
-
-          {serverError && (
-            <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              {serverError}
-            </p>
-          )}
-
-          <Button type="submit" disabled={isSubmitting} className="mt-2 w-full py-2.5">
-            {isSubmitting ? 'Creating account…' : 'Create account'}
-          </Button>
-        </form>
-
-        <p className="mt-5 text-center text-sm text-slate-600">
+    <AuthFrame
+      title="Create your account"
+      description="It takes a minute. Use the details the clinic has for you."
+      footer={
+        <p>
           Already have an account?{' '}
-          <Link href="/login" className="font-medium text-slate-900 underline">
+          <Link href="/login" className="font-semibold text-primary underline underline-offset-4">
             Sign in
           </Link>
         </p>
-      </div>
-    </main>
+      }
+    >
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <Field label="First name" htmlFor="firstName" error={errors.firstName?.message} required>
+            <TextInput
+              id="firstName"
+              autoComplete="given-name"
+              aria-required="true"
+              invalid={!!errors.firstName}
+              {...register('firstName')}
+            />
+          </Field>
+          <Field label="Last name" htmlFor="lastName" error={errors.lastName?.message} required>
+            <TextInput
+              id="lastName"
+              autoComplete="family-name"
+              aria-required="true"
+              invalid={!!errors.lastName}
+              {...register('lastName')}
+            />
+          </Field>
+        </div>
+        <Field
+          label="Date of birth"
+          htmlFor="dateOfBirth"
+          error={errors.dateOfBirth?.message}
+          required
+        >
+          <TextInput
+            id="dateOfBirth"
+            type="date"
+            autoComplete="bday"
+            max={today()}
+            aria-required="true"
+            invalid={!!errors.dateOfBirth}
+            {...register('dateOfBirth')}
+          />
+        </Field>
+        <Field
+          label="Mobile number"
+          htmlFor="phone"
+          hint="The number you gave the clinic."
+          error={errors.phone?.message}
+          required
+        >
+          <TextInput
+            id="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            aria-required="true"
+            invalid={!!errors.phone}
+            {...register('phone')}
+          />
+        </Field>
+        <Field label="Email" htmlFor="email" error={errors.email?.message} required>
+          <TextInput
+            id="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            aria-required="true"
+            invalid={!!errors.email}
+            {...register('email')}
+          />
+        </Field>
+        <Field
+          label="Password"
+          htmlFor="password"
+          hint="At least 8 characters."
+          error={errors.password?.message}
+          required
+        >
+          <TextInput
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            aria-required="true"
+            invalid={!!errors.password}
+            {...register('password')}
+          />
+        </Field>
+        <FormError message={serverError} />
+        <Button type="submit" full loading={isSubmitting}>
+          {isSubmitting ? 'Creating your account' : 'Create account'}
+        </Button>
+      </form>
+    </AuthFrame>
   );
 }

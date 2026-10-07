@@ -1,27 +1,113 @@
 @import 'tailwindcss';
 
 /*
- * Deliberately no `prefers-color-scheme: dark` variant — see
- * apps/staff-web/app/globals.css's comment for the full reasoning
- * (same scaffold, same bug: every component here is hardcoded to a
- * fixed light Tailwind palette, so flipping just `body`'s background
- * dark left text invisible for anyone with an OS dark theme).
+ * Patient app tokens: docs/design/DESIGN_SYSTEM.md sections 2 and 18.
+ * Same SereneMed teal and semantic names as staff-web, so a component
+ * reads the same in both apps; the patient app is airier (17px body,
+ * 16px card radius, 48px controls). Components use the semantic classes
+ * (bg-surface, text-fg-muted, bg-primary, ...) and never raw palette
+ * classes or hex values. Light only for now, like staff-web.
  */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f5f8f8;
+  --surface: #ffffff;
+  --surface-muted: #eef3f3;
+  --fg: #0f172a;
+  --fg-muted: #475569;
+  --fg-subtle: #64748b;
+  --line: #e2e8f0;
+  --control: #94a3b8;
+  --primary: #12706f;
+  --primary-hover: #0f5a5a;
+  --primary-subtle: #e6f4f2;
+  --primary-subtle-fg: #0e4a4a;
+  --on-primary: #ffffff;
+  --ring: #12706f;
+  --brand-deep: #0c3d3e;
+  --brand-deep-fg: #d8f0ee;
+
+  --success-fg: #15803d;
+  --success-bg: #f0fdf4;
+  --warning-fg: #92400e;
+  --warning-bg: #fffbeb;
+  --danger-fg: #b91c1c;
+  --danger-bg: #fef2f2;
+  --info-fg: #075985;
+  --info-bg: #f0f9ff;
+  --neutral-fg: #334155;
+  --neutral-bg: #f1f5f9;
+
   color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-line: var(--line);
+  --color-control: var(--control);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-subtle-fg: var(--primary-subtle-fg);
+  --color-on-primary: var(--on-primary);
+  --color-ring: var(--ring);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-deep-fg: var(--brand-deep-fg);
+  --color-success-fg: var(--success-fg);
+  --color-success-bg: var(--success-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-bg: var(--danger-bg);
+  --color-info-fg: var(--info-fg);
+  --color-info-bg: var(--info-bg);
+  --color-neutral-fg: var(--neutral-fg);
+  --color-neutral-bg: var(--neutral-bg);
+
+  --font-sans: var(--font-atkinson);
   --font-mono: var(--font-geist-mono);
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --shadow-lift: 0 8px 24px rgba(12, 61, 62, 0.18);
+}
+
+html {
+  /* 17px base: every rem-based size scales with it (section 18.5). */
+  font-size: 106.25%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-atkinson), system-ui, sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Room for the fixed bottom tab bar plus the phone's home indicator. */
+.pb-tabbar {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
   // tracing only looks inside apps/patient-web/ and misses the
   // @serenemed/* packages/workspace node_modules it actually needs.
   outputFileTracingRoot: path.join(__dirname, '../../'),
+  // Development only: keep the Next badge off the bottom tab bar.
+  devIndicators: { position: 'top-right' },
 };
 
 export default nextConfig;
