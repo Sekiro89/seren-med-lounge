@@ -14,6 +14,8 @@ import {
   requiredProps,
   rupeesError,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { formatDate, formatTime } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
@@ -67,7 +69,10 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
     [visits.data, patient],
   );
 
+  const clearError = makeClearError(setErrors, () => setError(undefined));
+
   const choosePatient = (p: PatientOption | undefined) => {
+    clearError('pp-patient', 'pp-visit');
     setPatient(p);
     setEncounterId('');
   };
@@ -145,7 +150,13 @@ function PlanForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
         </>
       }
     >
-      <form id="plan-procedure-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="plan-procedure-form"
+        onSubmit={submit}
+        onChange={clearOnEdit(clearError)}
+        noValidate
+        className="flex flex-col gap-5"
+      >
         <Field label={req('Patient')} htmlFor="pp-patient" error={errors['pp-patient']}>
           <PatientPicker id="pp-patient" value={patient} onChange={choosePatient} />
         </Field>

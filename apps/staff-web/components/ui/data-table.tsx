@@ -46,7 +46,7 @@ export function DataTable<T>({
   const showEmpty = !loading && rows !== undefined && rows.length === 0;
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto [background:linear-gradient(to_right,var(--surface)_30%,transparent),linear-gradient(to_left,var(--surface)_30%,transparent)_100%_0,radial-gradient(farthest-side_at_0_50%,rgba(15,23,42,0.12),transparent),radial-gradient(farthest-side_at_100%_50%,rgba(15,23,42,0.12),transparent)_100%_0] [background-attachment:local,local,scroll,scroll] [background-repeat:no-repeat] [background-size:40px_100%,40px_100%,14px_100%,14px_100%]">
       <table className="w-full border-collapse text-left text-sm">
         <thead>
           <tr className="border-b border-line bg-surface-muted">
@@ -54,7 +54,7 @@ export function DataTable<T>({
               <th
                 key={column.header}
                 scope="col"
-                className={`h-12 px-6 text-xs font-semibold uppercase tracking-wide text-fg-muted ${
+                className={`h-12 whitespace-nowrap px-4 text-xs sm:px-6 font-semibold uppercase tracking-wide text-fg-muted ${
                   column.align === 'right' ? 'text-right' : ''
                 }`}
               >
@@ -83,7 +83,7 @@ export function DataTable<T>({
                 {columns.map((column) => (
                   <td
                     key={column.header}
-                    className={`h-14 px-6 align-middle text-fg ${
+                    className={`h-14 px-4 align-middle sm:px-6 text-fg ${
                       column.align === 'right' ? 'tabular text-right' : ''
                     } ${column.className ?? ''}`}
                   >

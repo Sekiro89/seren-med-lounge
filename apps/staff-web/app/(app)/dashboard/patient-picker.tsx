@@ -72,7 +72,7 @@ export function PatientPicker({
   return (
     <div className="relative">
       <Field
-        label="Patient"
+        label="Patient *"
         htmlFor="patient-search"
         helper="Search by name or phone."
         error={error}

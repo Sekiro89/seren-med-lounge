@@ -32,6 +32,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { homeFor } from '../../../../lib/nav';
 import { can } from '../../../../lib/permissions';
@@ -361,6 +363,7 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
   const [error, setError] = useState<string>();
   const [blocked, setBlocked] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const outreach = ACTIVITY_TYPES.find((t) => t.value === type)?.outreach ?? false;
   const noConsent = !lead.consentToContact;
@@ -412,7 +415,12 @@ function Composer({ lead, onSaved }: { lead: LeadDetail; onSaved: () => void }) 
         title="Log activity"
         description="Record what you did, and when to follow up next."
       />
-      <form onSubmit={submit} noValidate className="flex flex-col gap-5 px-6 py-6">
+      <form
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError, { 'act-type': ['act-notes'] })}
+        className="flex flex-col gap-5 px-6 py-6"
+      >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label={req('What happened')} htmlFor="act-type" error={errors['act-type']}>
             <Select

@@ -44,7 +44,7 @@ export function PatientPicker({
 
   if (value) {
     return (
-      <Field label="Patient" htmlFor="case-patient">
+      <Field label="Patient *" htmlFor="case-patient">
         <div
           id="case-patient"
           className="flex items-center gap-3 rounded-control border border-control bg-surface-muted px-3 py-2"
@@ -69,7 +69,7 @@ export function PatientPicker({
   const term = query.trim();
   return (
     <Field
-      label="Patient"
+      label="Patient *"
       htmlFor="case-patient-search"
       error={error}
       helper="Search by name or phone number."

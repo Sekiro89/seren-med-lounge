@@ -9,6 +9,7 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { formatMoney } from '../../../../lib/format';
+import { clearOnEditRhf } from '../../../../lib/forms';
 import { errorText, rupeesToPaise, type InvoiceDetail } from './billing-types';
 import { PatientPicker, type PatientOption } from './patient-picker';
 
@@ -78,7 +79,11 @@ export function NewInvoiceDialog({
     reset,
     formState: { errors },
     setError,
-  } = useForm<FormValues>({ defaultValues: { patient: null, items: [blankItem()], notes: '' } });
+    clearErrors,
+  } = useForm<FormValues>({
+    reValidateMode: 'onSubmit',
+    defaultValues: { patient: null, items: [blankItem()], notes: '' },
+  });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const watched = useWatch({ control, name: 'items' });
   const total = (watched ?? []).reduce((sum, item) => sum + lineTotalPaise(item), 0);
@@ -142,7 +147,12 @@ export function NewInvoiceDialog({
         </>
       }
     >
-      <form onSubmit={submit} className="space-y-5" noValidate>
+      <form
+        onSubmit={submit}
+        onChange={clearOnEditRhf(clearErrors, () => setServerError(undefined))}
+        className="space-y-5"
+        noValidate
+      >
         <Controller
           control={control}
           name="patient"
@@ -150,7 +160,11 @@ export function NewInvoiceDialog({
           render={({ field }) => (
             <PatientPicker
               value={field.value}
-              onChange={field.onChange}
+              onChange={(value) => {
+                field.onChange(value);
+                clearErrors('patient');
+                setServerError(undefined);
+              }}
               error={errors.patient?.message}
             />
           )}

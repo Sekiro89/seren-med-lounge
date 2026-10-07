@@ -28,6 +28,7 @@ import { can } from '../../../lib/permissions';
 import { useStaff } from '../../../lib/staff-context';
 import { useApi } from '../../../lib/use-api';
 import { PatientPicker, type PatientSummary } from './patient-picker';
+import { clearOnEditRhf } from '../../../lib/forms';
 
 interface AppointmentRow {
   id: string;
@@ -170,6 +171,7 @@ export default function ConsultationsPage() {
 
   const appointmentForm = useForm<z.infer<typeof appointmentFormSchema>>({
     resolver: zodResolver(appointmentFormSchema),
+    reValidateMode: 'onSubmit',
     defaultValues: {
       patientId: '',
       entrySource: Object.values(AppointmentEntrySource)[0],
@@ -178,7 +180,12 @@ export default function ConsultationsPage() {
   });
   const patientForm = useForm<PatientRegistrationInput>({
     resolver: zodResolver(patientFormSchema),
+    reValidateMode: 'onSubmit',
   });
+  // One <form> wraps both react-hook-form instances; an edit clears that
+  // control's error in whichever one owns it, and the page-level error.
+  const clearAppointmentEdit = clearOnEditRhf(appointmentForm.clearErrors);
+  const clearPatientEdit = clearOnEditRhf(patientForm.clearErrors, () => setFormError(null));
 
   // Picking a patient (a new record, an existing one Reception confirmed,
   // or the claim-resolution endpoints below) always ends the same way:
@@ -410,6 +417,10 @@ export default function ConsultationsPage() {
             />
             <form
               onSubmit={appointmentForm.handleSubmit(onCreateAppointment)}
+              onChange={(event) => {
+                clearAppointmentEdit(event);
+                clearPatientEdit(event);
+              }}
               className="flex flex-col gap-4 p-5"
               noValidate
             >

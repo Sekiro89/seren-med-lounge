@@ -18,7 +18,7 @@ import { Field, Input, Select } from '../../../../components/ui/fields';
 import { Toolbar } from '../../../../components/ui/toolbar';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, humanize } from '../../../../lib/format';
-import { invalidProps, req, requiredProps } from '../../../../lib/forms';
+import { invalidProps, req, requiredProps, clearOnEditRhf } from '../../../../lib/forms';
 import type { ApiState } from '../../../../lib/use-api';
 
 export interface StaffRow {
@@ -211,9 +211,11 @@ function AddStaffDialog({
     handleSubmit,
     reset,
     setError,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
+    reValidateMode: 'onSubmit',
     defaultValues: { email: '', fullName: '', password: '', role: StaffRole.RECEPTION },
   });
 
@@ -259,7 +261,12 @@ function AddStaffDialog({
         </>
       }
     >
-      <form onSubmit={submit} noValidate className="flex flex-col gap-6">
+      <form
+        onSubmit={submit}
+        onChange={clearOnEditRhf(clearErrors, () => setServerError(undefined))}
+        noValidate
+        className="flex flex-col gap-6"
+      >
         <Field
           label={req('Full name')}
           htmlFor="staff-name"
@@ -390,7 +397,10 @@ function ChangeRoleDialog({
             id="change-role"
             value={role}
             {...requiredProps}
-            onChange={(e) => setRole(e.target.value)}
+            onChange={(e) => {
+              setRole(e.target.value);
+              setError(undefined);
+            }}
           >
             {ROLES.map((r) => (
               <option key={r} value={r}>

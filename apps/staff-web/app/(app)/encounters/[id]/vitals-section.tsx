@@ -12,6 +12,7 @@ import { apiClient } from '../../../../lib/api-client';
 import { formatDate, formatTime } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
 import { apiErrorMessage, type Vital } from './types';
+import { clearOnEditRhf } from '../../../../lib/forms';
 
 // min and max mirror recordVitalSchema so the browser and the schema agree.
 const FIELDS: {
@@ -65,8 +66,9 @@ export function VitalsSection({
   onChange: () => void;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
-  const { register, handleSubmit, reset, formState } = useForm<RecordVitalInput>({
+  const { register, handleSubmit, reset, clearErrors, formState } = useForm<RecordVitalInput>({
     resolver: zodResolver(recordVitalSchema),
+    reValidateMode: 'onSubmit',
     defaultValues: { encounterId },
   });
 
@@ -109,7 +111,12 @@ export function VitalsSection({
         )}
 
         {can(role, 'vitals:write') && (
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            onChange={clearOnEditRhf(clearErrors, () => setFormError(null), { '*': [''] })}
+            className="flex flex-col gap-4"
+            noValidate
+          >
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
               {FIELDS.map((field) => (
                 <Field

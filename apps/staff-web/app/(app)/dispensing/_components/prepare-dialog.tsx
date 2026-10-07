@@ -10,6 +10,7 @@ import { Field, Input, Select, Textarea } from '../../../../components/ui/fields
 import { SearchBox } from '../../../../components/ui/search-box';
 import { apiClient } from '../../../../lib/api-client';
 import { clinicToday, formatDate, fullName } from '../../../../lib/format';
+import { clearOnEdit, makeClearError, type FieldErrors } from '../../../../lib/forms';
 import { useApi } from '../../../../lib/use-api';
 import type { BatchRow, MedicationOption, PendingItem } from './types';
 
@@ -55,8 +56,11 @@ function PrepareBody({
   const [quantity, setQuantity] = useState('');
   const [mode, setMode] = useState<'PICKUP' | 'HOME_DELIVERY'>('PICKUP');
   const [address, setAddress] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string>();
+  const clearBase = makeClearError(setErrors, () => setServerError(undefined));
+  // Any edit also drops the form-level "check the details" message.
+  const clearError = (...keys: string[]) => clearBase(...keys, 'form');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ batchNumber: string; quantity: number }[]>();
 
@@ -88,7 +92,7 @@ function PrepareBody({
       mode,
       deliveryAddress: mode === 'HOME_DELIVERY' ? address.trim() || undefined : undefined,
     });
-    const next: Record<string, string> = {};
+    const next: FieldErrors = {};
     if (!medicationId) next.medicationId = 'Choose the medicine to dispense.';
     const units = Number(quantity);
     if (quantity === '' || !Number.isInteger(units) || units < 1) {
@@ -170,7 +174,18 @@ function PrepareBody({
         </>
       }
     >
-      <form id="prepare-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
+      <form
+        id="prepare-form"
+        onSubmit={submit}
+        onChange={clearOnEdit(clearError, {
+          'med-select': ['medicationId', 'quantity'],
+          qty: ['quantity'],
+          mode: ['deliveryAddress'],
+          addr: ['deliveryAddress'],
+        })}
+        noValidate
+        className="flex flex-col gap-4"
+      >
         {serverError && (
           <p role="alert" className="rounded-control bg-danger-bg px-3 py-2 text-sm text-danger-fg">
             {serverError}

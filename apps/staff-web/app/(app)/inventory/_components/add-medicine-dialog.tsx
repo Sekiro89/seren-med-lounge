@@ -8,7 +8,7 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { humanize } from '../../../../lib/format';
-import { invalidProps, req, requiredProps } from '../../../../lib/forms';
+import { invalidProps, req, requiredProps, clearOnEditRhf } from '../../../../lib/forms';
 import { FormError, rupeesToPaise, serverMessage } from './shared';
 
 const FORMS = ['TABLET', 'CAPSULE', 'SYRUP', 'INJECTION', 'CREAM', 'DROPS', 'INHALER', 'OTHER'];
@@ -42,7 +42,7 @@ export function AddMedicineDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const { register, handleSubmit, setError, formState } = useForm<Values>({
+  const { register, handleSubmit, setError, clearErrors, formState } = useForm<Values>({
     defaultValues: EMPTY,
   });
   const [busy, setBusy] = useState(false);
@@ -113,7 +113,13 @@ export function AddMedicineDialog({
         </>
       }
     >
-      <form id="add-medicine-form" onSubmit={submit} className="space-y-4" noValidate>
+      <form
+        id="add-medicine-form"
+        onSubmit={submit}
+        className="space-y-4"
+        noValidate
+        onChange={clearOnEditRhf(clearErrors, () => setServerError(undefined))}
+      >
         <FormError message={serverError} />
         <Field label={req('Name')} htmlFor="med-name" error={errors.name?.message}>
           <Input

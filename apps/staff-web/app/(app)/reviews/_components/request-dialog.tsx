@@ -75,7 +75,7 @@ export function RequestDialog({
       }
     >
       <div className="flex flex-col gap-6">
-        <Field label="Patient" htmlFor="review-patient">
+        <Field label="Patient *" htmlFor="review-patient">
           <PatientPicker id="review-patient" value={patient} onChange={setPatient} />
         </Field>
         <Field label="Stage" htmlFor="review-stage" helper={hint}>

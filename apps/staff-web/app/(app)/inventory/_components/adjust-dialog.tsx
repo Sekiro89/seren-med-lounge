@@ -7,7 +7,7 @@ import { Button } from '../../../../components/ui/button';
 import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
-import { invalidProps, req, requiredProps } from '../../../../lib/forms';
+import { invalidProps, req, requiredProps, clearOnEditRhf } from '../../../../lib/forms';
 import { FormError, medicineLabel, serverMessage, type BatchRow } from './shared';
 
 interface Values {
@@ -27,7 +27,7 @@ export function AdjustDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const { register, handleSubmit, setError, control, formState } = useForm<Values>({
+  const { register, handleSubmit, setError, clearErrors, control, formState } = useForm<Values>({
     defaultValues: EMPTY,
   });
   const [busy, setBusy] = useState(false);
@@ -101,7 +101,15 @@ export function AdjustDialog({
         </>
       }
     >
-      <form id="adjust-stock-form" onSubmit={submit} className="space-y-4" noValidate>
+      <form
+        id="adjust-stock-form"
+        onSubmit={submit}
+        className="space-y-4"
+        noValidate
+        onChange={clearOnEditRhf(clearErrors, () => setServerError(undefined), {
+          type: ['quantityDelta'],
+        })}
+      >
         <FormError message={serverError} />
         <Field label={req('Type')} htmlFor="adj-type">
           <Select id="adj-type" {...requiredProps} {...register('type')}>

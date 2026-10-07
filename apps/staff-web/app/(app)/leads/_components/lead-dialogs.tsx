@@ -15,6 +15,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { PatientPicker, type PatientOption } from './patient-picker';
 import { FormError, leadName, messageOf, type LeadDetail } from './shared';
@@ -48,6 +50,7 @@ function LostForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -92,7 +95,13 @@ function LostForm({
         </>
       }
     >
-      <form id="lost-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="lost-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-5"
+      >
         <Field
           label={req('Why was this lead lost')}
           htmlFor="lost-reason"
@@ -153,6 +162,7 @@ function ConvertForm({
   const [error, setError] = useState<string>();
   const [review, setReview] = useState<PendingReview>();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -256,7 +266,13 @@ function ConvertForm({
         </>
       }
     >
-      <form id="convert-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="convert-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-5"
+      >
         <Field label={req('How should the patient record be made')} htmlFor="convert-mode">
           <Select
             id="convert-mode"
@@ -305,7 +321,14 @@ function ConvertForm({
           </>
         ) : (
           <Field label={req('Patient')} htmlFor="convert-patient" error={errors['convert-patient']}>
-            <PatientPicker id="convert-patient" value={patient} onChange={setPatient} />
+            <PatientPicker
+              id="convert-patient"
+              value={patient}
+              onChange={(p) => {
+                setPatient(p);
+                clearError('convert-patient');
+              }}
+            />
           </Field>
         )}
         <FormError message={error} />

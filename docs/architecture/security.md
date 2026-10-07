@@ -272,8 +272,8 @@ unlimited password-guessing against `POST /auth/login`. Fixed with
   _before_ `JwtAuthGuard` so abusive traffic is rejected before spending
   any work on JWT verification or a Redis blacklist lookup.
 - `POST /auth/login` overrides this with `@Throttle({ default: { limit:
-5, ttl: 60_000 } })` — 5 attempts/minute per IP. Verified live against a
-  clean server: attempts 1–5 returned `401` (wrong password), attempt 6
+20, ttl: 60_000 } })` — 20 attempts/minute per IP (raised from 5 so a clinic's 11 staff roles can sign in from one network; patient login and signup are 10/min). Verified live against a
+  clean server: with the earlier limit of 5, attempts 1–5 returned `401` (wrong password), attempt 6
   returned `429`.
 - Storage is Redis-backed (`@nest-lab/throttler-storage-redis`, sharing
   `RedisService`'s existing connection rather than opening a second one

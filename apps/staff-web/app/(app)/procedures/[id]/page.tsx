@@ -25,6 +25,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { formatDate, formatMoney, formatTime, fullName, humanize } from '../../../../lib/format';
 import { homeFor } from '../../../../lib/nav';
@@ -80,6 +82,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
   const [newItem, setNewItem] = useState('');
   const [documentId, setDocumentId] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setFieldErrors, () => setError(undefined));
 
   if (!allowed) {
     return (
@@ -391,6 +394,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                   <form
                     onSubmit={attach}
                     noValidate
+                    onChange={clearOnEdit(clearError)}
                     className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
                   >
                     <div className="min-w-56 flex-1">
@@ -487,6 +491,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                   <form
                     onSubmit={addItem}
                     noValidate
+                    onChange={clearOnEdit(clearError)}
                     className="mt-4 flex max-w-lg flex-wrap items-end gap-3"
                   >
                     <div className="min-w-56 flex-1">

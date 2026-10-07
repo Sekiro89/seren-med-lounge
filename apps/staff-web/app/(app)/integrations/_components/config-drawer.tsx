@@ -18,6 +18,7 @@ import {
   isEmail,
   requiredProps,
   type FieldErrors,
+  makeClearError,
 } from '../../../../lib/forms';
 import { connectionStatus, serverMessage, whenText } from './shared';
 
@@ -63,7 +64,11 @@ export function ConfigDrawer({
     return (values[field.key] ?? '').trim() !== '';
   });
 
-  const edit = () => setSaved(false);
+  const clearError = makeClearError(setErrors, () => setError(undefined));
+  const edit = (id?: string) => {
+    setSaved(false);
+    clearError(...(id ? [id] : []));
+  };
 
   /** Errors are never given the secret text itself, only the field's label. */
   function validate(): FieldErrors {
@@ -242,7 +247,7 @@ export function ConfigDrawer({
                     type="password"
                     value={secrets[field.key] ?? ''}
                     onChange={(event) => {
-                      edit();
+                      edit(id);
                       setSecrets({ ...secrets, [field.key]: event.target.value });
                     }}
                     {...NO_FILL}
@@ -293,7 +298,7 @@ export function ConfigDrawer({
                     value={values[field.key] ?? ''}
                     {...ariaProps}
                     onChange={(event) => {
-                      edit();
+                      edit(id);
                       setValues({ ...values, [field.key]: event.target.value });
                     }}
                   >
@@ -311,7 +316,7 @@ export function ConfigDrawer({
                     type={field.kind === 'url' ? 'url' : 'text'}
                     value={values[field.key] ?? ''}
                     onChange={(event) => {
-                      edit();
+                      edit(id);
                       setValues({ ...values, [field.key]: event.target.value });
                     }}
                     {...NO_FILL}

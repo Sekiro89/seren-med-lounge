@@ -14,6 +14,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { messageOf, localToIso, type DoctorOption, type FollowUpRow } from './helpers';
 import { PatientPicker, type PatientOption } from './patient-picker';
@@ -110,6 +112,7 @@ function NewFollowUpForm({
     onSaved();
     onClose();
   });
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -159,9 +162,22 @@ function NewFollowUpForm({
         </>
       }
     >
-      <form id="new-follow-up-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
+      <form
+        id="new-follow-up-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-4"
+      >
         <Field label={req('Patient')} htmlFor="fu-patient" error={errors['fu-patient']}>
-          <PatientPicker id="fu-patient" value={patient} onChange={setPatient} />
+          <PatientPicker
+            id="fu-patient"
+            value={patient}
+            onChange={(p) => {
+              setPatient(p);
+              clearError('fu-patient');
+            }}
+          />
         </Field>
         <Field label={req('Type')} htmlFor="fu-type" error={errors['fu-type']}>
           <Select
@@ -254,6 +270,7 @@ function RowActionForm({
     onSaved();
     onClose();
   });
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const open = true;
   const who = fullName(row.patient);
@@ -344,7 +361,13 @@ function RowActionForm({
         </>
       }
     >
-      <form id="row-action-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
+      <form
+        id="row-action-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-4"
+      >
         {(action === 'done' || action === 'missed') && (
           <Field label="Outcome (optional)" htmlFor="fu-outcome" error={errors['fu-outcome']}>
             <Textarea

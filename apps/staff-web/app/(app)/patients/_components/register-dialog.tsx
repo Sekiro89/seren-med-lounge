@@ -13,6 +13,7 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { clinicToday, formatDate, fullName } from '../../../../lib/format';
+import { clearOnEditRhf } from '../../../../lib/forms';
 import { ageLabel, apiMessage, type PatientProfile } from './patient-shared';
 
 type RegisterResult =
@@ -104,8 +105,9 @@ function RegisterFlow({
   const {
     register,
     handleSubmit,
+    clearErrors,
     formState: { errors, isSubmitting },
-  } = useForm<PatientRegistrationInput>({ resolver });
+  } = useForm<PatientRegistrationInput>({ resolver, reValidateMode: 'onSubmit' });
 
   const openRecord = (patient: PatientProfile) => {
     onClose();
@@ -321,7 +323,11 @@ function RegisterFlow({
   }
 
   return (
-    <form onSubmit={submit} noValidate>
+    <form
+      onSubmit={submit}
+      onChange={clearOnEditRhf(clearErrors, () => setError(undefined))}
+      noValidate
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="First name" htmlFor="reg-first" error={errors.firstName?.message}>
           <Input

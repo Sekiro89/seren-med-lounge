@@ -4,6 +4,8 @@
  * entry to <Field error>. The Zod schemas stay the source of truth for the
  * server rules; these cover the format checks the UI adds on top.
  */
+import type { Dispatch, FormEvent, SetStateAction } from 'react';
+import type { FieldValues, Path, UseFormClearErrors } from 'react-hook-form';
 import type { ZodError } from 'zod';
 
 export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
@@ -22,6 +24,71 @@ export const invalidProps = (error: string | undefined) =>
 export function focusFirst(errors: FieldErrors, order: string[]): void {
   const first = order.find((id) => errors[id]);
   if (first) window.setTimeout(() => document.getElementById(first)?.focus(), 0);
+}
+
+/** Returns `errors` without `keys`; the same object when none were set, so React skips the render. */
+export function withoutErrors(errors: FieldErrors, keys: string[]): FieldErrors {
+  if (!keys.some((k) => errors[k] !== undefined)) return errors;
+  const next = { ...errors };
+  for (const k of keys) delete next[k];
+  return next;
+}
+
+/**
+ * Builds `clearError(...keys)`: drops those inline errors (and runs `onEdit`,
+ * normally the form-level server error reset) as soon as a field is edited.
+ * Called with no keys it only runs `onEdit`. It never re-validates.
+ */
+export function makeClearError(
+  setErrors: Dispatch<SetStateAction<FieldErrors>>,
+  onEdit?: () => void,
+) {
+  return (...keys: string[]) => {
+    if (keys.length) setErrors((prev) => withoutErrors(prev, keys));
+    onEdit?.();
+  };
+}
+
+/**
+ * Form-level `onChange` that clears the error of the edited control (matched by
+ * its id). `groups` maps a control id to extra error keys cleared with it, for
+ * group errors such as "add at least one row".
+ */
+export function clearOnEdit(
+  clearError: (...keys: string[]) => void,
+  groups: Record<string, string[]> = {},
+) {
+  return (event: FormEvent<HTMLElement>) => {
+    const id = (event.target as HTMLElement).id;
+    clearError(...(id ? [id, ...(groups[id] ?? [])] : []));
+  };
+}
+
+/**
+ * Same idea for react-hook-form forms: a form-level `onChange` that clears the
+ * edited control's error (by its registered `name`, plus any `groups` extras)
+ * and runs `onEdit`, normally the form-level server error reset.
+ */
+export function clearOnEditRhf<V extends FieldValues>(
+  clearErrors: UseFormClearErrors<V>,
+  onEdit?: () => void,
+  groups: Record<string, string[]> = {},
+) {
+  return (event: FormEvent<HTMLElement>) => {
+    const name = (event.target as HTMLInputElement).name;
+    // '*' lists keys cleared by any edit, such as the form-wide '' key of a refine() rule.
+    const keys = [...(name ? [name, ...(groups[name] ?? [])] : []), ...(groups['*'] ?? [])];
+    if (keys.length) clearErrors(keys as Path<V>[]);
+    onEdit?.();
+  };
+}
+
+/** Clears named errors of a react-hook-form form, for keys the field types do not list (such as `items.root`). */
+export function clearKeysRhf<V extends FieldValues>(
+  clearErrors: UseFormClearErrors<V>,
+  keys: string[],
+) {
+  clearErrors(keys as Path<V>[]);
 }
 
 /** True when the map holds no errors. */

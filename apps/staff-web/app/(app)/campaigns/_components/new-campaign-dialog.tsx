@@ -15,6 +15,8 @@ import {
   requiredProps,
   rupeesError,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { FormError, messageOf } from '../../leads/_components/shared';
 import { CAMPAIGN_TYPES, TYPE_LABELS, dateToIso, type CampaignRow } from './shared';
@@ -47,6 +49,7 @@ function NewCampaignForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const isCamp = type === 'HEALTH_CAMP';
 
@@ -127,7 +130,17 @@ function NewCampaignForm({
         </>
       }
     >
-      <form id="new-campaign-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="new-campaign-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError, {
+          'camp-type': ['camp-location', 'camp-start'],
+          'camp-start': ['camp-end'],
+          'camp-end': ['camp-start'],
+        })}
+        className="flex flex-col gap-5"
+      >
         <Field label={req('Name')} htmlFor="camp-name" error={errors['camp-name']}>
           <Input
             id="camp-name"

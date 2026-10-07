@@ -13,6 +13,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { humanize } from '../../../../lib/format';
 import { PatientPicker, type PatientOption } from '../../follow-ups/_components/patient-picker';
@@ -53,6 +55,7 @@ function NewTaskForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -117,7 +120,13 @@ function NewTaskForm({
         </>
       }
     >
-      <form id="new-task-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
+      <form
+        id="new-task-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-4"
+      >
         <Field label={req('Title')} htmlFor="task-title" error={errors['task-title']}>
           <Input
             id="task-title"

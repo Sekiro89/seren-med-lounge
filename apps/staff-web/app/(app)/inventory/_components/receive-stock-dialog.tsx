@@ -8,7 +8,7 @@ import { Dialog } from '../../../../components/ui/dialog';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { clinicToday } from '../../../../lib/format';
-import { invalidProps, req, requiredProps } from '../../../../lib/forms';
+import { invalidProps, req, requiredProps, clearOnEditRhf } from '../../../../lib/forms';
 import { FormError, medicineLabel, rupeesToPaise, serverMessage, type Medication } from './shared';
 
 interface Values {
@@ -42,7 +42,7 @@ export function ReceiveStockDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const { register, handleSubmit, setError, formState } = useForm<Values>({
+  const { register, handleSubmit, setError, clearErrors, formState } = useForm<Values>({
     defaultValues: { ...EMPTY, medicationId: initialMedicationId ?? '' },
   });
   const [busy, setBusy] = useState(false);
@@ -121,7 +121,13 @@ export function ReceiveStockDialog({
         </>
       }
     >
-      <form id="receive-stock-form" onSubmit={submit} className="space-y-4" noValidate>
+      <form
+        id="receive-stock-form"
+        onSubmit={submit}
+        className="space-y-4"
+        noValidate
+        onChange={clearOnEditRhf(clearErrors, () => setServerError(undefined))}
+      >
         <FormError message={serverError} />
         <Field label={req('Medicine')} htmlFor="rs-med" error={errors.medicationId?.message}>
           <Select

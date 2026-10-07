@@ -11,7 +11,7 @@ import { apiClient } from '../../lib/api-client';
 import { saveStaffSession, type StaffUser } from '../../lib/auth';
 import { homeFor } from '../../lib/nav';
 import { Field, Input } from '../../components/ui/fields';
-import { invalidProps, req, requiredProps } from '../../lib/forms';
+import { invalidProps, req, requiredProps, clearOnEditRhf } from '../../lib/forms';
 import { Button } from '../../components/ui/button';
 import { Logo } from '../../components/shell/logo';
 import { DemoLogins } from './demo-logins';
@@ -29,9 +29,11 @@ export default function StaffLoginPage() {
     handleSubmit,
     setValue,
     getValues,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
+    reValidateMode: 'onSubmit',
   });
 
   const onSubmit = async (data: LoginInput) => {
@@ -125,7 +127,12 @@ export default function StaffLoginPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-fg">Welcome back</h1>
           <p className="mb-8 mt-2 text-sm text-fg-muted">Sign in to your clinic workspace.</p>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            onChange={clearOnEditRhf(clearErrors, () => setServerError(null))}
+            className="flex flex-col gap-5"
+            noValidate
+          >
             <Field label={req('Email')} htmlFor="email" error={emailMessage}>
               <Input
                 id="email"

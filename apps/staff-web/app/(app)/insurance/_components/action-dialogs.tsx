@@ -14,6 +14,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import {
   errorText,
@@ -49,6 +51,7 @@ export function TransitionDialog({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string>();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
   const [busy, setBusy] = useState(false);
 
   const close = () => {
@@ -121,6 +124,7 @@ export function TransitionDialog({
       <form
         className="flex flex-col gap-6"
         noValidate
+        onChange={clearOnEdit(clearError)}
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
@@ -206,6 +210,7 @@ export function SettleDialog({
   const [reference, setReference] = useState('');
   const [error, setError] = useState<string>();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
   const [busy, setBusy] = useState(false);
 
   const close = () => {
@@ -270,6 +275,7 @@ export function SettleDialog({
       <form
         className="flex flex-col gap-6"
         noValidate
+        onChange={clearOnEdit(clearError)}
         onSubmit={(e) => {
           e.preventDefault();
           void submit();

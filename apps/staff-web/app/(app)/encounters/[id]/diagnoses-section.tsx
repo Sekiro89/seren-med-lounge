@@ -18,6 +18,7 @@ import { Field, Input, Textarea } from '../../../../components/ui/fields';
 import { apiClient } from '../../../../lib/api-client';
 import { can } from '../../../../lib/permissions';
 import { apiErrorMessage, isUnsigned, type Diagnosis } from './types';
+import { clearOnEditRhf } from '../../../../lib/forms';
 
 const DESCRIPTION_MAX = 2000;
 
@@ -34,8 +35,9 @@ function descriptionError(error: { type?: string } | undefined): string | undefi
 
 function AmendForm({ diagnosisId, onDone }: { diagnosisId: string; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
-  const { register, handleSubmit, formState } = useForm<DiagnosisContentInput>({
+  const { register, handleSubmit, clearErrors, formState } = useForm<DiagnosisContentInput>({
     resolver: zodResolver(diagnosisContentSchema),
+    reValidateMode: 'onSubmit',
     defaultValues: { icdCode: '', description: '' },
   });
 
@@ -55,6 +57,7 @@ function AmendForm({ diagnosisId, onDone }: { diagnosisId: string; onDone: () =>
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
+      onChange={clearOnEditRhf(clearErrors, () => setError(null))}
       className="mt-3 flex flex-col gap-3 border-t border-line pt-3"
       noValidate
     >
@@ -117,10 +120,12 @@ export function DiagnosesSection({
   const [confirming, setConfirming] = useState<Diagnosis | null>(null);
   const [signingOff, setSigningOff] = useState(false);
 
-  const { register, handleSubmit, reset, formState } = useForm<CreateDiagnosisDraftInput>({
-    resolver: zodResolver(createDiagnosisDraftSchema),
-    defaultValues: { encounterId, icdCode: '', description: '' },
-  });
+  const { register, handleSubmit, reset, clearErrors, formState } =
+    useForm<CreateDiagnosisDraftInput>({
+      resolver: zodResolver(createDiagnosisDraftSchema),
+      reValidateMode: 'onSubmit',
+      defaultValues: { encounterId, icdCode: '', description: '' },
+    });
 
   const onSubmit = async (data: CreateDiagnosisDraftInput) => {
     setFormError(null);
@@ -219,7 +224,12 @@ export function DiagnosesSection({
         )}
 
         {can(role, 'diagnosis:write-draft') && (
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            onChange={clearOnEditRhf(clearErrors, () => setFormError(null))}
+            className="flex flex-col gap-4"
+            noValidate
+          >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_1fr]">
               <Field
                 label="ICD code (optional)"

@@ -222,7 +222,10 @@ export default function InsuranceCasePage({ params }: { params: Promise<{ id: st
                   {...requiredProps}
                   {...invalidProps(noteError)}
                   value={note}
-                  onChange={(e) => setNote(e.target.value)}
+                  onChange={(e) => {
+                    setNote(e.target.value);
+                    setNoteError(undefined);
+                  }}
                 />
               </Field>
               <div>

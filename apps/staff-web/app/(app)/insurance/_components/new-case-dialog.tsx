@@ -15,6 +15,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { can } from '../../../../lib/permissions';
 import { useStaff } from '../../../../lib/staff-context';
@@ -58,6 +60,7 @@ export function NewCaseDialog({
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const policies = useApi<PolicyRow[]>(
     open && patient ? `/insurance/policies?patientId=${encodeURIComponent(patient.id)}` : null,
@@ -184,6 +187,7 @@ export function NewCaseDialog({
       <form
         className="flex flex-col gap-6"
         noValidate
+        onChange={clearOnEdit(clearError, { 'case-patient-search': ['case-patient'] })}
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
@@ -228,6 +232,7 @@ export function NewCaseDialog({
                               onChange={() => {
                                 setPolicyId(p.id);
                                 setAddingPolicy(false);
+                                clearError('policy-choice');
                               }}
                             />
                             <span className="min-w-0 text-sm">
@@ -312,7 +317,10 @@ export function NewCaseDialog({
                     {active.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setAddingPolicy(false)}
+                        onClick={() => {
+                          setAddingPolicy(false);
+                          clearError('policy-choice');
+                        }}
                         className="cursor-pointer self-start text-[13px] font-medium text-primary hover:text-primary-hover"
                       >
                         Use an existing policy instead
@@ -322,7 +330,10 @@ export function NewCaseDialog({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setAddingPolicy(true)}
+                    onClick={() => {
+                      setAddingPolicy(true);
+                      clearError('policy-choice');
+                    }}
                     className="cursor-pointer self-start text-[13px] font-medium text-primary hover:text-primary-hover"
                   >
                     Add a different policy

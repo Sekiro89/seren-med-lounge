@@ -58,12 +58,12 @@ export class AuthController {
 
   // Much stricter than the app-wide default (100/min) — this is a
   // public, unauthenticated endpoint that checks a password, i.e.
-  // exactly what brute-forcing targets. 5 attempts/minute per IP is
-  // generous for a real user (mistypes a password a couple of times)
-  // and expensive for an attacker (300/hour max, tracked per source IP —
+  // exactly what brute-forcing targets. 20 attempts/minute per IP leaves
+  // room for a whole clinic (11 staff roles) signing in from one network
+  // while staying expensive for an attacker (1200/hour max, tracked per source IP —
   // see docs/architecture/security.md#rate-limiting for what this does
   // and doesn't protect against).
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Public()
   @Post('login')
   login(@Body(new ZodValidationPipe(loginSchema)) body: LoginInput) {
@@ -93,7 +93,7 @@ export class AuthController {
    * staff login) — see patientLoginSchema's comment and
    * resolveOrganizationId above.
    */
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Public()
   @Post('patient/login')
   patientLogin(@Body(new ZodValidationPipe(patientLoginSchema)) body: PatientLoginInput) {
@@ -114,7 +114,7 @@ export class AuthController {
    * signup above (also public, and account creation is exactly the kind
    * of endpoint spam-signup abuse targets).
    */
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Public()
   @Post('patient/signup')
   patientSignup(@Body(new ZodValidationPipe(patientSignupSchema)) body: PatientSignupInput) {
@@ -128,7 +128,7 @@ export class AuthController {
    * login/signup above: it's a public code+password endpoint, the same
    * shape of thing brute-forcing targets.
    */
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Public()
   @Post('patient/activate')
   patientActivate(

@@ -18,6 +18,8 @@ import {
   requiredProps,
   rupeesError,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import {
   isoToLocal,
@@ -70,6 +72,7 @@ export function EstimateDialog({ procedure, onClose, onSaved }: Props) {
     onClose();
   });
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -104,7 +107,13 @@ export function EstimateDialog({ procedure, onClose, onSaved }: Props) {
         </>
       }
     >
-      <form id="estimate-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="estimate-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-5"
+      >
         <Field label={req('Estimate in rupees')} htmlFor="est-amount" error={errors['est-amount']}>
           <Input
             id="est-amount"
@@ -135,6 +144,7 @@ export function ScheduleDialog({
     onClose();
   });
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -178,7 +188,13 @@ export function ScheduleDialog({
         </>
       }
     >
-      <form id="schedule-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="schedule-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-5"
+      >
         <Field label={req('Date and time')} htmlFor="sch-when" error={errors['sch-when']}>
           <Input
             id="sch-when"
@@ -232,6 +248,7 @@ export function CancelProcedureDialog({ procedure, onClose, onSaved }: Props) {
   });
   const who = `${procedure.patient.firstName} ${procedure.patient.lastName}`.trim();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -268,7 +285,13 @@ export function CancelProcedureDialog({ procedure, onClose, onSaved }: Props) {
         </>
       }
     >
-      <form id="cancel-procedure-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="cancel-procedure-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError)}
+        className="flex flex-col gap-5"
+      >
         <Field label={req('Reason')} htmlFor="cp-reason" error={errors['cp-reason']}>
           <Textarea
             id="cp-reason"

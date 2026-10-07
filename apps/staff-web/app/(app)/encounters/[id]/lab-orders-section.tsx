@@ -20,6 +20,7 @@ import { apiClient } from '../../../../lib/api-client';
 import { formatDate, humanize } from '../../../../lib/format';
 import { can } from '../../../../lib/permissions';
 import { apiErrorMessage, orderTone, type LabOrder, type LabOrderItem } from './types';
+import { clearKeysRhf, clearOnEditRhf } from '../../../../lib/forms';
 
 const EMPTY_ITEM = { testName: '' };
 
@@ -34,8 +35,9 @@ function itemErrorsOf(errors: unknown, index: number) {
 
 function RecordResultForm({ item, onDone }: { item: LabOrderItem; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
-  const { register, handleSubmit, formState } = useForm<RecordLabResultInput>({
+  const { register, handleSubmit, clearErrors, formState } = useForm<RecordLabResultInput>({
     resolver: zodResolver(recordLabResultSchema),
+    reValidateMode: 'onSubmit',
   });
 
   const onSubmit = async (data: RecordLabResultInput) => {
@@ -52,6 +54,7 @@ function RecordResultForm({ item, onDone }: { item: LabOrderItem; onDone: () => 
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
+      onChange={clearOnEditRhf(clearErrors, () => setError(null))}
       className="mt-2 flex flex-wrap items-start gap-3"
       noValidate
     >
@@ -138,10 +141,14 @@ export function LabOrdersSection({
   const [cancelling, setCancelling] = useState(false);
   const [resultingItemId, setResultingItemId] = useState<string | null>(null);
 
-  const { register, control, handleSubmit, reset, formState } = useForm<CreateLabOrderInput>({
-    resolver: zodResolver(createLabOrderSchema),
-    defaultValues: { encounterId, items: [EMPTY_ITEM] },
-  });
+  const { register, control, handleSubmit, reset, clearErrors, formState } =
+    useForm<CreateLabOrderInput>({
+      resolver: zodResolver(createLabOrderSchema),
+      reValidateMode: 'onSubmit',
+      defaultValues: { encounterId, items: [EMPTY_ITEM] },
+    });
+  // The "add at least one test" error belongs to the whole list.
+  const GROUP = ['items.root', 'items.message'] as const;
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   const onSubmit = async (data: CreateLabOrderInput) => {
@@ -234,7 +241,12 @@ export function LabOrdersSection({
         )}
 
         {can(role, 'lab-order:write') && (
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            onChange={clearOnEditRhf(clearErrors, () => setFormError(null), { '*': [...GROUP] })}
+            className="flex flex-col gap-4"
+            noValidate
+          >
             {fields.map((field, index) => {
               const itemErrors = itemErrorsOf(formState.errors, index);
               return (
@@ -286,7 +298,10 @@ export function LabOrdersSection({
                       className="sm:mt-[1.625rem]"
                       aria-label={`Remove test ${index + 1}`}
                       icon={<Trash size={20} aria-hidden="true" />}
-                      onClick={() => remove(index)}
+                      onClick={() => {
+                        remove(index);
+                        clearKeysRhf(clearErrors, [...GROUP]);
+                      }}
                     />
                   )}
                 </div>
@@ -298,7 +313,10 @@ export function LabOrdersSection({
               size="sm"
               className="self-start"
               icon={<Plus size={16} aria-hidden="true" />}
-              onClick={() => append(EMPTY_ITEM)}
+              onClick={() => {
+                append(EMPTY_ITEM);
+                clearKeysRhf(clearErrors, [...GROUP]);
+              }}
             >
               Add another test
             </Button>

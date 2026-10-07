@@ -15,6 +15,8 @@ import {
   req,
   requiredProps,
   type FieldErrors,
+  clearOnEdit,
+  makeClearError,
 } from '../../../../lib/forms';
 import { humanize } from '../../../../lib/format';
 import { PatientPicker, type PatientOption } from './patient-picker';
@@ -84,6 +86,7 @@ function AddLeadForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [errors, setErrors] = useState<FieldErrors>({});
+  const clearError = makeClearError(setErrors, () => setError(undefined));
 
   const needsCampaign = source === 'CAMPAIGN' || source === 'CAMP';
   // A health camp lead must point at a health camp campaign.
@@ -165,7 +168,13 @@ function AddLeadForm({
         </>
       }
     >
-      <form id="add-lead-form" onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <form
+        id="add-lead-form"
+        onSubmit={submit}
+        noValidate
+        onChange={clearOnEdit(clearError, { 'lead-source': ['lead-campaign'] })}
+        className="flex flex-col gap-5"
+      >
         <div className="grid grid-cols-2 gap-4">
           <Field label={req('First name')} htmlFor="lead-first" error={errors['lead-first']}>
             <Input

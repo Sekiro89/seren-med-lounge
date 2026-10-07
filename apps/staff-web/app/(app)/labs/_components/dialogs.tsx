@@ -123,6 +123,7 @@ function ResultForm({
           onChange={(e) => {
             setValue(e.target.value);
             if (fieldError) setFieldError(undefined);
+            setError(undefined);
           }}
           autoFocus
         />
@@ -133,7 +134,10 @@ function ResultForm({
             id="lab-result-unit"
             value={unit}
             maxLength={50}
-            onChange={(e) => setUnit(e.target.value)}
+            onChange={(e) => {
+              setUnit(e.target.value);
+              setError(undefined);
+            }}
           />
         </Field>
         <Field label="Reference range (optional)" htmlFor="lab-result-range">
@@ -141,7 +145,10 @@ function ResultForm({
             id="lab-result-range"
             value={range}
             maxLength={200}
-            onChange={(e) => setRange(e.target.value)}
+            onChange={(e) => {
+              setRange(e.target.value);
+              setError(undefined);
+            }}
           />
         </Field>
       </div>
