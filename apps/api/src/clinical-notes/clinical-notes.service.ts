@@ -5,9 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ClinicalNoteType, ClinicalRecordSource, ClinicalRecordStatus } from '@prisma/client';
-import type { ClinicalNoteContentInput } from '@serenemed/validation';
+import { clinicalTemplateBodySchema, type ClinicalNoteContentInput } from '@serenemed/validation';
 import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+
+const SOAP_KEYS = ['subjective', 'objective', 'assessment', 'plan'] as const;
 
 /**
  * Proves docs/architecture/security.md's clinical-record-immutability
@@ -31,7 +33,7 @@ export class ClinicalNotesService {
     authorId: string,
     encounterId: string,
     content: ClinicalNoteContentInput,
-    options: { noteType?: ClinicalNoteType; procedureId?: string } = {},
+    options: { noteType?: ClinicalNoteType; procedureId?: string; templateVersionId?: string } = {},
   ) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const encounter = await tx.encounter.findUnique({ where: { id: encounterId } });
@@ -45,13 +47,22 @@ export class ClinicalNotesService {
         }
       }
 
+      const noteType = options.noteType ?? ClinicalNoteType.CONSULTATION;
+      if (options.templateVersionId) {
+        content = await this.prefillFromTemplate(tx, options.templateVersionId, noteType, content);
+      }
+      if (!SOAP_KEYS.some((key) => content[key] !== undefined && content[key] !== '')) {
+        throw new BadRequestException('At least one note field is required.');
+      }
+
       const note = await tx.clinicalNote.create({
         data: {
           organizationId,
           patientId: encounter.patientId,
           encounterId,
-          noteType: options.noteType ?? ClinicalNoteType.CONSULTATION,
+          noteType,
           procedureId: options.procedureId,
+          templateVersionId: options.templateVersionId,
           status: ClinicalRecordStatus.DRAFT,
           currentVersionNumber: 1,
         },
@@ -80,6 +91,7 @@ export class ClinicalNotesService {
           patientId: encounter.patientId,
           versionNumber: 1,
           noteType: note.noteType,
+          templateVersionId: note.templateVersionId,
         },
       });
 
@@ -202,6 +214,46 @@ export class ClinicalNotesService {
 
       return amended;
     });
+  }
+
+  /**
+   * The template version must exist (RLS hides other orgs' → 400), its
+   * template must be active and of the same noteType. SOAP fields the
+   * caller did NOT supply (undefined) take the section's defaultText; an
+   * explicitly supplied value — even '' — wins.
+   * TODO: structured template `fields` values are not stored yet —
+   * ClinicalNoteVersion has no column for them.
+   */
+  private async prefillFromTemplate(
+    tx: ExtendedPrismaClient,
+    templateVersionId: string,
+    noteType: ClinicalNoteType,
+    content: ClinicalNoteContentInput,
+  ): Promise<ClinicalNoteContentInput> {
+    const version = await tx.clinicalTemplateVersion.findUnique({
+      where: { id: templateVersionId },
+      include: { template: true },
+    });
+    if (!version || version.template.deletedAt) {
+      throw new BadRequestException('templateVersionId does not match a clinical template.');
+    }
+    if (!version.template.isActive) {
+      throw new BadRequestException('That clinical template is inactive.');
+    }
+    if (version.template.noteType !== noteType) {
+      throw new BadRequestException(
+        `That template is for ${version.template.noteType} notes, not ${noteType}.`,
+      );
+    }
+    const body = clinicalTemplateBodySchema.parse(version.body);
+    const prefilled: ClinicalNoteContentInput = { ...content };
+    for (const key of SOAP_KEYS) {
+      const defaultText = body.sections[key]?.defaultText;
+      if (prefilled[key] === undefined && defaultText) {
+        prefilled[key] = defaultText;
+      }
+    }
+    return prefilled;
   }
 
   private async requireLatestVersion(tx: ExtendedPrismaClient, clinicalNoteId: string) {

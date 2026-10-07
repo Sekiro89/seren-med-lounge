@@ -28,13 +28,13 @@ export class ClinicalNotesController {
   createDraft(
     @Body(new ZodValidationPipe(createClinicalNoteDraftSchema)) body: CreateClinicalNoteDraftInput,
   ) {
-    const { encounterId, noteType, procedureId, ...content } = body;
+    const { encounterId, noteType, procedureId, templateVersionId, ...content } = body;
     return this.clinicalNotesService.createDraft(
       this.tenantContext.organizationId,
       this.tenantContext.userId,
       encounterId,
       content,
-      { noteType, procedureId },
+      { noteType, procedureId, templateVersionId },
     );
   }
 
