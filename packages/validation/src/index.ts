@@ -14,3 +14,4 @@ export * from './billing';
 export * from './opd';
 export * from './pharmacy';
 export * from './procedures';
+export * from './care';

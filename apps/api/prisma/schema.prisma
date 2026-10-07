@@ -130,6 +130,8 @@ model Organization {
   referrals               Referral[]
   procedures              Procedure[]
   procedureChecklistItems ProcedureChecklistItem[]
+  carePlans               CarePlan[]
+  followUps               FollowUp[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -195,6 +197,10 @@ model User {
   proceduresPerformed      Procedure[]              @relation("ProcedurePerformer")
   proceduresCreated        Procedure[]              @relation("ProcedureCreator")
   checklistItemsCompleted  ProcedureChecklistItem[]
+  carePlansCreated         CarePlan[]
+  followUpsAssigned        FollowUp[]               @relation("FollowUpAssignee")
+  followUpsCreated         FollowUp[]               @relation("FollowUpCreator")
+  followUpsResolved        FollowUp[]               @relation("FollowUpResolver")
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -248,6 +254,8 @@ model Patient {
   dispensings      Dispensing[]
   referrals        Referral[]
   procedures       Procedure[]
+  carePlans        CarePlan[]
+  followUps        FollowUp[]
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -404,6 +412,7 @@ model Appointment {
   updatedAt      DateTime               @updatedAt
   doctorId       String?
   doctor         User?                  @relation("AppointmentDoctor", fields: [doctorId], references: [id])
+  followUp       FollowUp?
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -445,6 +454,7 @@ model Encounter {
   metabolicWorkups MetabolicWorkup[]
   referrals        Referral[]
   procedures       Procedure[]
+  carePlans        CarePlan[]
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -1530,4 +1540,97 @@ model ProcedureChecklistItem {
   @@index([organizationId])
   @@index([procedureId])
   @@map("procedure_checklist_items")
+}
+
+// =============================================================================
+// POST-TREATMENT CARE & FOLLOW-UP — care-plans and followups modules.
+// Discharge (EncountersService.discharge) closes the encounter and can
+// create the CarePlan + first FollowUps in the same transaction. See
+// docs/workflows/follow-up.md.
+// =============================================================================
+
+enum CarePlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum FollowUpType {
+  REVIEW_APPOINTMENT
+  MEDICATION_REMINDER
+  RECOVERY_CHECK
+  REPORT_ALERT
+  OTHER
+}
+
+/// PENDING until a staff member records the outcome. ESCALATED = the
+/// check-in found a problem and it was handed to a doctor (the diagram's
+/// "Escalation"); it stays open until completed.
+enum FollowUpStatus {
+  PENDING
+  DONE
+  MISSED
+  ESCALATED
+  CANCELLED
+}
+
+model CarePlan {
+  id                    String         @id @default(cuid())
+  organizationId        String
+  organization          Organization   @relation(fields: [organizationId], references: [id])
+  patientId             String
+  patient               Patient        @relation(fields: [patientId], references: [id])
+  encounterId           String?
+  encounter             Encounter?     @relation(fields: [encounterId], references: [id])
+  title                 String
+  dischargeInstructions String?
+  status                CarePlanStatus @default(ACTIVE)
+  followUps             FollowUp[]
+  createdById           String
+  createdBy             User           @relation(fields: [createdById], references: [id])
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([organizationId, status])
+  @@index([patientId])
+  @@map("care_plans")
+}
+
+/// One scheduled post-treatment touchpoint. A REVIEW_APPOINTMENT is
+/// booked through the appointments module (appointmentId), not a
+/// separate booking mechanism.
+/// TODO(integration): reminders are worklist items for staff today —
+/// no SMS/WhatsApp provider is contracted to send them to the patient.
+model FollowUp {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient        @relation(fields: [patientId], references: [id])
+  carePlanId     String?
+  carePlan       CarePlan?      @relation(fields: [carePlanId], references: [id])
+  type           FollowUpType
+  dueAt          DateTime
+  notes          String?
+  status         FollowUpStatus @default(PENDING)
+  outcome        String?
+  assignedToId   String?
+  assignedTo     User?          @relation("FollowUpAssignee", fields: [assignedToId], references: [id])
+  appointmentId  String?        @unique
+  appointment    Appointment?   @relation(fields: [appointmentId], references: [id])
+  createdById    String
+  createdBy      User           @relation("FollowUpCreator", fields: [createdById], references: [id])
+  resolvedById   String?
+  resolvedBy     User?          @relation("FollowUpResolver", fields: [resolvedById], references: [id])
+  resolvedAt     DateTime?
+  escalatedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([organizationId, status, dueAt])
+  @@index([patientId])
+  @@index([assignedToId, status])
+  @@map("follow_ups")
 }

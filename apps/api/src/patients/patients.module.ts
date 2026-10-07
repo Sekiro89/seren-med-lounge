@@ -9,6 +9,7 @@ import { MedicalHistoryModule } from '../medical-history/medical-history.module'
 import { QueueModule } from '../queue/queue.module';
 import { PharmacyModule } from '../pharmacy/pharmacy.module';
 import { ProceduresModule } from '../procedures/procedures.module';
+import { CarePlansModule } from '../care-plans/care-plans.module';
 import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
 
@@ -28,6 +29,7 @@ import { PatientsService } from './patients.service';
     QueueModule,
     PharmacyModule,
     ProceduresModule,
+    CarePlansModule,
   ],
   controllers: [PatientsController],
   providers: [PatientsService],
