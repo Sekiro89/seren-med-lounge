@@ -1,41 +1,43 @@
 @import 'tailwindcss';
 
 /*
- * Patient app tokens: docs/design/DESIGN_SYSTEM.md sections 2 and 18.
- * Same SereneMed teal and semantic names as staff-web, so a component
- * reads the same in both apps; the patient app is airier (17px body,
- * 16px card radius, 48px controls). Components use the semantic classes
- * (bg-surface, text-fg-muted, bg-primary, ...) and never raw palette
- * classes or hex values. Light only for now, like staff-web.
+ * Patient app tokens: docs/design/DESIGN_SYSTEM.md sections 2 and 18 (Clinical Ink).
+ * Same values and semantic names as staff-web, so a component reads the
+ * same in both apps; the patient app is airier (17px Atkinson body, 48px
+ * controls). Components use the semantic classes (bg-surface,
+ * text-fg-muted, bg-primary, ...) and never raw palette classes or hex
+ * values. Light only.
  */
 :root {
-  --bg: #f5f8f8;
+  /* Clinical Ink (design system 2 and 18): paper, ink, one cobalt accent. */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-muted: #eef3f3;
-  --fg: #0f172a;
-  --fg-muted: #475569;
-  --fg-subtle: #64748b;
-  --line: #e2e8f0;
-  --control: #94a3b8;
-  --primary: #12706f;
-  --primary-hover: #0f5a5a;
-  --primary-subtle: #e6f4f2;
-  --primary-subtle-fg: #0e4a4a;
+  --surface-muted: #f3f4f6;
+  --fg: #0b0d12;
+  --fg-muted: #5b5e66;
+  --fg-subtle: #6b6e76;
+  --line: #e4e7ec;
+  --control: #858991;
+  --primary: #1f4fd8;
+  --primary-hover: #1a43b8;
+  --primary-subtle: #eef2fd;
+  --primary-subtle-fg: #1a43b8;
   --on-primary: #ffffff;
-  --ring: #12706f;
-  --brand-deep: #0c3d3e;
-  --brand-deep-fg: #d8f0ee;
+  --ring: #1f4fd8;
+  /* No dark brand surfaces in Clinical Ink; kept so older components still compile. */
+  --brand-deep: #0b0d12;
+  --brand-deep-fg: #e4e7ec;
 
-  --success-fg: #15803d;
-  --success-bg: #f0fdf4;
-  --warning-fg: #92400e;
-  --warning-bg: #fffbeb;
-  --danger-fg: #b91c1c;
-  --danger-bg: #fef2f2;
-  --info-fg: #075985;
-  --info-bg: #f0f9ff;
-  --neutral-fg: #334155;
-  --neutral-bg: #f1f5f9;
+  --success-fg: #067647;
+  --success-bg: #eef8f3;
+  --warning-fg: #b54708;
+  --warning-bg: #fdf4ec;
+  --danger-fg: #b42318;
+  --danger-bg: #fdf1f0;
+  --info-fg: #1a43b8;
+  --info-bg: #eef2fd;
+  --neutral-fg: #33363d;
+  --neutral-bg: #f3f4f6;
 
   color-scheme: light;
 }
@@ -69,10 +71,12 @@
   --color-neutral-bg: var(--neutral-bg);
 
   --font-sans: var(--font-atkinson);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-plex-mono);
 
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.04);
-  --shadow-lift: 0 8px 24px rgba(12, 61, 62, 0.18);
+  /* Sharp and flat (design system 4): no shadows. */
+  --shadow-card: none;
+  --shadow-lift: none;
+  --radius-control: 2px;
 }
 
 html {

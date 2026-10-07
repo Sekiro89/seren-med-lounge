@@ -4,12 +4,14 @@ import { Skeleton } from './skeleton';
 
 export type KpiTone = 'primary' | 'info' | 'warning' | 'success' | 'danger';
 
+// Clinical Ink figures: no icon boxes; the icon is a quiet glyph and only
+// warning/danger tiles colour it.
 const ICON_TONES: Record<KpiTone, string> = {
-  primary: 'bg-primary-subtle text-primary-subtle-fg',
-  info: 'bg-info-bg text-info-fg',
-  warning: 'bg-warning-bg text-warning-fg',
-  success: 'bg-success-bg text-success-fg',
-  danger: 'bg-danger-bg text-danger-fg',
+  primary: 'text-fg-subtle',
+  info: 'text-fg-subtle',
+  warning: 'text-warning-fg',
+  success: 'text-fg-subtle',
+  danger: 'text-danger-fg',
 };
 
 /**
@@ -36,18 +38,14 @@ export function KpiTile({
 }) {
   const body = (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-[13px] font-medium text-fg-muted">{label}</p>
-        <span
-          className={`flex size-9 items-center justify-center rounded-control ${ICON_TONES[tone]}`}
-        >
-          <IconComponent size={20} aria-hidden="true" />
-        </span>
+        <IconComponent size={20} className={ICON_TONES[tone]} aria-hidden="true" />
       </div>
       {loading ? (
         <Skeleton className="mt-4 h-9 w-24" />
       ) : (
-        <p className="tabular mt-4 font-mono text-[30px] font-semibold leading-9 tracking-tight text-fg">
+        <p className="tabular mt-3 font-mono text-[32px] font-medium leading-10 tracking-tight text-fg">
           {value ?? '-'}
         </p>
       )}
@@ -58,10 +56,7 @@ export function KpiTile({
   const base = 'block rounded-panel border border-line bg-surface p-6 shadow-card';
   if (href) {
     return (
-      <Link
-        href={href}
-        className={`${base} transition-[box-shadow,border-color] duration-150 hover:border-primary/30 hover:shadow-card-hover`}
-      >
+      <Link href={href} className={`${base} transition-colors duration-150 hover:border-primary`}>
         {body}
       </Link>
     );

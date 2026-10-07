@@ -34,12 +34,9 @@ export function BarList({
               {row.display ?? row.value.toLocaleString('en-IN')}
             </span>
           </div>
-          <div
-            className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-muted"
-            aria-hidden="true"
-          >
+          <div className="mt-1.5 h-2 overflow-hidden bg-surface-muted" aria-hidden="true">
             <div
-              className="h-full rounded-full bg-primary"
+              className="h-full bg-primary"
               style={{ width: `${Math.max(2, (row.value / max) * 100)}%` }}
             />
           </div>

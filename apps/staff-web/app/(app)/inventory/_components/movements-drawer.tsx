@@ -54,7 +54,7 @@ export function MovementsDrawer({
                 </p>
               </div>
               <span
-                className={`tabular rounded-full px-2 py-0.5 font-mono text-sm font-semibold ${
+                className={`tabular rounded-control px-2 py-0.5 font-mono text-sm font-semibold ${
                   m.quantityDelta >= 0
                     ? 'bg-success-bg text-success-fg'
                     : 'bg-danger-bg text-danger-fg'

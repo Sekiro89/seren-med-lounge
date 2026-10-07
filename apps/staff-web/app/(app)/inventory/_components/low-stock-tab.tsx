@@ -13,9 +13,9 @@ function LevelBar({ usable, reorder }: { usable: number; reorder: number }) {
     <div
       role="img"
       aria-label={`${usable} of ${reorder} units at the reorder level`}
-      className="h-2 w-28 overflow-hidden rounded-full bg-neutral-bg"
+      className="h-2 w-28 overflow-hidden bg-neutral-bg"
     >
-      <div className={`h-full rounded-full ${fill}`} style={{ width: `${pct}%` }} />
+      <div className={`h-full ${fill}`} style={{ width: `${pct}%` }} />
     </div>
   );
 }

@@ -14,10 +14,17 @@ export function PageHeader({
   eyebrow?: string;
 }) {
   return (
-    <div className="mb-10 flex flex-wrap items-end justify-between gap-6">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-6 border-b border-fg pb-6">
       <div>
-        {eyebrow && <p className="mb-1 text-[13px] font-medium text-primary">{eyebrow}</p>}
-        <h1 className="text-2xl font-semibold leading-8 tracking-tight text-fg">{title}</h1>
+        {eyebrow && (
+          <p className="mb-1.5 font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-fg-subtle">
+            {eyebrow}
+          </p>
+        )}
+        {/* The one serif line on the page (design system 3, serif discipline). */}
+        <h1 className="font-serif text-[2rem] font-medium leading-10 tracking-tight text-fg">
+          {title}
+        </h1>
         {description && <p className="mt-2 text-sm text-fg-muted">{description}</p>}
       </div>
       {action}

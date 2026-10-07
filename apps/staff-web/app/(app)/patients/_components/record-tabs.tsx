@@ -827,7 +827,7 @@ function TimelineTab({ patientId }: { patientId: string }) {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setFilter(f.key)}
-                className={`h-9 cursor-pointer rounded-full border px-3.5 text-[13px] font-medium transition-colors ${
+                className={`h-9 cursor-pointer rounded-control border px-3.5 text-[13px] font-medium transition-colors ${
                   active
                     ? 'border-primary bg-primary-subtle text-primary-subtle-fg'
                     : 'border-control bg-surface text-fg-muted hover:bg-surface-muted hover:text-fg'

@@ -1,44 +1,52 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens from docs/design/DESIGN_SYSTEM.md (section 2). Components
- * use the semantic classes below (bg-surface, text-fg-muted, border-control,
- * bg-primary, ...) and never raw palette classes or hex values.
+ * Design tokens from docs/design/DESIGN_SYSTEM.md (version 2, "Clinical
+ * Ink", section 2). Components use the semantic classes below (bg-surface,
+ * text-fg-muted, border-control, bg-primary, rounded-control, ...) and never
+ * raw palette classes or hex values. Version 2 changed the values, not the
+ * names, so every screen built on the tokens restyles from this file.
  *
- * Light only for now. Dark mode is defined in the design system but ships
- * after the light workspace; when it does, only the :root values change.
+ * Light only: Clinical Ink is white paper and ink (design system 2.4).
  */
 :root {
-  --bg: #f7f9fa;
+  /* Ink and paper (2.1) */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-muted: #f1f5f9;
-  --fg: #0f172a;
-  --fg-muted: #475569;
-  --fg-subtle: #64748b;
-  --line: #e2e8f0;
-  --control: #64748b;
-  --primary: #12706f;
-  --primary-hover: #0f5a5a;
-  --primary-subtle: #f0f9f8;
-  --primary-subtle-fg: #0e4a4a;
-  --on-primary: #ffffff;
-  --ring: #12706f;
-  --sidebar: #ffffff;
-  /* Deep teal brand surface (serene-900), used for the sign-in panel. */
-  --brand-deep: #0c3d3e;
-  --brand-deep-fg: #d8f0ee;
+  --surface-muted: #f3f4f6;
+  --fg: #0b0d12;
+  --fg-muted: #5b5e66;
+  --fg-subtle: #6b6e76;
+  --line: #e4e7ec;
+  /* Borders of anything clickable: 3.5:1 on white (the hairline is only 1.6:1). */
+  --control: #858991;
 
-  --success-fg: #15803d;
-  --success-bg: #f0fdf4;
-  --warning-fg: #92400e;
-  --warning-bg: #fffbeb;
-  --danger-fg: #b91c1c;
-  --danger-bg: #fef2f2;
-  --danger: #dc2626;
-  --info-fg: #075985;
-  --info-bg: #f0f9ff;
-  --neutral-fg: #334155;
-  --neutral-bg: #f1f5f9;
+  /* The one accent, cobalt (2.2) */
+  --primary: #1f4fd8;
+  --primary-hover: #1a43b8;
+  --primary-subtle: #eef2fd;
+  --primary-subtle-fg: #1a43b8;
+  --primary-line: #c7d3f6;
+  --on-primary: #ffffff;
+  --ring: #1f4fd8;
+
+  /* Kept for components that still read them; Clinical Ink has no brand panel. */
+  --sidebar: #ffffff;
+  --brand-deep: #0b0d12;
+  --brand-deep-fg: #e4e7ec;
+
+  /* Status (2.3): muted, always with a word. Info reuses cobalt on purpose. */
+  --success-fg: #067647;
+  --success-bg: #eef8f3;
+  --warning-fg: #b54708;
+  --warning-bg: #fdf4ec;
+  --danger-fg: #b42318;
+  --danger-bg: #fdf1f0;
+  --danger: #b42318;
+  --info-fg: #1a43b8;
+  --info-bg: #eef2fd;
+  --neutral-fg: #33363d;
+  --neutral-bg: #f3f4f6;
 
   color-scheme: light;
 }
@@ -56,6 +64,7 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-subtle: var(--primary-subtle);
   --color-primary-subtle-fg: var(--primary-subtle-fg);
+  --color-primary-line: var(--primary-line);
   --color-on-primary: var(--on-primary);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
@@ -73,26 +82,27 @@
   --color-neutral-fg: var(--neutral-fg);
   --color-neutral-bg: var(--neutral-bg);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+  /* Page titles only: one per page (design system 3, serif discipline). */
+  --font-serif: var(--font-plex-serif);
 
-  --radius-control: 8px;
-  --radius-panel: 12px;
-  --shadow-popover: 0 8px 24px rgba(15, 23, 42, 0.08);
-  /* Cards lift a hair off the page; slate-tinted, never black. */
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
-  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.07);
+  /* Shape (4): sharp. Controls 2px, panels square, no shadows anywhere. */
+  --radius-control: 2px;
+  --radius-panel: 0px;
+  --shadow-popover: none;
+  --shadow-card: none;
+  --shadow-card-hover: none;
 }
 
 html {
-  /* Roomier than a typical dashboard: every rem-based space and size scales with this. */
   font-size: 15px;
 }
 
 body {
   background: var(--bg);
   color: var(--fg);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -102,9 +112,14 @@ body {
   outline-offset: 2px;
 }
 
-/* Numbers line up in columns and KPI tiles. */
+/* Numbers line up in columns. */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* The section rule: a 1px ink line above a section heading (design system 4). */
+.section-rule {
+  border-top: 1px solid var(--fg);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -138,7 +138,7 @@ export default function SchedulesPage() {
                             {today.map((w) => (
                               <span
                                 key={w.id}
-                                className="tabular inline-flex items-center gap-2 rounded-full bg-primary-subtle py-1 pl-3 pr-1 text-sm text-primary-subtle-fg"
+                                className="tabular inline-flex items-center gap-2 rounded-control bg-primary-subtle py-1 pl-3 pr-1 text-sm text-primary-subtle-fg"
                               >
                                 {w.startTime} to {w.endTime}
                                 <span className="text-[12px] opacity-80">

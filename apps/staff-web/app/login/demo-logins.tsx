@@ -41,7 +41,7 @@ export function DemoLogins({
             type="button"
             disabled={disabled}
             onClick={() => onPick(role.email, DEMO_PASSWORD)}
-            className="h-8 cursor-pointer rounded-full border border-line bg-surface px-3 text-[13px] font-medium text-fg-muted transition-colors hover:border-control hover:bg-surface-muted hover:text-fg disabled:opacity-50"
+            className="h-8 cursor-pointer rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-fg-muted transition-colors hover:border-control hover:bg-surface-muted hover:text-fg disabled:opacity-50"
           >
             {role.label}
           </button>

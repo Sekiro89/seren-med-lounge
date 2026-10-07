@@ -264,7 +264,7 @@ export default function QueuePage() {
                     <StationIcon size={18} className="text-primary" aria-hidden="true" />
                     {STATION_LABEL[station]}
                   </h2>
-                  <span className="tabular rounded-full bg-surface px-2.5 py-0.5 font-mono text-xs font-medium text-fg-muted">
+                  <span className="tabular rounded-control bg-surface px-2.5 py-0.5 font-mono text-xs font-medium text-fg-muted">
                     {here.length}
                   </span>
                 </div>

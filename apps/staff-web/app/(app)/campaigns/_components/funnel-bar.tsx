@@ -7,7 +7,7 @@ export function FunnelBar({ funnel, total }: { funnel: Funnel; total: number }) 
       <div
         role="img"
         aria-label={FUNNEL_ORDER.map((s) => `${FUNNEL_LABELS[s]} ${funnel[s]}`).join(', ')}
-        className="flex h-4 w-full overflow-hidden rounded-full bg-surface-muted"
+        className="flex h-4 w-full overflow-hidden bg-surface-muted"
       >
         {FUNNEL_ORDER.filter((s) => funnel[s] > 0).map((s) => (
           <div

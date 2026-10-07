@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 
-/** 12px radius, hairline border and a barely-there tinted shadow. */
+/** A white sheet with a hairline border: square corners, no shadow (design system 4). */
 export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div

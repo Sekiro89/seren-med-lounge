@@ -57,7 +57,7 @@ export function Tabs<K extends string>({
               {tab.label}
               {tab.count !== undefined && (
                 <span
-                  className={`tabular rounded-full px-1.5 text-xs ${
+                  className={`tabular rounded-control px-1.5 text-xs ${
                     active
                       ? 'bg-primary-subtle text-primary-subtle-fg'
                       : 'bg-surface-muted text-fg-muted'

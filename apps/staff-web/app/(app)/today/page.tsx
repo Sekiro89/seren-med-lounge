@@ -329,7 +329,7 @@ export default function TodayPage() {
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
                       <div
-                        className="h-full rounded-full bg-primary transition-[width] duration-200"
+                        className="h-full bg-primary transition-[width] duration-200"
                         style={{ width: `${(count / busiest) * 100}%` }}
                       />
                     </div>
@@ -370,7 +370,7 @@ export default function TodayPage() {
                       >
                         <IconComponent size={20} className="text-fg-subtle" aria-hidden="true" />
                         <span className="flex-1 text-fg">{text}</span>
-                        <span className="tabular rounded-full bg-warning-bg px-2 py-0.5 font-mono text-xs font-semibold text-warning-fg">
+                        <span className="tabular rounded-control bg-warning-bg px-2 py-0.5 font-mono text-xs font-semibold text-warning-fg">
                           {count}
                         </span>
                       </Link>
