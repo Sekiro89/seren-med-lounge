@@ -7,6 +7,7 @@ import { LabsModule } from '../labs/labs.module';
 import { InvoicesModule } from '../invoices/invoices.module';
 import { MedicalHistoryModule } from '../medical-history/medical-history.module';
 import { QueueModule } from '../queue/queue.module';
+import { PharmacyModule } from '../pharmacy/pharmacy.module';
 import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
 
@@ -24,6 +25,7 @@ import { PatientsService } from './patients.service';
     InvoicesModule,
     MedicalHistoryModule,
     QueueModule,
+    PharmacyModule,
   ],
   controllers: [PatientsController],
   providers: [PatientsService],

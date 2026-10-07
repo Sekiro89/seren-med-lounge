@@ -123,6 +123,10 @@ model Organization {
   queueEntries            QueueEntry[]
   medicalHistoryEntries   MedicalHistoryEntry[]
   metabolicWorkups        MetabolicWorkup[]
+  medications             Medication[]
+  stockBatches            StockBatch[]
+  stockMovements          StockMovement[]
+  dispensings             Dispensing[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -180,6 +184,9 @@ model User {
   registrationsRecorded    Registration[]
   medicalHistoryRecorded   MedicalHistoryEntry[]
   metabolicWorkupsRecorded MetabolicWorkup[]
+  stockBatchesReceived     StockBatch[]
+  stockMovements           StockMovement[]
+  dispensings              Dispensing[]
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -230,6 +237,7 @@ model Patient {
   queueEntries     QueueEntry[]
   medicalHistory   MedicalHistoryEntry[]
   metabolicWorkups MetabolicWorkup[]
+  dispensings      Dispensing[]
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -614,6 +622,7 @@ model PrescriptionItem {
   durationDays   Int?
   instructions   String?
   createdAt      DateTime     @default(now())
+  dispensings    Dispensing[]
 
   @@index([organizationId])
   @@index([prescriptionId])
@@ -1196,4 +1205,167 @@ model MetabolicWorkup {
   @@index([organizationId, deletedAt])
   @@index([encounterId])
   @@map("metabolic_workups")
+}
+
+// =============================================================================
+// PHARMACY & INVENTORY — inventory module (Medication, StockBatch,
+// StockMovement), pharmacy module (Dispensing). See
+// docs/workflows/pharmacy.md: dispensing always references the
+// PrescriptionItem it fulfils, stock is allocated FEFO
+// (first-expiry-first-out), and delivery is a status on Dispensing.
+// =============================================================================
+
+enum MedicationForm {
+  TABLET
+  CAPSULE
+  SYRUP
+  INJECTION
+  CREAM
+  DROPS
+  INHALER
+  OTHER
+}
+
+/// RECEIPT/RETURN add stock, DISPENSE/WASTAGE remove it, ADJUSTMENT is a
+/// stock-count correction either way (CHECK constraint enforces the sign).
+enum StockMovementType {
+  RECEIPT
+  DISPENSE
+  RETURN
+  ADJUSTMENT
+  WASTAGE
+}
+
+/// PREPARED = medicines picked and stock allocated (the diagram's
+/// "pharmacy ready"); then HANDED_OVER at the counter, or
+/// OUT_FOR_DELIVERY -> DELIVERED for home delivery. Only a PREPARED
+/// dispensing can be CANCELLED, which returns its stock.
+enum DispensingStatus {
+  PREPARED
+  HANDED_OVER
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum FulfilmentMode {
+  PICKUP
+  HOME_DELIVERY
+}
+
+/// The pharmacy catalogue. `unit` is the dispensing unit ("tablet",
+/// "ml", "tube"); every quantity in this section counts that unit.
+/// reorderLevel drives the low-stock list.
+model Medication {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  name           String
+  genericName    String?
+  form           MedicationForm
+  strength       String?
+  unit           String
+  unitPriceMinor Int?
+  reorderLevel   Int?
+  isActive       Boolean         @default(true)
+  batches        StockBatch[]
+  movements      StockMovement[]
+  dispensings    Dispensing[]
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([organizationId, name])
+  @@map("medications")
+}
+
+/// One received batch. quantityOnHand is the running balance — it only
+/// changes together with a StockMovement row in the same transaction,
+/// and a CHECK keeps it >= 0, so the batch can never go negative even
+/// under a bug. Movements are the audit trail; this is the fast read.
+model StockBatch {
+  id               String          @id @default(cuid())
+  organizationId   String
+  organization     Organization    @relation(fields: [organizationId], references: [id])
+  medicationId     String
+  medication       Medication      @relation(fields: [medicationId], references: [id])
+  batchNumber      String
+  expiryDate       DateTime        @db.Date
+  quantityReceived Int
+  quantityOnHand   Int
+  unitCostMinor    Int?
+  supplier         String?
+  receivedById     String
+  receivedBy       User            @relation(fields: [receivedById], references: [id])
+  movements        StockMovement[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([organizationId, medicationId, batchNumber])
+  @@index([medicationId, expiryDate])
+  @@map("stock_batches")
+}
+
+/// Append-only stock ledger (REVOKE UPDATE, DELETE). Every change to a
+/// batch's quantityOnHand has exactly one row here; a DISPENSE/RETURN
+/// row also names the Dispensing it belongs to, so which batches a
+/// dispense drew from (and what a cancellation must return) is recorded.
+model StockMovement {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  batchId        String
+  batch          StockBatch        @relation(fields: [batchId], references: [id])
+  medicationId   String
+  medication     Medication        @relation(fields: [medicationId], references: [id])
+  type           StockMovementType
+  quantityDelta  Int
+  reason         String?
+  dispensingId   String?
+  dispensing     Dispensing?       @relation(fields: [dispensingId], references: [id])
+  actorId        String
+  actor          User              @relation(fields: [actorId], references: [id])
+  createdAt      DateTime          @default(now())
+
+  @@index([organizationId])
+  @@index([batchId])
+  @@index([medicationId, createdAt])
+  @@index([dispensingId])
+  @@map("stock_movements")
+}
+
+/// Medicines given out against one prescribed line. Several dispensings
+/// per line are allowed (partial supply, refills).
+/// TODO(product): PrescriptionItem has no total quantity (dosage /
+/// frequency / duration are free text), so over-dispensing against the
+/// prescription can't be checked — open-questions.md#16.
+model Dispensing {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  patientId          String
+  patient            Patient          @relation(fields: [patientId], references: [id])
+  prescriptionItemId String
+  prescriptionItem   PrescriptionItem @relation(fields: [prescriptionItemId], references: [id])
+  medicationId       String
+  medication         Medication       @relation(fields: [medicationId], references: [id])
+  quantity           Int
+  status             DispensingStatus @default(PREPARED)
+  mode               FulfilmentMode
+  deliveryAddress    String?
+  movements          StockMovement[]
+  dispensedById      String
+  dispensedBy        User             @relation(fields: [dispensedById], references: [id])
+  handedOverAt       DateTime?
+  dispatchedAt       DateTime?
+  deliveredAt        DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([organizationId, status])
+  @@index([patientId])
+  @@index([prescriptionItemId])
+  @@map("dispensings")
 }

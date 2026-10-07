@@ -12,3 +12,4 @@ export * from './patient-consent';
 export * from './patient-claims';
 export * from './billing';
 export * from './opd';
+export * from './pharmacy';
