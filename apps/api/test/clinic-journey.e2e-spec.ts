@@ -364,7 +364,7 @@ describe('Clinic journey spine (e2e)', () => {
       expect(historyRes.body.versions[0].subjective).toBe('Initial complaint.');
     });
 
-    it('refuses to amend a note that has never been finalized', async () => {
+    it('edits an unsigned note as a new draft version, keeping the earlier text', async () => {
       const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
       const encounterId = await createCheckedInEncounter(token);
 
@@ -374,11 +374,23 @@ describe('Clinic journey spine (e2e)', () => {
         .send({ encounterId, subjective: 'Still a draft.' })
         .expect(201);
 
-      await request(app.getHttpServer())
+      // Editing an unsigned note adds a DRAFT version (the typo stays on record); nothing is signed.
+      const edited = await request(app.getHttpServer())
         .post(`/clinical-notes/${draftRes.body.id}/amend`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ subjective: 'Trying to amend an unfinalized note.' })
-        .expect(409);
+        .send({ subjective: 'Edited while still a draft.' })
+        .expect(201);
+      expect(edited.body).toMatchObject({ versionNumber: 2, status: 'DRAFT' });
+      const history = await request(app.getHttpServer())
+        .get(`/clinical-notes/${draftRes.body.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(history.body.status).toBe('DRAFT');
+      expect(history.body.versions.map((v: { status: string }) => v.status)).toEqual([
+        'DRAFT',
+        'DRAFT',
+      ]);
+      expect(history.body.versions[0].author).toEqual({ fullName: expect.any(String) });
     });
 
     it('a JUNIOR_DOCTOR can write drafts but not sign off — SENIOR_DOCTOR/ADMINISTRATOR only', async () => {
@@ -448,7 +460,7 @@ describe('Clinic journey spine (e2e)', () => {
       expect(historyRes.body.versions[0].description).toBe('Acute upper respiratory infection');
     });
 
-    it('refuses to amend a diagnosis that has never been finalized', async () => {
+    it('edits an unsigned diagnosis as a new draft version', async () => {
       const token = await login(orgA.id, 'admin@journey-a.example.com', adminAPassword);
       const encounterId = await createCheckedInEncounter(token);
 
@@ -458,11 +470,12 @@ describe('Clinic journey spine (e2e)', () => {
         .send({ encounterId, description: 'Still a draft.' })
         .expect(201);
 
-      await request(app.getHttpServer())
+      const edited = await request(app.getHttpServer())
         .post(`/diagnoses/${draftRes.body.id}/amend`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ description: 'Trying to amend an unfinalized diagnosis.' })
-        .expect(409);
+        .send({ description: 'Edited while still a draft.' })
+        .expect(201);
+      expect(edited.body).toMatchObject({ versionNumber: 2, status: 'DRAFT' });
     });
 
     it('a JUNIOR_DOCTOR can write drafts but not sign off — SENIOR_DOCTOR/ADMINISTRATOR only', async () => {

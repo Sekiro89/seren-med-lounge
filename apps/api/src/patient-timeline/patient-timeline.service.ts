@@ -33,6 +33,10 @@ export interface TimelineEntry {
   entityType: string;
   entityId: string;
   encounterId?: string | null;
+  /** For visits: the appointment they belong to, so a patient can open that visit's page. */
+  appointmentId?: string | null;
+  /** A code shown small beside the detail (ICD for diagnoses). */
+  code?: string | null;
 }
 
 /**
@@ -103,7 +107,7 @@ export class PatientTimelineService {
       }),
       tx.encounter.findMany({
         where,
-        select: { id: true, status: true, startedAt: true, endedAt: true },
+        select: { id: true, status: true, startedAt: true, endedAt: true, appointmentId: true },
       }),
       tx.vital.findMany({
         where,
@@ -269,6 +273,7 @@ export class PatientTimelineService {
         entityType: 'Encounter',
         entityId: e.id,
         encounterId: e.id,
+        appointmentId: e.appointmentId,
       });
     }
     for (const v of vitals) {
@@ -311,7 +316,8 @@ export class PatientTimelineService {
         kind: 'diagnosis',
         at: d.createdAt,
         title: 'Diagnosis',
-        detail: v ? `${v.description}${v.icdCode ? ` (${v.icdCode})` : ''}` : undefined,
+        detail: v?.description,
+        code: v?.icdCode,
         status: d.status,
         entityType: 'Diagnosis',
         entityId: d.id,
@@ -426,7 +432,7 @@ export class PatientTimelineService {
         kind: 'follow_up',
         at: f.dueAt,
         title: 'Follow-up',
-        detail: f.type.toLowerCase().replace(/_/g, ' '),
+        detail: FOLLOW_UP_TITLES[f.type] ?? 'Follow-up',
         status: f.status,
         entityType: 'FollowUp',
         entityId: f.id,
@@ -476,4 +482,12 @@ const NOTE_TITLES: Record<string, string> = {
   PROGRESS: 'Progress note',
   OPERATIVE: 'Operation note',
   DISCHARGE_SUMMARY: 'Discharge summary',
+};
+
+const FOLLOW_UP_TITLES: Record<string, string> = {
+  REVIEW_APPOINTMENT: 'Review visit',
+  MEDICATION_REMINDER: 'Medicine check',
+  RECOVERY_CHECK: 'Recovery check-in',
+  REPORT_ALERT: 'Report check',
+  OTHER: 'Follow-up',
 };

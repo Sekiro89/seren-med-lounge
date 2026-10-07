@@ -571,3 +571,25 @@ anything else:
 3. **Virus scanning** is not done. Files are served with their declared
    type and `nosniff`, and only the allow-listed types are accepted, but
    nothing inspects the bytes.
+
+## 20. Clinical writing in the staff app (October 2026)
+
+Built: doctors write, edit, sign off and amend clinical notes (consultation,
+progress, operation, discharge summary) from templates; nurses record
+metabolic workups; a visit is discharged from the consultation page, which
+refuses while drafts are unsigned; senior doctors and administrators manage
+templates. Editing an unsigned note or diagnosis now adds a new DRAFT
+version (the earlier text stays in History) instead of being refused.
+Decisions still needed:
+
+1. **Can doctors record vitals?** `vitals:write` is held by nurses and
+   administrators only, so a doctor who re-measures blood pressure in the
+   room cannot enter it. The diagram puts vitals at the nurse's intake
+   station; confirm that is the clinic's practice or grant doctors
+   `vitals:write` (one line in `packages/permissions/src/matrix.ts`).
+2. **Structured template fields** (`fields` on a template version) are
+   stored but not shown or filled in; notes are SOAP text. Decide whether
+   structured fields are needed before building a form renderer.
+3. **Discharge with a care plan** in one step: the API accepts an
+   optional care plan on discharge; the UI discharges first and the care
+   plan is created from the patient record. Fine for now; flagging.

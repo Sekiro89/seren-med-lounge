@@ -60,6 +60,15 @@ COPY --from=builder /prod/api /app
 
 EXPOSE 4000
 
+# /health/ready answers 503 unless Postgres AND Redis are reachable
+# (app.service.ts), so an unhealthy container means a real dependency
+# problem, not just "process up". busybox wget (in alpine) exits non-zero
+# on a non-2xx status. Port is fixed to 4000 here: the compose file sets
+# API_PORT to match, and a different API_PORT needs a matching
+# healthcheck override at the orchestrator level.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:4000/health/ready || exit 1
+
 # NOT dist/main.js: `nest build` has no rootDir set in tsconfig.build.json
 # (it's inferred from the union of src/ and scripts/), so the compiled
 # output nests under dist/src/, not dist/ directly — confirmed by

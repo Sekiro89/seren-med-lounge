@@ -50,6 +50,7 @@ export class PatientConsentService {
     const history = await this.prisma.withTenant(organizationId, (tx) =>
       tx.patientConsent.findMany({
         where: { patientId },
+        include: { recordedBy: { select: { fullName: true } } },
         orderBy: { createdAt: 'asc' },
       }),
     );

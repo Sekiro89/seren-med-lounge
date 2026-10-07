@@ -161,14 +161,12 @@ export class DiagnosesService {
   ) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const latest = await this.requireLatestVersion(tx, diagnosisId);
-      if (
-        latest.status !== ClinicalRecordStatus.FINALIZED &&
-        latest.status !== ClinicalRecordStatus.AMENDED
-      ) {
-        throw new ConflictException(
-          'Only a finalized diagnosis can be amended — sign it off first.',
-        );
-      }
+      // Signed: a new AMENDED version, the signed one stays. Unsigned: a new
+      // DRAFT version, so a correction before sign-off is just as traceable.
+      const signed =
+        latest.status === ClinicalRecordStatus.FINALIZED ||
+        latest.status === ClinicalRecordStatus.AMENDED;
+      const nextStatus = signed ? ClinicalRecordStatus.AMENDED : ClinicalRecordStatus.DRAFT;
 
       const nextVersionNumber = latest.versionNumber + 1;
       const amended = await tx.diagnosisVersion.create({
@@ -176,7 +174,7 @@ export class DiagnosesService {
           organizationId,
           diagnosisId,
           versionNumber: nextVersionNumber,
-          status: ClinicalRecordStatus.AMENDED,
+          status: nextStatus,
           authorId,
           ...content,
         },
@@ -184,13 +182,13 @@ export class DiagnosesService {
 
       await tx.diagnosis.update({
         where: { id: diagnosisId },
-        data: { status: ClinicalRecordStatus.AMENDED, currentVersionNumber: nextVersionNumber },
+        data: { status: nextStatus, currentVersionNumber: nextVersionNumber },
       });
 
       await this.auditService.record(tx, organizationId, {
         actorType: 'USER',
         actorId: authorId,
-        action: 'diagnosis.amend',
+        action: signed ? 'diagnosis.amend' : 'diagnosis.edit_draft',
         entityType: 'Diagnosis',
         entityId: diagnosisId,
         metadata: { versionNumber: nextVersionNumber },

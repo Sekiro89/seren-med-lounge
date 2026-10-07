@@ -103,7 +103,12 @@ export class ClinicalNotesService {
     const note = await this.prisma.withTenant(organizationId, (tx) =>
       tx.clinicalNote.findUnique({
         where: { id: clinicalNoteId },
-        include: { versions: { orderBy: { versionNumber: 'asc' } } },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'asc' },
+            include: { author: { select: { fullName: true } } },
+          },
+        },
       }),
     );
     if (!note) {
@@ -178,12 +183,13 @@ export class ClinicalNotesService {
   ) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const latest = await this.requireLatestVersion(tx, clinicalNoteId);
-      if (
-        latest.status !== ClinicalRecordStatus.FINALIZED &&
-        latest.status !== ClinicalRecordStatus.AMENDED
-      ) {
-        throw new ConflictException('Only a finalized note can be amended — sign it off first.');
-      }
+      // A signed note is amended (new AMENDED version, the signed one stays);
+      // an unsigned one is simply edited (new DRAFT version). Either way the
+      // earlier text is kept, so a typo fix is as traceable as an amendment.
+      const signed =
+        latest.status === ClinicalRecordStatus.FINALIZED ||
+        latest.status === ClinicalRecordStatus.AMENDED;
+      const nextStatus = signed ? ClinicalRecordStatus.AMENDED : ClinicalRecordStatus.DRAFT;
 
       const nextVersionNumber = latest.versionNumber + 1;
       const amended = await tx.clinicalNoteVersion.create({
@@ -191,7 +197,7 @@ export class ClinicalNotesService {
           organizationId,
           clinicalNoteId,
           versionNumber: nextVersionNumber,
-          status: ClinicalRecordStatus.AMENDED,
+          status: nextStatus,
           source: ClinicalRecordSource.MANUAL,
           authorId,
           ...content,
@@ -200,13 +206,13 @@ export class ClinicalNotesService {
 
       await tx.clinicalNote.update({
         where: { id: clinicalNoteId },
-        data: { status: ClinicalRecordStatus.AMENDED, currentVersionNumber: nextVersionNumber },
+        data: { status: nextStatus, currentVersionNumber: nextVersionNumber },
       });
 
       await this.auditService.record(tx, organizationId, {
         actorType: 'USER',
         actorId: authorId,
-        action: 'clinical_note.amend',
+        action: signed ? 'clinical_note.amend' : 'clinical_note.edit_draft',
         entityType: 'ClinicalNote',
         entityId: clinicalNoteId,
         metadata: { versionNumber: nextVersionNumber },
