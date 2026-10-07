@@ -22,6 +22,7 @@
     "docker:down": "docker compose down",
     "prisma:generate": "pnpm --filter api prisma:generate",
     "prisma:migrate": "pnpm --filter api prisma:migrate",
+    "demo:seed": "pnpm --filter \"./packages/*\" build && pnpm --filter api exec prisma migrate deploy && pnpm --filter api seed:demo",
     "prepare": "husky"
   },
   "devDependencies": {

@@ -114,18 +114,20 @@ pnpm dev:staff                # http://localhost:3001
 
 ### Try the demo (UI review)
 
-After the setup above, load the demo clinic. It plays one evening clinic
-day, the same one as the approved Clinical Ink prototype, with data for
-every role:
+After the setup above, load the demo clinic with one command. It plays one
+evening clinic day, the same one as the approved Clinical Ink prototype,
+with data for every role:
 
 ```bash
-pnpm --filter api exec ts-node -O '{"module":"commonjs"}' scripts/seed-demo.ts
+pnpm demo:seed
 ```
 
-- Already have a database from an earlier pull? Run
-  `pnpm --filter api exec prisma migrate deploy` and
-  `pnpm --filter "./packages/*" build` first, then re-run the seed (it
-  wipes and rebuilds only the `demo-clinic` organization).
+It builds the shared packages, applies any new migrations, then wipes and
+rebuilds only the `demo-clinic` organization. Run it again after every pull
+(and whenever you want to undo what you clicked through): everyone who runs
+it sees the same patients, visits, notes, results and invoices, dated to
+their own today. The data lives in your local database, never in git.
+
 - `apps/api/.env` must have `DEFAULT_ORGANIZATION_ID=demo-clinic` (the
   default in `.env.example`), so the sign-in pages find the demo clinic.
 
