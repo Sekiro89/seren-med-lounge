@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service';
+import { userSessionRevocationKey } from './session-revocation';
 
 /**
  * Split out from AuthService deliberately: JwtAuthGuard (common/guards)
@@ -23,6 +24,15 @@ export class TokenBlacklistService {
   async isRevoked(jti: string): Promise<boolean> {
     const value = await this.redis.client.get(TokenBlacklistService.key(jti));
     return value !== null;
+  }
+
+  /**
+   * True when this user's sessions were ended after the token was issued.
+   * `issuedAt` is the token's `iat` (seconds).
+   */
+  async isUserSessionRevoked(userId: string, issuedAt: number): Promise<boolean> {
+    const value = await this.redis.client.get(userSessionRevocationKey(userId));
+    return value !== null && issuedAt <= Number(value);
   }
 
   private static key(jti: string): string {

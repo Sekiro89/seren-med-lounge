@@ -53,6 +53,12 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token has been revoked.');
     }
 
+    // Sessions ended on purpose (role change, switched off): see
+    // auth/session-revocation.ts.
+    if (await this.tokenBlacklist.isUserSessionRevoked(payload.sub, payload.iat)) {
+      throw new UnauthorizedException('Your session has ended. Please sign in again.');
+    }
+
     // Built per-branch (not one spread) so TypeScript keeps `role`
     // narrowed to the actorType it actually belongs to — see the
     // discriminated-union comment on AuthenticatedUser.

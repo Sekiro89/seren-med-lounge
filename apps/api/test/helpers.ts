@@ -13,6 +13,7 @@ import { AppModule } from '../src/app.module';
 /** Every organization-scoped model, children before parents (FK-safe delete order). */
 const WIPE_ORDER = [
   'auditLog',
+  'integrationSetting',
   'message',
   'messageThread',
   'notification',

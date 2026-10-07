@@ -48,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     'review:manage',
     'schedule:manage',
     'message:manage',
+    'integration:manage',
   ],
   [StaffRole.RECEPTION]: [
     'patient:read',

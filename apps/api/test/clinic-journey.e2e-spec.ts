@@ -573,14 +573,26 @@ describe('Clinic journey spine (e2e)', () => {
       expect(cbcItem.results).toHaveLength(1);
       expect(cbcItem.results[0].resultValue).toBe('5.4');
 
-      const cancelRes = await request(app.getHttpServer())
+      // A reported result is part of the clinical record: the order can no
+      // longer be cancelled.
+      await request(app.getHttpServer())
         .post(`/lab-orders/${labOrderId}/cancel`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(409);
+
+      const unresulted = await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, items: [{ testName: 'Urine routine' }] })
+        .expect(201);
+      const cancelRes = await request(app.getHttpServer())
+        .post(`/lab-orders/${unresulted.body.id}/cancel`)
         .set('Authorization', `Bearer ${token}`)
         .expect(201);
       expect(cancelRes.body.status).toBe('CANCELLED');
 
       await request(app.getHttpServer())
-        .post(`/lab-orders/${labOrderId}/cancel`)
+        .post(`/lab-orders/${unresulted.body.id}/cancel`)
         .set('Authorization', `Bearer ${token}`)
         .expect(409);
     });
@@ -950,8 +962,14 @@ describe('Clinic journey spine (e2e)', () => {
         .expect(201);
       const labResultId = labResultRes.body.id as string;
 
+      const cancelledLabOrderRes = await request(app.getHttpServer())
+        .post('/lab-orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ encounterId, items: [{ testName: 'Audit trail cancel check.' }] })
+        .expect(201);
+      const cancelledLabOrderId = cancelledLabOrderRes.body.id as string;
       await request(app.getHttpServer())
-        .post(`/lab-orders/${labOrderId}/cancel`)
+        .post(`/lab-orders/${cancelledLabOrderId}/cancel`)
         .set('Authorization', `Bearer ${token}`)
         .expect(201);
 
@@ -1067,7 +1085,7 @@ describe('Clinic journey spine (e2e)', () => {
           expect.objectContaining({
             action: 'lab_order.cancel',
             entityType: 'LabOrder',
-            entityId: labOrderId,
+            entityId: cancelledLabOrderId,
             actorId: adminAId,
           }),
           expect.objectContaining({

@@ -7,6 +7,7 @@ import { z } from 'zod';
 // when NODE_ENV=production and one of them is still in place, meaning
 // nobody actually set a real secret/credential for this deployment.
 const PLACEHOLDER_JWT_SECRET = 'replace-with-a-long-random-string';
+const PLACEHOLDER_INTEGRATION_KEY = 'replace-with-another-long-random-string-for-integrations';
 const DEV_APP_DB_CREDENTIAL = 'serenemed_app:serenemed_app';
 const DEV_SUPERUSER_DB_CREDENTIAL = 'serenemed:serenemed';
 // Organization ids that only the dev seed scripts create (scripts/seed-dev.ts,
@@ -66,6 +67,8 @@ export const apiEnvSchema = z
     // custom domain per clinic), it just stops blocking today's real
     // single-clinic case on an unbuilt multi-tenant UI decision.
     DEFAULT_ORGANIZATION_ID: z.string().optional(),
+    // Encrypts integration API keys saved in the database. 32+ characters.
+    INTEGRATION_ENCRYPTION_KEY: z.string().min(32).optional(),
   })
   /**
    * A schema that only checks JWT_SECRET.min(16) would happily accept
@@ -91,6 +94,20 @@ export const apiEnvSchema = z
           `DEFAULT_ORGANIZATION_ID is "${env.DEFAULT_ORGANIZATION_ID}", a clinic that only the dev ` +
           'seed scripts create (with well-known demo passwords). Point it at the real clinic, ' +
           'or leave it unset and have clients send organizationId.',
+      });
+    }
+
+    if (
+      !env.INTEGRATION_ENCRYPTION_KEY ||
+      env.INTEGRATION_ENCRYPTION_KEY === PLACEHOLDER_INTEGRATION_KEY
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['INTEGRATION_ENCRYPTION_KEY'],
+        message:
+          'INTEGRATION_ENCRYPTION_KEY is missing or still the placeholder. It encrypts the API keys ' +
+          'stored in the database; set a long random value (32+ characters) and keep it safe: ' +
+          'losing it makes saved keys unreadable.',
       });
     }
 

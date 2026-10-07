@@ -577,6 +577,14 @@ procedure). Permissions are the slugs already reserved in the matrix:
 `invoice:manage`, `payment:manage`, `refund:issue` (BILLING and
 ADMINISTRATOR).
 
+### Integration secrets
+
+API keys for outside services are kept in `integration_settings`. They are encrypted with AES-256-GCM (`INTEGRATION_ENCRYPTION_KEY`, 32+ characters, required in production) before they touch the database; the API returns only whether each secret is set and a masked hint of its last four characters (and nothing at all for short secrets). Only `integration:manage` (administrators) can read that list or change anything, every change is audited by field name without values, and `IntegrationSettingsService.getDecrypted` is server-side only with no route. See `docs/architecture/open-questions.md#17` for the key-management caveats.
+
+### Ending sessions on role change
+
+Access tokens carry the role, so on a role change or switch-off the user's sessions are ended explicitly: the moment is stored in Redis (`auth:revoked-user-sessions:<id>`, one hour) and `JwtAuthGuard` refuses any token issued at or before it. The old token stops working on the very next request instead of surviving to its 15-minute expiry.
+
 ## AI consultation assistant — safety boundary
 
 See `docs/workflows/doctor-consultation.md` for the full flow. The

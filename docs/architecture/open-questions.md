@@ -490,3 +490,31 @@ patient's phone yet.
 **Data lifecycle** — users and patients are deactivated / soft-deleted,
 never hard-deleted. Notifications cascade with their recipient; a staff
 user who has sent patient messages cannot be hard-deleted at all.
+
+## 17. Admin controls, API keys and sessions (October 2026) - what to know
+
+**API keys (Integrations page, `integration:manage`, administrators only)**
+
+- Keys are encrypted at rest (AES-256-GCM) with `INTEGRATION_ENCRYPTION_KEY`, shown only as the last four characters, never returned by any route and never written to the audit log (it records which fields changed, not values). Production refuses to boot without a real key.
+- **Losing or changing that key makes saved keys unreadable.** There is no key-rotation tool yet; rotating means re-entering the keys. Decide where the production key is kept and who holds a backup.
+- Saving a connection does **not** test it. Nothing contacts a provider until an adapter is built for the chosen provider, so a status of "Connected" means "saved and switched on", not "verified".
+- The provider list lives in `INTEGRATION_CATALOG` (`packages/validation/src/integrations.ts`). Adding or changing a provider's fields is a small code change.
+
+**Sessions**
+
+- Changing someone's role or switching them off now ends their open sessions immediately (the moment is stored in Redis; older tokens are refused). Before this, a demoted user kept their old access until the 15-minute token expired.
+- Switching off blocks future sign-ins; a patient-facing or staff password-change screen does not exist yet.
+
+**Staff controls**
+
+- Administrators can add staff, switch them off or on, and change roles. They cannot change their own account, and the clinic always keeps at least one active administrator.
+- `GET /users/directory` is open to every signed-in staff member (names and roles of active staff only) so people can assign tasks and follow-ups. Say if the client wants that restricted.
+
+**Limits and gaps found while building the screens**
+
+- List endpoints are capped (invoices 100, leads 200, insurance cases 200, lab orders 100, patients 20 per search) with no paging yet. Fine for a demo; needs paging before a busy clinic.
+- The audit log pages by timestamp only; two rows with an identical timestamp across a page boundary could be skipped. A tiebreaker on id would fix it.
+- An insurance case can only be linked to an invoice when it is created, and a case without one cannot be settled.
+- A lead's owner cannot be changed after creation; an assigned message thread cannot be unassigned.
+- A lab order can no longer be cancelled once any result is entered (now enforced by the server, not just the screen).
+- `Payments` and `Reports` still open "is being built" pages: payments are handled inside Billing, and reporting has no backend yet.

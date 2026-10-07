@@ -18,3 +18,19 @@ export const createUserSchema = z.object({
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+/**
+ * Change one staff member: switch them off or on, and/or give them another
+ * role. At least one of the two is required. See UsersService.update for
+ * the safeguards (not yourself; always one active administrator left).
+ */
+export const updateUserSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    role: z.nativeEnum(StaffRole).optional(),
+  })
+  .refine((v) => v.isActive !== undefined || v.role !== undefined, {
+    message: 'Send isActive, role, or both.',
+  });
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;

@@ -55,6 +55,7 @@ import { MessagesModule } from './messages/messages.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { AiModule } from './ai/ai.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { IntegrationSettingsModule } from './integration-settings/integration-settings.module';
 import { AuditModule } from './audit/audit.module';
 import { ReportsModule } from './reports/reports.module';
 
@@ -146,6 +147,7 @@ import { ReportsModule } from './reports/reports.module';
     // --- cross-cutting ---
     AiModule,
     IntegrationsModule,
+    IntegrationSettingsModule,
     AuditModule,
     ReportsModule,
   ],

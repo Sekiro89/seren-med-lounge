@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { LabOrderStatus } from '@prisma/client';
 import {
   createLabOrderSchema,
   recordLabResultSchema,
@@ -16,6 +17,24 @@ export class LabsController {
     private readonly labsService: LabsService,
     private readonly tenantContext: TenantContextService,
   ) {}
+
+  /** `?status=ORDERED|CANCELLED`, `?patientId=`, `?pending=true` (tests still waiting for a result). */
+  @Get()
+  @RequirePermissions('patient-record:read-clinical')
+  list(
+    @Query('status') status?: string,
+    @Query('patientId') patientId?: string,
+    @Query('pending') pending?: string,
+  ) {
+    if (status && !(status in LabOrderStatus)) {
+      throw new BadRequestException('Unknown status.');
+    }
+    return this.labsService.listOrders(this.tenantContext.organizationId, {
+      status: status as LabOrderStatus | undefined,
+      patientId,
+      pending: pending === 'true',
+    });
+  }
 
   @Get(':id')
   @RequirePermissions('patient-record:read-clinical')
@@ -45,9 +64,8 @@ export class LabsController {
 
   /**
    * A separate permission from the order itself (lab-result:write, not
-   * lab-order:write) — today only ADMINISTRATOR has it (there's no lab
-   * technician StaffRole yet), a real, documented gap rather than a
-   * guessed-at role — see docs/architecture/security.md.
+   * lab-order:write): held by LAB_TECHNICIAN and ADMINISTRATOR. Doctors order
+   * tests; they don't enter results.
    */
   @Post('items/:itemId/results')
   @RequirePermissions('lab-result:write')

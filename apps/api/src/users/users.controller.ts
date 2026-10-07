@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Param,
   Post,
   Query,
   Req,
@@ -11,11 +12,17 @@ import {
 import type { Request } from 'express';
 import { StaffRole } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface';
-import { createUserSchema, type CreateUserInput } from '@serenemed/validation';
+import {
+  createUserSchema,
+  updateUserSchema,
+  type CreateUserInput,
+  type UpdateUserInput,
+} from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { TenantContextService } from '../prisma/tenant-context.service';
 import { UsersService } from './users.service';
+import { toPrismaStaffRole } from './staff-role.mapper';
 
 @Controller('users')
 export class UsersController {
@@ -55,6 +62,24 @@ export class UsersController {
       this.tenantContext.organizationId,
       this.tenantContext.userId,
       body,
+    );
+  }
+
+  /** Switch a staff member off or on, or change their role. */
+  @Post(':id')
+  @RequirePermissions('user:manage')
+  update(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateUserSchema)) body: UpdateUserInput,
+  ) {
+    return this.usersService.update(
+      this.tenantContext.organizationId,
+      this.tenantContext.userId,
+      id,
+      {
+        isActive: body.isActive,
+        role: body.role ? toPrismaStaffRole(body.role) : undefined,
+      },
     );
   }
 }

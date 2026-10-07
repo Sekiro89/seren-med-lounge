@@ -44,6 +44,7 @@ const PASSWORD = 'dev-password-123';
 /** Children before parents so foreign keys never block the wipe. */
 const WIPE_ORDER = [
   'auditLog',
+  'integrationSetting',
   'message',
   'messageThread',
   'notification',
@@ -362,6 +363,298 @@ async function main() {
         type: 'GENERAL',
         recipientRole: 'RECEPTION',
         title: 'Clinic opens at 09:00. Two online bookings are waiting to be confirmed.',
+      },
+    ],
+  });
+
+  // ---- Pharmacy catalogue and stock (one batch near expiry, one running low).
+  const day = 86_400_000;
+  const medicines: Array<
+    [string, string, string, string, number, number, Array<[string, number, number]>]
+  > = [
+    [
+      'Metformin',
+      'TABLET',
+      '500 mg',
+      'tablet',
+      350,
+      200,
+      [
+        ['MET-2411', 400, 0.05],
+        ['MET-2502', 600, 1.2],
+      ],
+    ],
+    ['Atorvastatin', 'TABLET', '10 mg', 'tablet', 900, 150, [['ATO-2409', 180, 0.6]]],
+    ['Amoxicillin', 'CAPSULE', '500 mg', 'capsule', 1200, 100, [['AMX-2408', 60, 0.04]]],
+    ['Pantoprazole', 'TABLET', '40 mg', 'tablet', 700, 120, [['PAN-2503', 500, 1.5]]],
+    ['Paracetamol', 'TABLET', '650 mg', 'tablet', 200, 300, [['PCM-2501', 1200, 2.0]]],
+    ['Cetirizine', 'TABLET', '10 mg', 'tablet', 250, 100, [['CET-2410', 90, 0.07]]],
+  ];
+  for (const [name, form, strength, unit, price, reorder, batches] of medicines) {
+    const medication = await db.medication.create({
+      data: {
+        organizationId: ORG_ID,
+        name,
+        form: form as 'TABLET',
+        strength,
+        unit,
+        unitPriceMinor: price,
+        reorderLevel: reorder,
+      },
+    });
+    for (const [batchNumber, qty, years] of batches) {
+      await db.stockBatch.create({
+        data: {
+          organizationId: ORG_ID,
+          medicationId: medication.id,
+          batchNumber,
+          expiryDate: new Date(Date.now() + years * 365 * day),
+          quantityReceived: qty + 40,
+          quantityOnHand: qty,
+          receivedById: users.pharmacy!,
+        },
+      });
+    }
+  }
+
+  // ---- Lab orders: one waiting for results, one finished.
+  const labEncounters = encounters.slice(0, 2);
+  const waiting = await db.labOrder.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: labEncounters[1]!.patientId,
+      encounterId: labEncounters[1]!.id,
+      authorId: users.senior!,
+      items: {
+        create: [
+          { organizationId: ORG_ID, testName: 'HbA1c' },
+          { organizationId: ORG_ID, testName: 'Lipid profile' },
+        ],
+      },
+    },
+  });
+  const done = await db.labOrder.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: labEncounters[0]!.patientId,
+      encounterId: labEncounters[0]!.id,
+      authorId: users.senior!,
+      items: { create: [{ organizationId: ORG_ID, testName: 'Complete blood count' }] },
+    },
+    include: { items: true },
+  });
+  await db.labResult.create({
+    data: {
+      organizationId: ORG_ID,
+      labOrderItemId: done.items[0]!.id,
+      resultValue: '13.4',
+      unit: 'g/dL',
+      referenceRange: '12.0 to 15.5',
+      enteredById: users.lab!,
+    },
+  });
+  void waiting;
+
+  // ---- A referral to the senior doctor, and a surgery being planned.
+  await db.referral.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: encounters[2]!.patientId,
+      encounterId: encounters[2]!.id,
+      type: 'INTERNAL',
+      toUserId: users.senior!,
+      reason: 'Persistent knee pain, needs a senior opinion.',
+      urgency: 'URGENT',
+      referredById: users.junior!,
+    },
+  });
+  await db.procedure.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: encounters[3]!.patientId,
+      encounterId: encounters[3]!.id,
+      kind: 'SURGERY',
+      name: 'Laparoscopic cholecystectomy',
+      estimateMinor: 8500000,
+      createdById: users.senior!,
+      checklist: {
+        create: [
+          { organizationId: ORG_ID, label: 'Fasting from midnight' },
+          { organizationId: ORG_ID, label: 'Blood grouping done' },
+          { organizationId: ORG_ID, label: 'Anaesthesia review' },
+        ],
+      },
+    },
+  });
+
+  // ---- Marketing: two campaigns and a spread of leads.
+  const camp = await db.campaign.create({
+    data: {
+      organizationId: ORG_ID,
+      name: 'Diabetes awareness camp',
+      type: 'HEALTH_CAMP',
+      status: 'ACTIVE',
+      location: 'Indiranagar Community Hall',
+      startsAt: new Date(Date.now() + 9 * day),
+      createdById: users.marketing!,
+    },
+  });
+  const social = await db.campaign.create({
+    data: {
+      organizationId: ORG_ID,
+      name: 'Winter wellness packages',
+      type: 'DIGITAL',
+      channel: 'Instagram',
+      status: 'ACTIVE',
+      createdById: users.marketing!,
+    },
+  });
+  const leads: Array<
+    [
+      string,
+      string,
+      string,
+      string,
+      'NEW' | 'CONTACTED' | 'NURTURING' | 'LOST',
+      string | null,
+      boolean,
+    ]
+  > = [
+    ['Anitha', 'Rajan', '9845012233', 'CAMPAIGN', 'NEW', camp.id, true],
+    ['Zubair', 'Khan', '9901233344', 'WEBSITE', 'CONTACTED', null, true],
+    ['Meenakshi', 'Sundaram', '9886455512', 'CAMPAIGN', 'NURTURING', social.id, true],
+    ['Rahul', 'Bhandari', '9740011223', 'WALK_IN', 'NEW', null, false],
+    ['Kavya', 'Menon', '9035122987', 'REFERRAL', 'LOST', null, true],
+  ];
+  for (const [firstName, lastName, phone, source, status, campaignId, consent] of leads) {
+    await db.lead.create({
+      data: {
+        organizationId: ORG_ID,
+        firstName,
+        lastName,
+        phone,
+        source: source as 'WEBSITE',
+        status,
+        campaignId,
+        ownerId: users.marketing!,
+        consentToContact: consent,
+        consentRecordedAt: consent ? new Date() : null,
+        enquiry: status === 'NEW' ? 'Asked about a full-body health check.' : null,
+        nextFollowUpAt: status === 'CONTACTED' ? at('16:30') : null,
+        lostReason: status === 'LOST' ? 'Chose a clinic closer to home.' : null,
+      },
+    });
+  }
+
+  // ---- Insurance: a policy and a case at the pre-authorisation stage.
+  const policy = await db.insurancePolicy.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: patients[1]!,
+      insurerName: 'Star Health',
+      policyNumber: 'P/151313/01/2026/008812',
+      memberId: 'SH-2290417',
+      sumInsuredMinor: 50000000,
+    },
+  });
+  const insuranceCase = await db.insuranceCase.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: patients[1]!,
+      policyId: policy.id,
+      status: 'PRE_AUTH_REQUESTED',
+      requestedAmountMinor: 8500000,
+      preAuthReference: 'PA-77120',
+      createdById: users.insurance!,
+    },
+  });
+  await db.insuranceCaseEvent.createMany({
+    data: [
+      {
+        organizationId: ORG_ID,
+        caseId: insuranceCase.id,
+        toStatus: 'ELIGIBILITY_CHECK',
+        actorId: users.insurance!,
+      },
+      {
+        organizationId: ORG_ID,
+        caseId: insuranceCase.id,
+        fromStatus: 'ELIGIBILITY_CHECK',
+        toStatus: 'PRE_AUTH_REQUESTED',
+        amountMinor: 8500000,
+        actorId: users.insurance!,
+        note: 'Pre-authorisation form sent to the TPA.',
+      },
+    ],
+  });
+
+  // ---- A patient message waiting for the front desk.
+  const thread = await db.messageThread.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: patients[4]!,
+      subject: 'Can I move my appointment to Friday?',
+    },
+  });
+  await db.message.create({
+    data: {
+      organizationId: ORG_ID,
+      threadId: thread.id,
+      senderType: 'PATIENT',
+      body: 'Hello, I have a meeting on Thursday. Is there any slot on Friday morning?',
+    },
+  });
+
+  // ---- A review waiting for moderation.
+  const reviewRequest = await db.reviewRequest.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: patients[0]!,
+      stage: 'AFTER_SECOND_CONSULTATION',
+      dedupeKey: 'AFTER_SECOND_CONSULTATION:-',
+      status: 'SUBMITTED',
+      expiresAt: new Date(Date.now() + 30 * day),
+      requestedById: users.marketing!,
+    },
+  });
+  await db.review.create({
+    data: {
+      organizationId: ORG_ID,
+      patientId: patients[0]!,
+      requestId: reviewRequest.id,
+      stage: 'AFTER_SECOND_CONSULTATION',
+      rating: 5,
+      comment: 'The doctor explained everything clearly and the waiting time was short.',
+      publishConsent: true,
+    },
+  });
+
+  // ---- A few tasks.
+  await db.staffTask.createMany({
+    data: [
+      {
+        organizationId: ORG_ID,
+        title: 'Call Mrs. Narayanan about her recovery',
+        assigneeId: users.nurse!,
+        createdById: users.senior!,
+        priority: 'HIGH',
+        dueAt: at('17:00'),
+      },
+      {
+        organizationId: ORG_ID,
+        title: 'Reorder Metformin 500 mg',
+        assigneeId: users.pharmacy!,
+        createdById: users.admin!,
+        priority: 'NORMAL',
+        dueAt: new Date(Date.now() + 2 * day),
+      },
+      {
+        organizationId: ORG_ID,
+        title: "Confirm tomorrow's online bookings",
+        assigneeId: users.reception!,
+        createdById: users.reception!,
+        priority: 'NORMAL',
+        dueAt: at('18:00'),
       },
     ],
   });

@@ -43,4 +43,5 @@ export type Permission =
   | 'clinical-template:manage'
   | 'review:manage'
   | 'schedule:manage'
-  | 'message:manage';
+  | 'message:manage'
+  | 'integration:manage';

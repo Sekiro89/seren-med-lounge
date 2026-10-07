@@ -66,6 +66,33 @@ export class LabsService {
     });
   }
 
+  /**
+   * Staff worklist of lab orders: newest first, optionally by status or
+   * patient. `pending=true` keeps only orders that still have a test with
+   * no result entered, which is the lab technician's queue.
+   */
+  async listOrders(
+    organizationId: string,
+    filter: { status?: LabOrderStatus; patientId?: string; pending?: boolean },
+  ) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.labOrder.findMany({
+        where: {
+          status: filter.status,
+          patientId: filter.patientId,
+          items: filter.pending ? { some: { results: { none: {} } } } : undefined,
+        },
+        include: {
+          patient: { select: { id: true, firstName: true, lastName: true } },
+          author: { select: { id: true, fullName: true } },
+          items: { include: { results: { orderBy: { createdAt: 'desc' } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+    );
+  }
+
   async getOrder(organizationId: string, labOrderId: string) {
     const labOrder = await this.prisma.withTenant(organizationId, (tx) =>
       tx.labOrder.findUnique({
@@ -103,6 +130,14 @@ export class LabsService {
       }
       if (labOrder.status === LabOrderStatus.CANCELLED) {
         throw new ConflictException('This lab order is already cancelled.');
+      }
+      // A reported result is part of the clinical record: an order that has
+      // any can no longer be cancelled.
+      const resulted = await tx.labResult.count({ where: { labOrderItem: { labOrderId } } });
+      if (resulted > 0) {
+        throw new ConflictException(
+          'Results have been entered for this order, so it cannot be cancelled.',
+        );
       }
 
       const cancelled = await tx.labOrder.update({

@@ -55,3 +55,7 @@ modules changes, because they only ever depended on the interface.
 - **AI consultation assistant** (`ai/`) — transcription + draft-note
   generation only. Safety boundary (draft-only, never finalizes a
   record) is documented in `security.md` and `docs/integrations/ai.md`.
+
+## Where the keys are entered
+
+Administrators add API keys and connection details on the **Integrations** page (`/integrations`), one entry per service in `INTEGRATION_CATALOG`: online payments, AI assistant, SMS, WhatsApp, email, accounting (Zoho), file storage, laboratory partner, insurance/TPA and video consultation. Provider names for payments, AI and messaging are free text on purpose: nothing is contracted yet. A provider adapter (the `integrations/*` ports) reads its keys with `IntegrationSettingsService.getDecrypted(organizationId, provider)`, server-side only. Keys saved there are stored encrypted; see `security.md#integration-secrets`.

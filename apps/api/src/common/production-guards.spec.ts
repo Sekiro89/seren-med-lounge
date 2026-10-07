@@ -13,6 +13,7 @@ describe('production boot guards', () => {
     DIRECT_DATABASE_URL:
       'postgresql://owner_prod:s3cret@db.internal:5432/serenemed?sslmode=require',
     REDIS_URL: 'rediss://cache.internal:6379',
+    INTEGRATION_ENCRYPTION_KEY: 'a-real-long-random-integration-key-0123456789abcdef',
   };
 
   const issuePaths = (env: Record<string, string>) => {
@@ -44,5 +45,18 @@ describe('production boot guards', () => {
         DEFAULT_ORGANIZATION_ID: 'demo-clinic',
       }),
     ).not.toContain('DEFAULT_ORGANIZATION_ID');
+  });
+
+  it('refuses production without a real integration encryption key', () => {
+    const withoutKey: Record<string, string> = { ...realProduction };
+    delete withoutKey.INTEGRATION_ENCRYPTION_KEY;
+    expect(issuePaths(withoutKey)).toContain('INTEGRATION_ENCRYPTION_KEY');
+    expect(
+      issuePaths({
+        ...realProduction,
+        INTEGRATION_ENCRYPTION_KEY: 'replace-with-another-long-random-string-for-integrations',
+      }),
+    ).toContain('INTEGRATION_ENCRYPTION_KEY');
+    expect(issuePaths(realProduction)).not.toContain('INTEGRATION_ENCRYPTION_KEY');
   });
 });

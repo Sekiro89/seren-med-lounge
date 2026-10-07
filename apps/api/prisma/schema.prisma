@@ -147,6 +147,7 @@ model Organization {
   notifications            Notification[]
   messageThreads           MessageThread[]
   messages                 Message[]
+  integrationSettings      IntegrationSetting[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -232,6 +233,7 @@ model User {
   notifications                   Notification[]            @relation("NotificationRecipient")
   threadsAssigned                 MessageThread[]           @relation("ThreadAssignee")
   messagesSent                    Message[]                 @relation("MessageSender")
+  integrationsUpdated             IntegrationSetting[]      @relation("IntegrationUpdatedBy")
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -2204,4 +2206,35 @@ model Message {
   @@index([organizationId])
   @@index([threadId, createdAt])
   @@map("messages")
+}
+
+// =============================================================================
+// INTEGRATION SETTINGS — where an administrator keeps the API keys and
+// connection details for outside services (payment gateway, AI, messaging,
+// accounting, labs...). The catalogue of providers and their fields lives
+// in @serenemed/validation (INTEGRATION_CATALOG).
+//
+// SECRETS: encrypted at rest with AES-256-GCM (INTEGRATION_ENCRYPTION_KEY)
+// into `secretsEncrypted`; never returned by the API (only a masked hint in
+// `secretHints`); never written to the audit log. Non-secret fields (URLs,
+// sender ids, modes) live in `config`. Nothing here talks to a provider:
+// the integrations/* ports stay stubs until a provider is contracted.
+// =============================================================================
+
+model IntegrationSetting {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  provider         String
+  enabled          Boolean      @default(false)
+  config           Json         @default("{}")
+  secretsEncrypted String?
+  secretHints      Json         @default("{}")
+  updatedById      String
+  updatedBy        User         @relation("IntegrationUpdatedBy", fields: [updatedById], references: [id])
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([organizationId, provider])
+  @@map("integration_settings")
 }
