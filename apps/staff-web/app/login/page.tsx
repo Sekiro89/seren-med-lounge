@@ -12,6 +12,7 @@ import { saveStaffSession, type StaffUser } from '../../lib/auth';
 import { homeFor } from '../../lib/nav';
 import { Button } from '../../components/ui/button';
 import { Logo } from '../../components/shell/logo';
+import { DemoLogins } from './demo-logins';
 
 /**
  * No Clinic ID field: like the patient login, the server resolves the
@@ -24,6 +25,7 @@ export default function StaffLoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -178,6 +180,17 @@ export default function StaffLoginPage() {
           <p className="mt-8 text-center text-[13px] text-fg-subtle">
             Trouble signing in? Ask your clinic administrator.
           </p>
+
+          {process.env.NODE_ENV !== 'production' && (
+            <DemoLogins
+              disabled={isSubmitting}
+              onPick={(email, password) => {
+                setValue('email', email);
+                setValue('password', password);
+                void handleSubmit(onSubmit)();
+              }}
+            />
+          )}
         </div>
       </section>
     </main>

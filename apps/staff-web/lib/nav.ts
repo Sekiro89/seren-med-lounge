@@ -207,7 +207,7 @@ export const NAV: NavGroup[] = [
         href: '/staff',
         icon: Gear,
         anyOf: ['user:manage'],
-        ready: false,
+        ready: true,
       },
     ],
   },
