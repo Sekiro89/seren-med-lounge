@@ -24,6 +24,8 @@ export class EncountersService {
           metabolicWorkups: { orderBy: { createdAt: 'desc' } },
           registration: true,
           queueEntry: true,
+          referrals: { orderBy: { createdAt: 'desc' } },
+          procedures: { orderBy: { createdAt: 'desc' } },
           clinicalNotes: {
             include: {
               versions: {

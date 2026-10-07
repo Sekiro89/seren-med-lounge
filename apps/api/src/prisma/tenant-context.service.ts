@@ -1,6 +1,7 @@
 import { Inject, Injectable, Scope } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import type { Request } from 'express';
+import type { StaffRole } from '@serenemed/types';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface';
 
 /**
@@ -27,6 +28,16 @@ export class TenantContextService {
 
   get userId(): string {
     return this.requireUser().userId;
+  }
+
+  /**
+   * The caller's staff role, or null for a patient. For the few checks a
+   * static @RequirePermissions can't express (e.g. surgery:manage only
+   * when the procedure being acted on is a surgery).
+   */
+  get staffRole(): StaffRole | null {
+    const user = this.requireUser();
+    return user.actorType === 'USER' ? user.role : null;
   }
 
   private requireUser(): AuthenticatedUser {

@@ -13,3 +13,4 @@ export * from './patient-claims';
 export * from './billing';
 export * from './opd';
 export * from './pharmacy';
+export * from './procedures';

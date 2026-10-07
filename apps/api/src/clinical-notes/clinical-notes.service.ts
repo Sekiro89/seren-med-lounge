@@ -1,5 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ClinicalRecordSource, ClinicalRecordStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ClinicalNoteType, ClinicalRecordSource, ClinicalRecordStatus } from '@prisma/client';
 import type { ClinicalNoteContentInput } from '@serenemed/validation';
 import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -26,11 +31,18 @@ export class ClinicalNotesService {
     authorId: string,
     encounterId: string,
     content: ClinicalNoteContentInput,
+    options: { noteType?: ClinicalNoteType; procedureId?: string } = {},
   ) {
     return this.prisma.withTenant(organizationId, async (tx) => {
       const encounter = await tx.encounter.findUnique({ where: { id: encounterId } });
       if (!encounter) {
         throw new NotFoundException('Encounter not found.');
+      }
+      if (options.procedureId) {
+        const procedure = await tx.procedure.findUnique({ where: { id: options.procedureId } });
+        if (!procedure || procedure.patientId !== encounter.patientId) {
+          throw new BadRequestException("procedureId must be one of this patient's procedures.");
+        }
       }
 
       const note = await tx.clinicalNote.create({
@@ -38,6 +50,8 @@ export class ClinicalNotesService {
           organizationId,
           patientId: encounter.patientId,
           encounterId,
+          noteType: options.noteType ?? ClinicalNoteType.CONSULTATION,
+          procedureId: options.procedureId,
           status: ClinicalRecordStatus.DRAFT,
           currentVersionNumber: 1,
         },
@@ -61,7 +75,12 @@ export class ClinicalNotesService {
         action: 'clinical_note.create_draft',
         entityType: 'ClinicalNote',
         entityId: note.id,
-        metadata: { encounterId, patientId: encounter.patientId, versionNumber: 1 },
+        metadata: {
+          encounterId,
+          patientId: encounter.patientId,
+          versionNumber: 1,
+          noteType: note.noteType,
+        },
       });
 
       return { ...note, status: version.status, versions: [version] };

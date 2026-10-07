@@ -27,7 +27,12 @@ export const clinicalNoteContentSchema = z
 export type ClinicalNoteContentInput = z.infer<typeof clinicalNoteContentSchema>;
 
 export const createClinicalNoteDraftSchema = z
-  .object({ encounterId: z.string().min(1), ...soapFields })
+  .object({
+    encounterId: z.string().min(1),
+    noteType: z.enum(['CONSULTATION', 'PROGRESS', 'OPERATIVE', 'DISCHARGE_SUMMARY']).optional(),
+    procedureId: z.string().min(1).optional(),
+    ...soapFields,
+  })
   .refine(requireAtLeastOneNoteField, { message: 'At least one note field is required.' });
 
 export type CreateClinicalNoteDraftInput = z.infer<typeof createClinicalNoteDraftSchema>;

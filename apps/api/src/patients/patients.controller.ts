@@ -13,6 +13,7 @@ import { InvoicesService } from '../invoices/invoices.service';
 import { MedicalHistoryService } from '../medical-history/medical-history.service';
 import { QueueService } from '../queue/queue.service';
 import { PharmacyService } from '../pharmacy/pharmacy.service';
+import { ProceduresService } from '../procedures/procedures.service';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface';
 
 @Controller('patients')
@@ -28,6 +29,7 @@ export class PatientsController {
     private readonly medicalHistoryService: MedicalHistoryService,
     private readonly queueService: QueueService,
     private readonly pharmacyService: PharmacyService,
+    private readonly proceduresService: ProceduresService,
   ) {}
 
   /**
@@ -158,5 +160,11 @@ export class PatientsController {
   myDispensings(@Req() request: Request & { user: AuthenticatedUser }) {
     const user = this.requirePatient(request);
     return this.pharmacyService.listForPatient(user.organizationId, user.userId);
+  }
+
+  @Get('me/procedures')
+  myProcedures(@Req() request: Request & { user: AuthenticatedUser }) {
+    const user = this.requirePatient(request);
+    return this.proceduresService.listForPatient(user.organizationId, user.userId);
   }
 }

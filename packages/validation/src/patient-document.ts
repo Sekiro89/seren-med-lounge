@@ -7,7 +7,14 @@ import { z } from 'zod';
  */
 export const registerPatientDocumentSchema = z.object({
   patientId: z.string().min(1),
-  documentType: z.enum(['PHOTO', 'ID_PROOF', 'INSURANCE_CARD', 'PAN_CARD', 'OTHER']),
+  documentType: z.enum([
+    'PHOTO',
+    'ID_PROOF',
+    'INSURANCE_CARD',
+    'PAN_CARD',
+    'CONSENT_FORM',
+    'OTHER',
+  ]),
   storageKey: z.string().min(1).max(1000),
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(100),

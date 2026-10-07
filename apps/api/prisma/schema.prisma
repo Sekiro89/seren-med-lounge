@@ -127,6 +127,9 @@ model Organization {
   stockBatches            StockBatch[]
   stockMovements          StockMovement[]
   dispensings             Dispensing[]
+  referrals               Referral[]
+  procedures              Procedure[]
+  procedureChecklistItems ProcedureChecklistItem[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -187,6 +190,11 @@ model User {
   stockBatchesReceived     StockBatch[]
   stockMovements           StockMovement[]
   dispensings              Dispensing[]
+  referralsReceived        Referral[]               @relation("ReferralTo")
+  referralsMade            Referral[]               @relation("ReferralFrom")
+  proceduresPerformed      Procedure[]              @relation("ProcedurePerformer")
+  proceduresCreated        Procedure[]              @relation("ProcedureCreator")
+  checklistItemsCompleted  ProcedureChecklistItem[]
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -238,6 +246,8 @@ model Patient {
   medicalHistory   MedicalHistoryEntry[]
   metabolicWorkups MetabolicWorkup[]
   dispensings      Dispensing[]
+  referrals        Referral[]
+  procedures       Procedure[]
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -353,6 +363,7 @@ enum PatientDocumentType {
   ID_PROOF
   INSURANCE_CARD
   PAN_CARD
+  CONSENT_FORM
   OTHER
 }
 
@@ -432,6 +443,8 @@ model Encounter {
   registration     Registration?
   queueEntry       QueueEntry?
   metabolicWorkups MetabolicWorkup[]
+  referrals        Referral[]
+  procedures       Procedure[]
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -488,6 +501,9 @@ model ClinicalNote {
   deletedAt            DateTime?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
+  noteType             ClinicalNoteType      @default(CONSULTATION)
+  procedureId          String?
+  procedure            Procedure?            @relation(fields: [procedureId], references: [id])
 
   @@index([organizationId, deletedAt])
   @@index([encounterId])
@@ -734,6 +750,7 @@ model PatientDocument {
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
   registrationsAsIdProof Registration[]
+  proceduresAsConsent    Procedure[]
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -1368,4 +1385,149 @@ model Dispensing {
   @@index([patientId])
   @@index([prescriptionItemId])
   @@map("dispensings")
+}
+
+// =============================================================================
+// REFERRALS, PROCEDURES & SURGERY — referrals and procedures modules
+// (surgery is a Procedure with kind = SURGERY, gated by surgery:manage).
+// Operative (OT) notes and discharge summaries are ClinicalNotes with a
+// noteType, so they get the same draft -> sign-off -> amend versioning.
+// =============================================================================
+
+enum ReferralType {
+  INTERNAL
+  EXTERNAL
+}
+
+enum ReferralUrgency {
+  ROUTINE
+  URGENT
+  EMERGENCY
+}
+
+enum ReferralStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum ProcedureKind {
+  PROCEDURE
+  SURGERY
+}
+
+/// PLANNED (estimate stage) -> SCHEDULED (date + doctor set) ->
+/// IN_PROGRESS (only once consent is attached and every pre-op checklist
+/// item is done) -> COMPLETED. CANCELLED from PLANNED or SCHEDULED.
+enum ProcedureStatus {
+  PLANNED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ClinicalNoteType {
+  CONSULTATION
+  PROGRESS
+  OPERATIVE
+  DISCHARGE_SUMMARY
+}
+
+/// INTERNAL = to another doctor in this organization (toUserId);
+/// EXTERNAL = to an outside doctor/facility (toName/toFacility). CHECK
+/// constraint enforces the matching target fields.
+model Referral {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient         @relation(fields: [patientId], references: [id])
+  encounterId    String
+  encounter      Encounter       @relation(fields: [encounterId], references: [id])
+  type           ReferralType
+  toUserId       String?
+  toUser         User?           @relation("ReferralTo", fields: [toUserId], references: [id])
+  toName         String?
+  toFacility     String?
+  toSpecialty    String?
+  reason         String
+  urgency        ReferralUrgency @default(ROUTINE)
+  status         ReferralStatus  @default(OPEN)
+  outcomeNote    String?
+  referredById   String
+  referredBy     User            @relation("ReferralFrom", fields: [referredById], references: [id])
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([organizationId, status])
+  @@index([patientId])
+  @@index([toUserId, status])
+  @@map("referrals")
+}
+
+/// A planned procedure or surgery, raised from the encounter where it was
+/// decided. estimateMinor is the quoted cost (paise) shown to the patient;
+/// it isn't an invoice — billing still issues one.
+/// consentDocumentId must point at a CONSENT_FORM PatientDocument before
+/// the procedure can start.
+model Procedure {
+  id                String                   @id @default(cuid())
+  organizationId    String
+  organization      Organization             @relation(fields: [organizationId], references: [id])
+  patientId         String
+  patient           Patient                  @relation(fields: [patientId], references: [id])
+  encounterId       String
+  encounter         Encounter                @relation(fields: [encounterId], references: [id])
+  kind              ProcedureKind
+  name              String
+  notes             String?
+  estimateMinor     Int?
+  status            ProcedureStatus          @default(PLANNED)
+  scheduledAt       DateTime?
+  location          String?
+  performedById     String?
+  performedBy       User?                    @relation("ProcedurePerformer", fields: [performedById], references: [id])
+  consentDocumentId String?
+  consentDocument   PatientDocument?         @relation(fields: [consentDocumentId], references: [id])
+  checklist         ProcedureChecklistItem[]
+  clinicalNotes     ClinicalNote[]
+  createdById       String
+  createdBy         User                     @relation("ProcedureCreator", fields: [createdById], references: [id])
+  startedAt         DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([organizationId, status])
+  @@index([patientId])
+  @@index([performedById, scheduledAt])
+  @@map("procedures")
+}
+
+/// One pre-op checklist line (e.g. "NPO since midnight", "Blood
+/// arranged"). Ticked/unticked with audit; every line must be ticked
+/// before the procedure can start.
+/// TODO(product): default checklist per procedure type — today the
+/// coordinator adds the lines.
+model ProcedureChecklistItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  procedureId    String
+  procedure      Procedure    @relation(fields: [procedureId], references: [id])
+  label          String
+  completedAt    DateTime?
+  completedById  String?
+  completedBy    User?        @relation(fields: [completedById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([procedureId])
+  @@map("procedure_checklist_items")
 }
