@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Plus, Trash } from '@phosphor-icons/react';
 import {
   createLabOrderSchema,
   recordLabResultSchema,
@@ -10,10 +11,15 @@ import {
   type RecordLabResultInput,
 } from '@serenemed/validation';
 import type { StaffRole } from '@serenemed/types';
-import { Button, Card } from '@serenemed/ui';
-import { apiClient } from '../../../lib/api-client';
-import { can } from '../../../lib/permissions';
-import { apiErrorMessage, type LabOrder, type LabOrderItem } from './types';
+import { Badge } from '../../../../components/ui/badge';
+import { Button } from '../../../../components/ui/button';
+import { Card, CardHeader } from '../../../../components/ui/card';
+import { Dialog } from '../../../../components/ui/dialog';
+import { Field, Input } from '../../../../components/ui/fields';
+import { apiClient } from '../../../../lib/api-client';
+import { formatDate, humanize } from '../../../../lib/format';
+import { can } from '../../../../lib/permissions';
+import { apiErrorMessage, orderTone, type LabOrder, type LabOrderItem } from './types';
 
 const EMPTY_ITEM = { testName: '' };
 
@@ -36,28 +42,36 @@ function RecordResultForm({ item, onDone }: { item: LabOrderItem; onDone: () => 
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="mt-1 flex flex-wrap items-end gap-2"
+      className="mt-2 flex flex-wrap items-end gap-3"
       noValidate
     >
-      <input
-        placeholder="Result"
-        className="w-28 rounded-md border border-slate-300 px-2 py-1 text-xs"
-        {...register('resultValue')}
-      />
-      <input
-        placeholder="Unit (optional)"
-        className="w-24 rounded-md border border-slate-300 px-2 py-1 text-xs"
-        {...register('unit')}
-      />
-      <input
-        placeholder="Reference range (optional)"
-        className="w-32 rounded-md border border-slate-300 px-2 py-1 text-xs"
-        {...register('referenceRange')}
-      />
-      <Button type="submit" variant="secondary" disabled={formState.isSubmitting}>
-        {formState.isSubmitting ? 'Saving…' : 'Record result'}
+      <div className="w-32">
+        <Field
+          label="Result"
+          htmlFor={`res-value-${item.id}`}
+          error={formState.errors.resultValue?.message}
+        >
+          <Input id={`res-value-${item.id}`} {...register('resultValue')} />
+        </Field>
+      </div>
+      <div className="w-28">
+        <Field label="Unit (optional)" htmlFor={`res-unit-${item.id}`}>
+          <Input id={`res-unit-${item.id}`} {...register('unit')} />
+        </Field>
+      </div>
+      <div className="w-40">
+        <Field label="Reference range (optional)" htmlFor={`res-range-${item.id}`}>
+          <Input id={`res-range-${item.id}`} {...register('referenceRange')} />
+        </Field>
+      </div>
+      <Button type="submit" variant="secondary" loading={formState.isSubmitting}>
+        Record result
       </Button>
-      {error && <p className="w-full text-xs text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="w-full text-[13px] text-danger-fg">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
@@ -74,7 +88,8 @@ export function LabOrdersSection({
   onChange: () => void;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<LabOrder | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [resultingItemId, setResultingItemId] = useState<string | null>(null);
 
   const { register, control, handleSubmit, reset, formState } = useForm<CreateLabOrderInput>({
@@ -94,123 +109,170 @@ export function LabOrdersSection({
     }
   };
 
-  const cancelOrder = async (id: string) => {
-    setCancellingId(id);
+  const cancelOrder = async (order: LabOrder) => {
+    setCancelling(true);
     setFormError(null);
     try {
-      await apiClient.post(`/lab-orders/${id}/cancel`);
+      await apiClient.post(`/lab-orders/${order.id}/cancel`);
+      setConfirming(null);
       onChange();
     } catch (error) {
+      setConfirming(null);
       setFormError(apiErrorMessage(error, 'Could not cancel this lab order.'));
     } finally {
-      setCancellingId(null);
+      setCancelling(false);
     }
   };
 
   return (
     <Card>
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Lab orders</h2>
-      {labOrders.length === 0 ? (
-        <p className="mb-3 text-sm text-slate-500">No lab orders yet.</p>
-      ) : (
-        <ul className="mb-4 flex flex-col gap-2">
-          {labOrders.map((order) => (
-            <li key={order.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-700">
-                  {order.status}
-                </span>
-                {order.status === 'ORDERED' && can(role, 'lab-order:write') && (
+      <CardHeader title="Lab orders" />
+      <div className="p-5">
+        {labOrders.length === 0 ? (
+          <p className="mb-4 text-sm text-fg-muted">No lab orders yet.</p>
+        ) : (
+          <ul className="mb-5 flex flex-col gap-2">
+            {labOrders.map((order) => (
+              <li key={order.id} className="rounded-control bg-surface-muted px-3 py-2 text-sm">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <Badge tone={orderTone(order.status)}>{humanize(order.status)}</Badge>
+                  {order.status === 'ORDERED' && can(role, 'lab-order:write') && (
+                    <Button variant="danger" size="sm" onClick={() => setConfirming(order)}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+                <ul className="flex flex-col gap-2 text-fg">
+                  {order.items.map((item) => {
+                    const latestResult = item.results[item.results.length - 1];
+                    return (
+                      <li key={item.id}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{item.testName}</span>
+                          {latestResult ? (
+                            <span className="tabular text-[13px] text-fg-muted">
+                              {latestResult.resultValue}
+                              {latestResult.unit ? ` ${latestResult.unit}` : ''}
+                            </span>
+                          ) : (
+                            can(role, 'lab-result:write') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setResultingItemId(resultingItemId === item.id ? null : item.id)
+                                }
+                              >
+                                {resultingItemId === item.id ? 'Cancel' : 'Add result'}
+                              </Button>
+                            )
+                          )}
+                        </div>
+                        {resultingItemId === item.id && (
+                          <RecordResultForm
+                            item={item}
+                            onDone={() => {
+                              setResultingItemId(null);
+                              onChange();
+                            }}
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {can(role, 'lab-order:write') && (
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+            {fields.map((field, index) => (
+              <div key={field.id} className="flex flex-wrap items-end gap-3">
+                <div className="w-56">
+                  <Field label="Test name" htmlFor={`lab-test-${index}`} helper="For example CBC">
+                    <Input id={`lab-test-${index}`} {...register(`items.${index}.testName`)} />
+                  </Field>
+                </div>
+                <div className="w-56">
+                  <Field label="Instructions (optional)" htmlFor={`lab-instr-${index}`}>
+                    <Input id={`lab-instr-${index}`} {...register(`items.${index}.instructions`)} />
+                  </Field>
+                </div>
+                {fields.length > 1 && (
                   <Button
-                    variant="danger"
-                    onClick={() => cancelOrder(order.id)}
-                    disabled={cancellingId === order.id}
-                  >
-                    {cancellingId === order.id ? 'Cancelling…' : 'Cancel'}
-                  </Button>
+                    type="button"
+                    variant="ghost"
+                    aria-label={`Remove test ${index + 1}`}
+                    icon={<Trash size={20} aria-hidden="true" />}
+                    onClick={() => remove(index)}
+                  />
                 )}
               </div>
-              <ul className="flex flex-col gap-2 text-slate-700">
-                {order.items.map((item) => {
-                  const latestResult = item.results[item.results.length - 1];
-                  return (
-                    <li key={item.id}>
-                      <div className="flex items-center justify-between">
-                        <span>{item.testName}</span>
-                        {latestResult ? (
-                          <span className="text-xs text-slate-500">
-                            {latestResult.resultValue}
-                            {latestResult.unit ? ` ${latestResult.unit}` : ''}
-                          </span>
-                        ) : (
-                          can(role, 'lab-result:write') && (
-                            <Button
-                              variant="ghost"
-                              onClick={() =>
-                                setResultingItemId(resultingItemId === item.id ? null : item.id)
-                              }
-                            >
-                              {resultingItemId === item.id ? 'Cancel' : 'Add result'}
-                            </Button>
-                          )
-                        )}
-                      </div>
-                      {resultingItemId === item.id && (
-                        <RecordResultForm
-                          item={item}
-                          onDone={() => {
-                            setResultingItemId(null);
-                            onChange();
-                          }}
-                        />
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </li>
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              icon={<Plus size={16} aria-hidden="true" />}
+              onClick={() => append(EMPTY_ITEM)}
+            >
+              Add another test
+            </Button>
+            {formState.errors.items && (
+              <p role="alert" className="text-[13px] text-danger-fg">
+                Check the test fields above.
+              </p>
+            )}
+            {formError && (
+              <p role="alert" className="text-[13px] text-danger-fg">
+                {formError}
+              </p>
+            )}
+            <Button type="submit" loading={formState.isSubmitting} className="self-start">
+              Order tests
+            </Button>
+          </form>
+        )}
+        {!can(role, 'lab-order:write') && formError && (
+          <p role="alert" className="mt-3 text-[13px] text-danger-fg">
+            {formError}
+          </p>
+        )}
+      </div>
+
+      <Dialog
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title="Cancel lab order"
+        description={
+          confirming
+            ? `Ordered ${formatDate(confirming.createdAt)}. This cannot be undone.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirming(null)}>
+              Keep order
+            </Button>
+            <Button
+              variant="danger"
+              loading={cancelling}
+              onClick={() => confirming && cancelOrder(confirming)}
+            >
+              Cancel lab order
+            </Button>
+          </>
+        }
+      >
+        <ul className="text-sm text-fg">
+          {confirming?.items.map((item) => (
+            <li key={item.id}>{item.testName}</li>
           ))}
         </ul>
-      )}
-
-      {can(role, 'lab-order:write') && (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
-          {fields.map((field, index) => (
-            <div key={field.id} className="flex flex-wrap items-end gap-2">
-              <input
-                placeholder="Test name (e.g. CBC)"
-                className="w-48 rounded-md border border-slate-300 px-3 py-2 text-sm"
-                {...register(`items.${index}.testName`)}
-              />
-              <input
-                placeholder="Instructions (optional)"
-                className="w-48 rounded-md border border-slate-300 px-3 py-2 text-sm"
-                {...register(`items.${index}.instructions`)}
-              />
-              {fields.length > 1 && (
-                <Button type="button" variant="ghost" onClick={() => remove(index)}>
-                  Remove
-                </Button>
-              )}
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="ghost"
-            className="self-start"
-            onClick={() => append(EMPTY_ITEM)}
-          >
-            + Add another test
-          </Button>
-          {formState.errors.items && (
-            <p className="text-xs text-red-600">Check the test fields above.</p>
-          )}
-          {formError && <p className="text-xs text-red-600">{formError}</p>}
-          <Button type="submit" disabled={formState.isSubmitting} className="self-start">
-            {formState.isSubmitting ? 'Ordering…' : 'Order tests'}
-          </Button>
-        </form>
-      )}
+      </Dialog>
     </Card>
   );
 }

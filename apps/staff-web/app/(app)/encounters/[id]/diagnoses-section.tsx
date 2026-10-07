@@ -10,10 +10,14 @@ import {
   type DiagnosisContentInput,
 } from '@serenemed/validation';
 import type { StaffRole } from '@serenemed/types';
-import { Button, Card } from '@serenemed/ui';
-import { apiClient } from '../../../lib/api-client';
-import { can } from '../../../lib/permissions';
-import { apiErrorMessage, type Diagnosis } from './types';
+import { Badge, StatusBadge } from '../../../../components/ui/badge';
+import { Button } from '../../../../components/ui/button';
+import { Card, CardHeader } from '../../../../components/ui/card';
+import { Dialog } from '../../../../components/ui/dialog';
+import { Field, Input, Textarea } from '../../../../components/ui/fields';
+import { apiClient } from '../../../../lib/api-client';
+import { can } from '../../../../lib/permissions';
+import { apiErrorMessage, isUnsigned, type Diagnosis } from './types';
 
 function AmendForm({ diagnosisId, onDone }: { diagnosisId: string; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
@@ -32,20 +36,33 @@ function AmendForm({ diagnosisId, onDone }: { diagnosisId: string; onDone: () =>
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="mt-2 flex flex-col gap-2" noValidate>
-      <input
-        placeholder="ICD code (optional)"
-        className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-        {...register('icdCode')}
-      />
-      <textarea
-        placeholder="Corrected description"
-        className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-        {...register('description')}
-      />
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <Button type="submit" variant="secondary" disabled={formState.isSubmitting}>
-        {formState.isSubmitting ? 'Saving…' : 'Save amendment'}
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="mt-3 flex flex-col gap-3 border-t border-line pt-3"
+      noValidate
+    >
+      <Field label="ICD code (optional)" htmlFor={`amend-icd-${diagnosisId}`}>
+        <Input id={`amend-icd-${diagnosisId}`} {...register('icdCode')} />
+      </Field>
+      <Field
+        label="Corrected description"
+        htmlFor={`amend-desc-${diagnosisId}`}
+        error={formState.errors.description?.message}
+      >
+        <Textarea id={`amend-desc-${diagnosisId}`} {...register('description')} />
+      </Field>
+      {error && (
+        <p role="alert" className="text-[13px] text-danger-fg">
+          {error}
+        </p>
+      )}
+      <Button
+        type="submit"
+        variant="secondary"
+        className="self-start"
+        loading={formState.isSubmitting}
+      >
+        Save amendment
       </Button>
     </form>
   );
@@ -64,7 +81,8 @@ export function DiagnosesSection({
 }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [amendingId, setAmendingId] = useState<string | null>(null);
-  const [signingOffId, setSigningOffId] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<Diagnosis | null>(null);
+  const [signingOff, setSigningOff] = useState(false);
 
   const { register, handleSubmit, reset, formState } = useForm<CreateDiagnosisDraftInput>({
     resolver: zodResolver(createDiagnosisDraftSchema),
@@ -82,101 +100,141 @@ export function DiagnosesSection({
     }
   };
 
-  const signOff = async (diagnosisId: string) => {
-    setSigningOffId(diagnosisId);
+  const signOff = async (diagnosis: Diagnosis) => {
+    setSigningOff(true);
     setFormError(null);
     try {
-      await apiClient.post(`/diagnoses/${diagnosisId}/sign-off`);
+      await apiClient.post(`/diagnoses/${diagnosis.id}/sign-off`);
+      setConfirming(null);
       onChange();
     } catch (error) {
+      setConfirming(null);
       setFormError(apiErrorMessage(error, 'Could not sign off this diagnosis.'));
     } finally {
-      setSigningOffId(null);
+      setSigningOff(false);
     }
   };
 
+  const confirmingLatest = confirming?.versions[0];
+
   return (
     <Card>
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Diagnoses</h2>
-      {diagnoses.length === 0 ? (
-        <p className="mb-3 text-sm text-slate-500">No diagnoses yet.</p>
-      ) : (
-        <ul className="mb-4 flex flex-col gap-2">
-          {diagnoses.map((diagnosis) => {
-            const latest = diagnosis.versions[0];
-            return (
-              <li key={diagnosis.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <span className="font-medium text-slate-900">{latest.description}</span>
-                    {latest.icdCode && (
-                      <span className="ml-2 text-xs text-slate-500">{latest.icdCode}</span>
-                    )}
-                    <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-700">
-                      {latest.status}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    {latest.status === 'DRAFT' && can(role, 'diagnosis:sign-off') && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => signOff(diagnosis.id)}
-                        disabled={signingOffId === diagnosis.id}
-                      >
-                        {signingOffId === diagnosis.id ? 'Signing off…' : 'Sign off'}
-                      </Button>
-                    )}
-                    {(latest.status === 'FINALIZED' || latest.status === 'AMENDED') &&
-                      can(role, 'diagnosis:write-draft') && (
+      <CardHeader title="Diagnoses" />
+      <div className="p-5">
+        {diagnoses.length === 0 ? (
+          <p className="mb-4 text-sm text-fg-muted">No diagnoses yet.</p>
+        ) : (
+          <ul className="mb-5 flex flex-col gap-2">
+            {diagnoses.map((diagnosis) => {
+              const latest = diagnosis.versions[0];
+              if (!latest) return null;
+              return (
+                <li key={diagnosis.id} className="rounded-control bg-surface-muted px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-medium text-fg">{latest.description}</span>
+                      {latest.icdCode && (
+                        <span className="tabular text-xs text-fg-muted">{latest.icdCode}</span>
+                      )}
+                      {isUnsigned(latest.status) ? (
+                        <Badge tone="warning">Draft, not signed</Badge>
+                      ) : (
+                        <StatusBadge domain="note" status={latest.status} />
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {latest.status === 'DRAFT' && can(role, 'diagnosis:sign-off') && (
                         <Button
-                          variant="ghost"
-                          onClick={() =>
-                            setAmendingId(amendingId === diagnosis.id ? null : diagnosis.id)
-                          }
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setConfirming(diagnosis)}
                         >
-                          {amendingId === diagnosis.id ? 'Cancel' : 'Amend'}
+                          Sign off
                         </Button>
                       )}
+                      {(latest.status === 'FINALIZED' || latest.status === 'AMENDED') &&
+                        can(role, 'diagnosis:write-draft') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setAmendingId(amendingId === diagnosis.id ? null : diagnosis.id)
+                            }
+                          >
+                            {amendingId === diagnosis.id ? 'Cancel' : 'Amend'}
+                          </Button>
+                        )}
+                    </div>
                   </div>
-                </div>
-                {amendingId === diagnosis.id && (
-                  <AmendForm
-                    diagnosisId={diagnosis.id}
-                    onDone={() => {
-                      setAmendingId(null);
-                      onChange();
-                    }}
-                  />
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  {amendingId === diagnosis.id && (
+                    <AmendForm
+                      diagnosisId={diagnosis.id}
+                      onDone={() => {
+                        setAmendingId(null);
+                        onChange();
+                      }}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-      {can(role, 'diagnosis:write-draft') && (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-2" noValidate>
-          <div className="flex gap-2">
-            <input
-              placeholder="ICD code (optional)"
-              className="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm"
-              {...register('icdCode')}
-            />
-            <input
-              placeholder="Diagnosis description"
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-              {...register('description')}
-            />
-          </div>
-          {formState.errors.description && (
-            <p className="text-xs text-red-600">{formState.errors.description.message}</p>
-          )}
-          {formError && <p className="text-xs text-red-600">{formError}</p>}
-          <Button type="submit" disabled={formState.isSubmitting} className="self-start">
-            {formState.isSubmitting ? 'Adding…' : 'Add diagnosis'}
-          </Button>
-        </form>
-      )}
+        {can(role, 'diagnosis:write-draft') && (
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_1fr]">
+              <Field label="ICD code (optional)" htmlFor="dx-icd">
+                <Input id="dx-icd" {...register('icdCode')} />
+              </Field>
+              <Field
+                label="Diagnosis description"
+                htmlFor="dx-description"
+                error={formState.errors.description?.message}
+              >
+                <Input id="dx-description" {...register('description')} />
+              </Field>
+            </div>
+            {formError && (
+              <p role="alert" className="text-[13px] text-danger-fg">
+                {formError}
+              </p>
+            )}
+            <Button type="submit" loading={formState.isSubmitting} className="self-start">
+              Add diagnosis
+            </Button>
+          </form>
+        )}
+        {!can(role, 'diagnosis:write-draft') && formError && (
+          <p role="alert" className="mt-3 text-[13px] text-danger-fg">
+            {formError}
+          </p>
+        )}
+      </div>
+
+      <Dialog
+        open={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title="Sign off diagnosis"
+        description="Signing off finalizes this diagnosis. Later changes are recorded as amendments."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirming(null)}>
+              Keep as draft
+            </Button>
+            <Button loading={signingOff} onClick={() => confirming && signOff(confirming)}>
+              Sign off diagnosis
+            </Button>
+          </>
+        }
+      >
+        {confirmingLatest && (
+          <p className="text-sm text-fg">
+            <span className="font-medium">{confirmingLatest.description}</span>
+            {confirmingLatest.icdCode ? ` (${confirmingLatest.icdCode})` : ''}
+          </p>
+        )}
+      </Dialog>
     </Card>
   );
 }

@@ -5,9 +5,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { recordVitalSchema, type RecordVitalInput } from '@serenemed/validation';
 import type { StaffRole } from '@serenemed/types';
-import { Button, Card } from '@serenemed/ui';
-import { apiClient } from '../../../lib/api-client';
-import { can } from '../../../lib/permissions';
+import { Button } from '../../../../components/ui/button';
+import { Card, CardHeader } from '../../../../components/ui/card';
+import { Field, Input } from '../../../../components/ui/fields';
+import { apiClient } from '../../../../lib/api-client';
+import { formatDate, formatTime } from '../../../../lib/format';
+import { can } from '../../../../lib/permissions';
 import { apiErrorMessage, type Vital } from './types';
 
 const FIELDS: { key: keyof RecordVitalInput; label: string; step?: string }[] = [
@@ -16,8 +19,28 @@ const FIELDS: { key: keyof RecordVitalInput; label: string; step?: string }[] = 
   { key: 'pulseBpm', label: 'Pulse (bpm)' },
   { key: 'spo2Percent', label: 'SpO2 (%)' },
   { key: 'temperatureCelsius', label: 'Temp (°C)', step: '0.1' },
+  { key: 'respiratoryRate', label: 'Resp. rate (/min)' },
+  { key: 'heightCm', label: 'Height (cm)', step: '0.1' },
+  { key: 'weightKg', label: 'Weight (kg)', step: '0.1' },
   { key: 'bmi', label: 'BMI', step: '0.1' },
 ];
+
+function summarize(vital: Vital): string {
+  return [
+    vital.bloodPressureSystolic &&
+      vital.bloodPressureDiastolic &&
+      `BP ${vital.bloodPressureSystolic}/${vital.bloodPressureDiastolic}`,
+    vital.pulseBpm && `Pulse ${vital.pulseBpm}`,
+    vital.spo2Percent && `SpO2 ${vital.spo2Percent}%`,
+    vital.temperatureCelsius && `Temp ${vital.temperatureCelsius}°C`,
+    vital.respiratoryRate && `Resp ${vital.respiratoryRate}/min`,
+    vital.heightCm && `Height ${vital.heightCm} cm`,
+    vital.weightKg && `Weight ${vital.weightKg} kg`,
+    vital.bmi && `BMI ${vital.bmi}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 export function VitalsSection({
   encounterId,
@@ -47,77 +70,67 @@ export function VitalsSection({
     }
   };
 
+  const validationMessages = Object.values(formState.errors)
+    .filter((error) => error && 'message' in error && error.message)
+    .map((error) => String((error as { message?: string }).message));
+
   return (
     <Card>
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Vitals</h2>
-      {vitals.length === 0 ? (
-        <p className="mb-3 text-sm text-slate-500">No vitals recorded yet.</p>
-      ) : (
-        <ul className="mb-4 flex flex-col gap-2">
-          {vitals.map((vital) => (
-            <li key={vital.id} className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              <span className="text-xs text-slate-400">
-                {new Date(vital.recordedAt).toLocaleString()} —{' '}
-              </span>
-              {[
-                vital.bloodPressureSystolic &&
-                  vital.bloodPressureDiastolic &&
-                  `BP ${vital.bloodPressureSystolic}/${vital.bloodPressureDiastolic}`,
-                vital.pulseBpm && `Pulse ${vital.pulseBpm}`,
-                vital.spo2Percent && `SpO2 ${vital.spo2Percent}%`,
-                vital.temperatureCelsius && `Temp ${vital.temperatureCelsius}°C`,
-                vital.bmi && `BMI ${vital.bmi}`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {can(role, 'vitals:write') && (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
-          <div className="grid grid-cols-3 gap-3">
-            {FIELDS.map((field) => (
-              <div key={field.key}>
-                <label className="mb-1 block text-xs font-medium text-slate-700">
-                  {field.label}
-                </label>
-                <input
-                  type="number"
-                  step={field.step}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  {...register(field.key, {
-                    // valueAsNumber turns an empty input into NaN, not
-                    // undefined — Zod's z.number().optional() rejects
-                    // NaN (it's neither a valid number nor undefined),
-                    // which silently blocked every submission that left
-                    // any field empty, with no visible error and no
-                    // network request. Caught live by actually
-                    // submitting this form in a browser with a partial
-                    // set of vitals filled in, not by typecheck.
-                    setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
-                  })}
-                />
-              </div>
+      <CardHeader title="Vitals" />
+      <div className="p-5">
+        {vitals.length === 0 ? (
+          <p className="mb-4 text-sm text-fg-muted">No vitals recorded yet.</p>
+        ) : (
+          <ul className="mb-5 flex flex-col gap-2">
+            {vitals.map((vital) => (
+              <li
+                key={vital.id}
+                className="rounded-control bg-surface-muted px-3 py-2 text-sm text-fg"
+              >
+                <span className="tabular mr-2 text-xs text-fg-subtle">
+                  {formatDate(vital.recordedAt)} {formatTime(vital.recordedAt)}
+                </span>
+                <span className="tabular">{summarize(vital)}</span>
+              </li>
             ))}
-          </div>
-          {formState.errors.root && (
-            <p className="text-xs text-red-600">{formState.errors.root.message}</p>
-          )}
-          {Object.values(formState.errors)
-            .filter((error) => error && 'message' in error && error.message)
-            .map((error, index) => (
-              <p key={index} className="text-xs text-red-600">
-                {String((error as { message?: string }).message)}
+          </ul>
+        )}
+
+        {can(role, 'vitals:write') && (
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+              {FIELDS.map((field) => (
+                <Field key={field.key} label={field.label} htmlFor={`vital-${field.key}`}>
+                  <Input
+                    id={`vital-${field.key}`}
+                    type="number"
+                    step={field.step}
+                    {...register(field.key, {
+                      // valueAsNumber turns an empty input into NaN, which
+                      // Zod's z.number().optional() rejects and silently
+                      // blocks every submission with an empty field.
+                      setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
+                    })}
+                  />
+                </Field>
+              ))}
+            </div>
+            {validationMessages.map((message, index) => (
+              <p key={index} role="alert" className="text-[13px] text-danger-fg">
+                {message}
               </p>
             ))}
-          {formError && <p className="text-xs text-red-600">{formError}</p>}
-          <Button type="submit" disabled={formState.isSubmitting} className="self-start">
-            {formState.isSubmitting ? 'Recording…' : 'Record vitals'}
-          </Button>
-        </form>
-      )}
+            {formError && (
+              <p role="alert" className="text-[13px] text-danger-fg">
+                {formError}
+              </p>
+            )}
+            <Button type="submit" loading={formState.isSubmitting} className="self-start">
+              Record vitals
+            </Button>
+          </form>
+        )}
+      </div>
     </Card>
   );
 }
