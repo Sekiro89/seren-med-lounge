@@ -67,7 +67,10 @@ export class AuthController {
   @Public()
   @Post('login')
   login(@Body(new ZodValidationPipe(loginSchema)) body: LoginInput) {
-    return this.authService.login(body);
+    return this.authService.login({
+      ...body,
+      organizationId: this.resolveOrganizationId(body.organizationId),
+    });
   }
 
   /**

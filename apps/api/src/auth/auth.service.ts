@@ -23,7 +23,8 @@ export class AuthService {
     private readonly tokenBlacklist: TokenBlacklistService,
   ) {}
 
-  async login(credentials: LoginInput) {
+  /** The controller has already resolved the organization (explicit or the deployment default). */
+  async login(credentials: LoginInput & { organizationId: string }) {
     const user = await this.usersService.findByOrgAndEmailWithPassword(
       credentials.organizationId,
       credentials.email,

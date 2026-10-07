@@ -13,10 +13,8 @@ import { Button } from '../../components/ui/button';
 import { Logo } from '../../components/shell/logo';
 
 /**
- * Same organizationId-as-plain-text-field shape as
- * patient-web/app/login/page.tsx — see that file's comment for why (a
- * real, unresolved product decision on how a login UI should resolve
- * the org, not a shortcut taken here).
+ * No Clinic ID field: like the patient login, the server resolves the
+ * clinic itself (the deployment's default) when none is sent.
  */
 export default function StaffLoginPage() {
   const router = useRouter();
@@ -66,22 +64,6 @@ export default function StaffLoginPage() {
           <p className="mb-6 mt-1 text-sm text-fg-muted">Use your clinic staff account.</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
-            <div>
-              <label htmlFor="organizationId" className="mb-1.5 block text-sm font-medium text-fg">
-                Clinic ID
-              </label>
-              <input
-                id="organizationId"
-                type="text"
-                autoComplete="off"
-                className={inputClass}
-                {...register('organizationId')}
-              />
-              {errors.organizationId && (
-                <p className="mt-1.5 text-[13px] text-danger-fg">{errors.organizationId.message}</p>
-              )}
-            </div>
-
             <div>
               <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-fg">
                 Email
