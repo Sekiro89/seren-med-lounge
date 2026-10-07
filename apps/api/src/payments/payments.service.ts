@@ -29,6 +29,35 @@ export class PaymentsService {
     private readonly invoicesService: InvoicesService,
   ) {}
 
+  /**
+   * The day's (or range's) money as a ledger: every payment with its
+   * invoice, patient, method, who took it and any refunds. Newest first,
+   * capped at 500 rows.
+   */
+  async list(organizationId: string, range: { from: Date; to: Date }) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.payment.findMany({
+        where: { createdAt: { gte: range.from, lt: range.to } },
+        include: {
+          invoice: {
+            select: {
+              id: true,
+              number: true,
+              status: true,
+              totalMinor: true,
+              paidMinor: true,
+              patient: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+          receivedBy: { select: { fullName: true } },
+          refunds: { include: { issuedBy: { select: { fullName: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+    );
+  }
+
   async record(
     organizationId: string,
     actorId: string,

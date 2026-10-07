@@ -33,6 +33,8 @@ export const apiEnvSchema = z
     JWT_SECRET: z.string().min(16),
     JWT_ACCESS_TTL: z.string().default('15m'),
     JWT_REFRESH_TTL: z.string().default('7d'),
+    // Where LocalDiskStorage keeps uploaded files (patient documents) until an S3 adapter is bound.
+    STORAGE_DIR: z.string().optional(),
     S3_ENDPOINT: z.string().optional(),
     S3_REGION: z.string().optional(),
     S3_BUCKET: z.string().optional(),

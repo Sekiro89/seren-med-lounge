@@ -22,17 +22,17 @@ You can also see all of this live in the product, under **Staff and roles**.
 
 | Role                    | Who                                                                             | Abilities |
 | ----------------------- | ------------------------------------------------------------------------------- | --------- |
-| **Administrator**       | Clinic owner or manager with full oversight.                                    | 37 of 37  |
-| **Reception**           | Front desk: registers patients, books and checks them in, runs the token queue. | 8 of 37   |
-| **Nurse**               | Takes vitals and history, runs follow-up check-ins, supports the queue.         | 8 of 37   |
-| **Junior doctor**       | Assesses patients and writes drafts; a senior doctor signs them off.            | 13 of 37  |
-| **Senior doctor**       | Consults, signs off clinical records, runs surgery, discharges visits.          | 18 of 37  |
-| **Surgery coordinator** | Plans and schedules procedures and surgeries.                                   | 4 of 37   |
-| **Lab technician**      | Enters lab results.                                                             | 3 of 37   |
-| **Pharmacy**            | Dispenses medicines and manages stock.                                          | 3 of 37   |
-| **Billing**             | Issues invoices, records payments and refunds.                                  | 4 of 37   |
-| **Insurance**           | Handles pre-authorisation and claims.                                           | 2 of 37   |
-| **Marketing**           | Leads, campaigns and reviews.                                                   | 4 of 37   |
+| **Administrator**       | Clinic owner or manager with full oversight.                                    | 38 of 38  |
+| **Reception**           | Front desk: registers patients, books and checks them in, runs the token queue. | 8 of 38   |
+| **Nurse**               | Takes vitals and history, runs follow-up check-ins, supports the queue.         | 8 of 38   |
+| **Junior doctor**       | Assesses patients and writes drafts; a senior doctor signs them off.            | 13 of 38  |
+| **Senior doctor**       | Consults, signs off clinical records, runs surgery, discharges visits.          | 18 of 38  |
+| **Surgery coordinator** | Plans and schedules procedures and surgeries.                                   | 4 of 38   |
+| **Lab technician**      | Enters lab results.                                                             | 3 of 38   |
+| **Pharmacy**            | Dispenses medicines and manages stock.                                          | 3 of 38   |
+| **Billing**             | Issues invoices, records payments and refunds.                                  | 4 of 38   |
+| **Insurance**           | Handles pre-authorisation and claims.                                           | 2 of 38   |
+| **Marketing**           | Leads, campaigns and reviews.                                                   | 4 of 38   |
 
 ### Administrator
 
@@ -44,7 +44,7 @@ _Clinic owner or manager with full oversight._
 - **Finance:** Issue and void invoices; Record payments; Issue refunds; Manage insurance cases
 - **Growth:** View leads; Manage and convert leads; Manage campaigns; Request and moderate reviews
 - **Team:** Answer patient messages
-- **Administration:** Manage staff accounts; Manage roles; Read the audit log; Manage integrations and API keys
+- **Administration:** Manage staff accounts; Manage roles; Read the audit log; See clinic reports; Manage integrations and API keys
 
 ### Reception
 
@@ -168,6 +168,7 @@ A tick means the role is allowed to do it.
 | Manage staff accounts                          |      Yes      |     -     |   -   |       -       |       -       |          -          |       -        |    -     |    -    |     -     |     -     |
 | Manage roles                                   |      Yes      |     -     |   -   |       -       |       -       |          -          |       -        |    -     |    -    |     -     |     -     |
 | Read the audit log                             |      Yes      |     -     |   -   |       -       |       -       |          -          |       -        |    -     |    -    |     -     |     -     |
+| See clinic reports                             |      Yes      |     -     |   -   |       -       |       -       |          -          |       -        |    -     |    -    |     -     |     -     |
 | Manage integrations and API keys               |      Yes      |     -     |   -   |       -       |       -       |          -          |       -        |    -     |    -    |     -     |     -     |
 
 ## 4. Questions for you

@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { BadRequestException, Get, Query, Body, Controller, Param, Post } from '@nestjs/common';
 import {
   issueRefundSchema,
   recordPaymentSchema,
@@ -7,6 +7,7 @@ import {
 } from '@serenemed/validation';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { clinicDateString, clinicDayRange, isDateString } from '../common/clinic-time';
 import { TenantContextService } from '../prisma/tenant-context.service';
 import { PaymentsService } from './payments.service';
 
@@ -23,6 +24,21 @@ export class PaymentsController {
     private readonly paymentsService: PaymentsService,
     private readonly tenantContext: TenantContextService,
   ) {}
+
+  /** `?from=YYYY-MM-DD&to=YYYY-MM-DD` (clinic-local, inclusive; default: today). */
+  @Get('payments')
+  @RequirePermissions('payment:manage')
+  list(@Query('from') from?: string, @Query('to') to?: string) {
+    const start = from ?? clinicDateString();
+    const end = to ?? start;
+    if (!isDateString(start) || !isDateString(end) || start > end) {
+      throw new BadRequestException('from and to must be YYYY-MM-DD, from not after to.');
+    }
+    return this.paymentsService.list(this.tenantContext.organizationId, {
+      from: clinicDayRange(start).from,
+      to: clinicDayRange(end).to,
+    });
+  }
 
   @Post('invoices/:invoiceId/payments')
   @RequirePermissions('payment:manage')

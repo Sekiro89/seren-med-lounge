@@ -52,6 +52,7 @@ export const PERMISSION_LABELS: Record<Permission, { area: PermissionArea; label
   'user:manage': { area: 'Administration', label: 'Manage staff accounts' },
   'role:manage': { area: 'Administration', label: 'Manage roles' },
   'audit-log:read': { area: 'Administration', label: 'Read the audit log' },
+  'report:read': { area: 'Administration', label: 'See clinic reports' },
   'integration:manage': { area: 'Administration', label: 'Manage integrations and API keys' },
 };
 

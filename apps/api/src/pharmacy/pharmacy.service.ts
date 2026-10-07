@@ -205,6 +205,7 @@ export class PharmacyService {
         where: { patientId },
         select: {
           id: true,
+          prescriptionItemId: true,
           quantity: true,
           status: true,
           mode: true,

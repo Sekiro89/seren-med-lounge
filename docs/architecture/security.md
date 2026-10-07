@@ -815,3 +815,24 @@ this) — so `GET /audit` returns an empty list until something does.
   records attach to the patient, not to a specific workflow, so a single
   consent can be checked from multiple places (e.g. AI recording consent
   checked from `ai`, marketing consent checked from `crm`).
+
+## Uploaded files
+
+Patient documents (`apps/api/src/patient-documents`, `apps/api/src/storage`):
+
+- Only JPEG, PNG, WebP, PDF, MP4 and WebM are accepted, by declared MIME
+  type, up to 25 MB (`ALLOWED_MIME_TYPES`, `MAX_UPLOAD_BYTES`); multer is
+  configured with the same byte limit and one file per request.
+- Storage keys are generated server-side (`<org>/<patient>/<random>-<slug>`);
+  the client never supplies a path. `LocalDiskStorage.pathFor` rejects
+  `..`, absolute paths and any key outside its root, so a crafted key can
+  only produce 404.
+- Files are served with `Content-Disposition: inline`, `X-Content-Type-Options:
+nosniff` and `Cache-Control: private, no-store`. Staff downloads need
+  `patient:read`; patients can only open documents on their own record
+  (ownership check in `PatientDocumentsService.open`).
+- Uploads are audited (`patient_document.upload`, with size and type but
+  no file name). Removing a document soft-deletes the row and deletes the
+  file in the same operation.
+- Not done: content inspection (virus scanning), and an S3 adapter — see
+  open-questions.md #19.

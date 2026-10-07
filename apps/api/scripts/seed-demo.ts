@@ -282,7 +282,7 @@ async function main() {
     [2, 120000, 0],
   ];
   for (const [number, [patientIndex, total, paid]] of invoiceSpecs.entries()) {
-    await db.invoice.create({
+    const invoice = await db.invoice.create({
       data: {
         organizationId: ORG_ID,
         number: number + 1,
@@ -308,6 +308,19 @@ async function main() {
         },
       },
     });
+    // The money behind paidMinor, so the payments ledger agrees with the invoice.
+    if (paid > 0) {
+      await db.payment.create({
+        data: {
+          organizationId: ORG_ID,
+          invoiceId: invoice.id,
+          method: paid === total ? 'UPI' : 'CASH',
+          amountMinor: paid,
+          reference: paid === total ? `UPI-${1000 + number}` : undefined,
+          receivedById: users.billing!,
+        },
+      });
+    }
   }
 
   // Follow-ups due today and one overdue.
@@ -807,7 +820,7 @@ async function main() {
       },
     ],
   });
-  await db.invoice.create({
+  const poojaInvoice = await db.invoice.create({
     data: {
       organizationId: ORG_ID,
       number: invoiceSpecs.length + 1,
@@ -841,6 +854,17 @@ async function main() {
           },
         ],
       },
+    },
+  });
+  await db.payment.create({
+    data: {
+      organizationId: ORG_ID,
+      invoiceId: poojaInvoice.id,
+      method: 'CARD',
+      amountMinor: 180000,
+      reference: 'CARD-5521',
+      receivedById: users.billing!,
+      createdAt: lastMonth,
     },
   });
   const poojaThread = await db.messageThread.create({

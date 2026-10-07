@@ -17,8 +17,11 @@ export function clinicDateString(at: Date = new Date()): string {
   }).format(at);
 }
 
+/** A real calendar date as YYYY-MM-DD (so 2026-02-30 is refused, not rolled into March). */
 export function isDateString(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 /** [start, end) instants of a clinic-local calendar date. */

@@ -44,4 +44,5 @@ export type Permission =
   | 'review:manage'
   | 'schedule:manage'
   | 'message:manage'
-  | 'integration:manage';
+  | 'integration:manage'
+  | 'report:read';

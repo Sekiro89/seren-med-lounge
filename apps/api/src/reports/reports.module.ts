@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
+import { ReportsController } from './reports.controller';
+import { ReportsService } from './reports.service';
 
-/**
- * Domain boundary placeholder — see docs/architecture/domain-modules.md.
- * Controllers/services/DTOs are added when this module's first workflow
- * is implemented; keep this file the single import site for the module
- * so AppModule never needs to know its internals.
- */
-@Module({})
+/** Clinic numbers for administrators, computed live; see ReportsService. */
+@Module({
+  controllers: [ReportsController],
+  providers: [ReportsService],
+})
 export class ReportsModule {}
