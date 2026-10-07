@@ -45,6 +45,7 @@ const PATIENT_PROFILE_SELECT = {
   phone: true,
   email: true,
   mrn: true,
+  sex: true,
   createdAt: true,
 } as const;
 
@@ -570,6 +571,7 @@ export class PatientsService {
       dateOfBirth: Date | string;
       phone: string;
       email?: string | null;
+      sex?: 'FEMALE' | 'MALE' | 'OTHER' | null;
     },
     passwordHash?: string,
   ): Promise<PatientProfile> {
@@ -585,6 +587,7 @@ export class PatientsService {
             typeof input.dateOfBirth === 'string' ? new Date(input.dateOfBirth) : input.dateOfBirth,
           phone: input.phone,
           email: input.email,
+          sex: input.sex ?? undefined,
           passwordHash,
         },
         select: PATIENT_PROFILE_SELECT,
@@ -852,6 +855,7 @@ export class PatientsService {
           phone: true,
           email: true,
           mrn: true,
+          sex: true,
           dateOfBirth: true,
         },
       }),

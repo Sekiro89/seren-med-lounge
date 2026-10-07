@@ -15,6 +15,7 @@ export const patientRegistrationSchema = z.object({
   dateOfBirth: z.string().date(),
   phone: z.string().min(7),
   email: z.string().email().optional(),
+  sex: z.enum(['FEMALE', 'MALE', 'OTHER']).optional(),
 });
 
 export type PatientRegistrationInput = z.infer<typeof patientRegistrationSchema>;

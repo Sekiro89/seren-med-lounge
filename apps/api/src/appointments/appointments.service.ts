@@ -78,6 +78,7 @@ export class AppointmentsService {
               firstName: true,
               lastName: true,
               mrn: true,
+              sex: true,
               dateOfBirth: true,
               phone: true,
             },

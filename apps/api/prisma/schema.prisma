@@ -208,6 +208,7 @@ model User {
   registrationsRecorded           Registration[]
   medicalHistoryRecorded          MedicalHistoryEntry[]
   metabolicWorkupsRecorded        MetabolicWorkup[]
+  vitalsRecorded                  Vital[]
   stockBatchesReceived            StockBatch[]
   stockMovements                  StockMovement[]
   dispensings                     Dispensing[]
@@ -273,6 +274,8 @@ model Patient {
   /// advisory lock). Nullable only so a raw insert outside the app (tests,
   /// scripts) doesn't fail; every app creation path assigns one.
   mrn               String?
+  /// As recorded at registration; optional (not every intake asks).
+  sex               Sex?
   passwordHash      String?
   appointments      Appointment[]
   encounters        Encounter[]
@@ -397,6 +400,12 @@ enum ClinicalRecordSource {
 /// see the doc comment on the Prescription model below for why), then
 /// only ever cancelled, never edited. No FINALIZED/AMENDED here: a
 /// correction cancels this prescription and issues a new one.
+enum Sex {
+  FEMALE
+  MALE
+  OTHER
+}
+
 enum PrescriptionStatus {
   ACTIVE
   CANCELLED
@@ -538,6 +547,9 @@ model Vital {
   respiratoryRate        Int?
   heightCm               Float?
   weightKg               Float?
+  /// Who took the reading. Null for rows recorded before this was tracked.
+  recordedById           String?
+  recordedBy             User?        @relation(fields: [recordedById], references: [id])
 
   @@index([organizationId, deletedAt])
   @@index([encounterId])

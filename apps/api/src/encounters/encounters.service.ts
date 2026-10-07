@@ -6,7 +6,7 @@ import {
   QueueStatus,
 } from '@prisma/client';
 import type { DischargeEncounterInput } from '@serenemed/validation';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.service';
 import { recordQueueEvent } from '../queue/queue.service';
 import { AuditService } from '../audit/audit.service';
 import { CarePlansService } from '../care-plans/care-plans.service';
@@ -15,6 +15,7 @@ const UNSIGNED: ClinicalRecordStatus[] = [
   ClinicalRecordStatus.DRAFT,
   ClinicalRecordStatus.AI_DRAFT,
 ];
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class EncountersService {
@@ -112,8 +113,8 @@ export class EncountersService {
    * "patient timeline, previous reports."
    */
   async getDetail(organizationId: string, encounterId: string) {
-    const encounter = await this.prisma.withTenant(organizationId, (tx) =>
-      tx.encounter.findUnique({
+    return this.prisma.withTenant(organizationId, async (tx) => {
+      const encounter = await tx.encounter.findUnique({
         where: { id: encounterId },
         include: {
           patient: {
@@ -122,11 +123,17 @@ export class EncountersService {
               firstName: true,
               lastName: true,
               mrn: true,
+              sex: true,
               dateOfBirth: true,
               phone: true,
             },
           },
-          vitals: { orderBy: { recordedAt: 'desc' } },
+          // The booking reason, in the patient's words.
+          appointment: { select: { notes: true, scheduledAt: true } },
+          vitals: {
+            orderBy: { recordedAt: 'desc' },
+            include: { recordedBy: { select: { fullName: true, role: true } } },
+          },
           metabolicWorkups: { orderBy: { createdAt: 'desc' } },
           registration: true,
           referrals: { orderBy: { createdAt: 'desc' } },
@@ -139,6 +146,7 @@ export class EncountersService {
                 orderBy: { versionNumber: 'desc' },
                 take: 1,
               },
+              templateVersion: { select: { version: true, template: { select: { name: true } } } },
             },
           },
           diagnoses: {
@@ -158,11 +166,57 @@ export class EncountersService {
             orderBy: { createdAt: 'desc' },
           },
         },
-      }),
+      });
+      if (!encounter) {
+        throw new NotFoundException('Encounter not found.');
+      }
+      const currentMedication = await this.currentMedication(tx, encounter);
+      return { ...encounter, currentMedication };
+    });
+  }
+
+  /**
+   * What the patient is taking from earlier visits: items on active
+   * prescriptions from other encounters that are still within their
+   * course (or have no set duration). This visit's own prescriptions are
+   * shown separately, so they are left out.
+   */
+  private async currentMedication(
+    tx: Pick<ExtendedPrismaClient, 'prescription'>,
+    encounter: { id: string; patientId: string; startedAt: Date },
+  ) {
+    const prescriptions = await tx.prescription.findMany({
+      where: {
+        patientId: encounter.patientId,
+        encounterId: { not: encounter.id },
+        status: 'ACTIVE',
+        deletedAt: null,
+        createdAt: { lt: encounter.startedAt },
+      },
+      include: { items: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    const at = encounter.startedAt.getTime();
+    const seen = new Set<string>();
+    return prescriptions.flatMap((p) =>
+      p.items
+        .filter((item) => {
+          const key = item.medicationName.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return (
+            item.durationDays == null || p.createdAt.getTime() + item.durationDays * DAY_MS > at
+          );
+        })
+        .map((item) => ({
+          id: item.id,
+          medicationName: item.medicationName,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          prescribedAt: p.createdAt,
+          encounterId: p.encounterId,
+        })),
     );
-    if (!encounter) {
-      throw new NotFoundException('Encounter not found.');
-    }
-    return encounter;
   }
 }

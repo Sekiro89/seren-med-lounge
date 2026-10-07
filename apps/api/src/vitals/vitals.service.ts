@@ -31,6 +31,7 @@ export class VitalsService {
           respiratoryRate: input.respiratoryRate,
           heightCm: input.heightCm,
           weightKg: input.weightKg,
+          recordedById: actorId,
         },
       });
 
