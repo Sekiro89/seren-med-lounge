@@ -50,6 +50,8 @@ import { AccountingModule } from './accounting/accounting.module';
 import { FollowupsModule } from './followups/followups.module';
 import { CarePlansModule } from './care-plans/care-plans.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TasksModule } from './tasks/tasks.module';
+import { MessagesModule } from './messages/messages.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { AiModule } from './ai/ai.module';
 import { IntegrationsModule } from './integrations/integrations.module';
@@ -137,6 +139,8 @@ import { ReportsModule } from './reports/reports.module';
     FollowupsModule,
     CarePlansModule,
     NotificationsModule,
+    TasksModule,
+    MessagesModule,
     ReviewsModule,
 
     // --- cross-cutting ---

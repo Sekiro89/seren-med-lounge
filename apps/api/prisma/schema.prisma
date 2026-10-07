@@ -90,48 +90,63 @@ enum StaffRole {
 /// Tenancy root. A deployment can host multiple organizations later;
 /// today there is exactly one, but every table hangs off this from day one.
 model Organization {
-  id                      String                   @id @default(cuid())
-  name                    String
-  clinics                 Clinic[]
-  users                   User[]
-  patients                Patient[]
-  auditLogs               AuditLog[]
-  appointments            Appointment[]
-  encounters              Encounter[]
-  vitals                  Vital[]
-  clinicalNotes           ClinicalNote[]
-  deletedAt               DateTime?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  clinicalNoteVersions    ClinicalNoteVersion[]
-  diagnoses               Diagnosis[]
-  diagnosisVersions       DiagnosisVersion[]
-  prescriptions           Prescription[]
-  prescriptionItems       PrescriptionItem[]
-  labOrders               LabOrder[]
-  labOrderItems           LabOrderItem[]
-  labResults              LabResult[]
-  patientDocuments        PatientDocument[]
-  patientConsents         PatientConsent[]
-  patientClaimRequests    PatientClaimRequest[]
-  patientActivationTokens PatientActivationToken[]
-  invoices                Invoice[]
-  invoiceItems            InvoiceItem[]
-  payments                Payment[]
-  refunds                 Refund[]
-  registrations           Registration[]
-  queueEntries            QueueEntry[]
-  medicalHistoryEntries   MedicalHistoryEntry[]
-  metabolicWorkups        MetabolicWorkup[]
-  medications             Medication[]
-  stockBatches            StockBatch[]
-  stockMovements          StockMovement[]
-  dispensings             Dispensing[]
-  referrals               Referral[]
-  procedures              Procedure[]
-  procedureChecklistItems ProcedureChecklistItem[]
-  carePlans               CarePlan[]
-  followUps               FollowUp[]
+  id                       String                    @id @default(cuid())
+  name                     String
+  clinics                  Clinic[]
+  users                    User[]
+  patients                 Patient[]
+  auditLogs                AuditLog[]
+  appointments             Appointment[]
+  encounters               Encounter[]
+  vitals                   Vital[]
+  clinicalNotes            ClinicalNote[]
+  deletedAt                DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  clinicalNoteVersions     ClinicalNoteVersion[]
+  diagnoses                Diagnosis[]
+  diagnosisVersions        DiagnosisVersion[]
+  prescriptions            Prescription[]
+  prescriptionItems        PrescriptionItem[]
+  labOrders                LabOrder[]
+  labOrderItems            LabOrderItem[]
+  labResults               LabResult[]
+  patientDocuments         PatientDocument[]
+  patientConsents          PatientConsent[]
+  patientClaimRequests     PatientClaimRequest[]
+  patientActivationTokens  PatientActivationToken[]
+  invoices                 Invoice[]
+  invoiceItems             InvoiceItem[]
+  payments                 Payment[]
+  refunds                  Refund[]
+  registrations            Registration[]
+  queueEntries             QueueEntry[]
+  medicalHistoryEntries    MedicalHistoryEntry[]
+  metabolicWorkups         MetabolicWorkup[]
+  medications              Medication[]
+  stockBatches             StockBatch[]
+  stockMovements           StockMovement[]
+  dispensings              Dispensing[]
+  referrals                Referral[]
+  procedures               Procedure[]
+  procedureChecklistItems  ProcedureChecklistItem[]
+  carePlans                CarePlan[]
+  followUps                FollowUp[]
+  reviewRequests           ReviewRequest[]
+  reviews                  Review[]
+  campaigns                Campaign[]
+  leads                    Lead[]
+  leadActivities           LeadActivity[]
+  insurancePolicies        InsurancePolicy[]
+  insuranceCases           InsuranceCase[]
+  insuranceCaseEvents      InsuranceCaseEvent[]
+  clinicalTemplates        ClinicalTemplate[]
+  clinicalTemplateVersions ClinicalTemplateVersion[]
+  doctorAvailability       DoctorAvailability[]
+  staffTasks               StaffTask[]
+  notifications            Notification[]
+  messageThreads           MessageThread[]
+  messages                 Message[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -139,18 +154,19 @@ model Organization {
 
 /// A physical/operational clinic location under an organization.
 model Clinic {
-  id             String        @id @default(cuid())
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id])
-  name           String
-  users          User[]
-  patients       Patient[]
-  appointments   Appointment[]
-  encounters     Encounter[]
-  deletedAt      DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  queueEntries   QueueEntry[]
+  id                 String               @id @default(cuid())
+  organizationId     String
+  organization       Organization         @relation(fields: [organizationId], references: [id])
+  name               String
+  users              User[]
+  patients           Patient[]
+  appointments       Appointment[]
+  encounters         Encounter[]
+  deletedAt          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  queueEntries       QueueEntry[]
+  doctorAvailability DoctorAvailability[]
 
   @@index([organizationId, deletedAt])
   @@map("clinics")
@@ -160,47 +176,62 @@ model Clinic {
 /// separate deliberately: staff auth/roles and patient auth/consent are
 /// different concerns and must never be merged into one "users" table.
 model User {
-  id                       String                   @id @default(cuid())
-  organizationId           String
-  organization             Organization             @relation(fields: [organizationId], references: [id])
-  clinicId                 String?
-  clinic                   Clinic?                  @relation(fields: [clinicId], references: [id])
-  email                    String
-  passwordHash             String
-  fullName                 String
-  role                     StaffRole
-  isActive                 Boolean                  @default(true)
-  authoredNotes            ClinicalNoteVersion[]
-  authoredDiagnoses        DiagnosisVersion[]
-  prescriptions            Prescription[]
-  labOrders                LabOrder[]
-  labResultsEntered        LabResult[]
-  documentsUploaded        PatientDocument[]
-  consentsRecorded         PatientConsent[]
-  activationTokensIssued   PatientActivationToken[]
-  invoicesIssued           Invoice[]                @relation("InvoiceIssuedBy")
-  invoicesVoided           Invoice[]                @relation("InvoiceVoidedBy")
-  paymentsReceived         Payment[]
-  refundsIssued            Refund[]
-  deletedAt                DateTime?
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
-  doctorAppointments       Appointment[]            @relation("AppointmentDoctor")
-  registrationsRecorded    Registration[]
-  medicalHistoryRecorded   MedicalHistoryEntry[]
-  metabolicWorkupsRecorded MetabolicWorkup[]
-  stockBatchesReceived     StockBatch[]
-  stockMovements           StockMovement[]
-  dispensings              Dispensing[]
-  referralsReceived        Referral[]               @relation("ReferralTo")
-  referralsMade            Referral[]               @relation("ReferralFrom")
-  proceduresPerformed      Procedure[]              @relation("ProcedurePerformer")
-  proceduresCreated        Procedure[]              @relation("ProcedureCreator")
-  checklistItemsCompleted  ProcedureChecklistItem[]
-  carePlansCreated         CarePlan[]
-  followUpsAssigned        FollowUp[]               @relation("FollowUpAssignee")
-  followUpsCreated         FollowUp[]               @relation("FollowUpCreator")
-  followUpsResolved        FollowUp[]               @relation("FollowUpResolver")
+  id                              String                    @id @default(cuid())
+  organizationId                  String
+  organization                    Organization              @relation(fields: [organizationId], references: [id])
+  clinicId                        String?
+  clinic                          Clinic?                   @relation(fields: [clinicId], references: [id])
+  email                           String
+  passwordHash                    String
+  fullName                        String
+  role                            StaffRole
+  isActive                        Boolean                   @default(true)
+  authoredNotes                   ClinicalNoteVersion[]
+  authoredDiagnoses               DiagnosisVersion[]
+  prescriptions                   Prescription[]
+  labOrders                       LabOrder[]
+  labResultsEntered               LabResult[]
+  documentsUploaded               PatientDocument[]
+  consentsRecorded                PatientConsent[]
+  activationTokensIssued          PatientActivationToken[]
+  invoicesIssued                  Invoice[]                 @relation("InvoiceIssuedBy")
+  invoicesVoided                  Invoice[]                 @relation("InvoiceVoidedBy")
+  paymentsReceived                Payment[]
+  refundsIssued                   Refund[]
+  deletedAt                       DateTime?
+  createdAt                       DateTime                  @default(now())
+  updatedAt                       DateTime                  @updatedAt
+  doctorAppointments              Appointment[]             @relation("AppointmentDoctor")
+  registrationsRecorded           Registration[]
+  medicalHistoryRecorded          MedicalHistoryEntry[]
+  metabolicWorkupsRecorded        MetabolicWorkup[]
+  stockBatchesReceived            StockBatch[]
+  stockMovements                  StockMovement[]
+  dispensings                     Dispensing[]
+  referralsReceived               Referral[]                @relation("ReferralTo")
+  referralsMade                   Referral[]                @relation("ReferralFrom")
+  proceduresPerformed             Procedure[]               @relation("ProcedurePerformer")
+  proceduresCreated               Procedure[]               @relation("ProcedureCreator")
+  checklistItemsCompleted         ProcedureChecklistItem[]
+  carePlansCreated                CarePlan[]
+  followUpsAssigned               FollowUp[]                @relation("FollowUpAssignee")
+  followUpsCreated                FollowUp[]                @relation("FollowUpCreator")
+  followUpsResolved               FollowUp[]                @relation("FollowUpResolver")
+  reviewRequestsMade              ReviewRequest[]
+  reviewsModerated                Review[]
+  campaignsCreated                Campaign[]
+  leadsOwned                      Lead[]                    @relation("LeadOwner")
+  leadActivities                  LeadActivity[]
+  insuranceCasesCreated           InsuranceCase[]
+  insuranceCaseEvents             InsuranceCaseEvent[]
+  clinicalTemplatesCreated        ClinicalTemplate[]
+  clinicalTemplateVersionsCreated ClinicalTemplateVersion[]
+  availability                    DoctorAvailability[]      @relation("DoctorAvailability")
+  tasksAssigned                   StaffTask[]               @relation("TaskAssignee")
+  tasksCreated                    StaffTask[]               @relation("TaskCreator")
+  notifications                   Notification[]            @relation("NotificationRecipient")
+  threadsAssigned                 MessageThread[]           @relation("ThreadAssignee")
+  messagesSent                    Message[]                 @relation("MessageSender")
 
   // Scoped to the organization, not global — the same person can hold
   // separate staff accounts at two different organizations under one
@@ -222,40 +253,49 @@ model User {
 /// attach to this same Patient row by patientId — never duplicated per
 /// module. See docs/database/erd.md.
 model Patient {
-  id               String                   @id @default(cuid())
-  organizationId   String
-  organization     Organization             @relation(fields: [organizationId], references: [id])
-  clinicId         String?
-  clinic           Clinic?                  @relation(fields: [clinicId], references: [id])
-  firstName        String
-  lastName         String
-  dateOfBirth      DateTime
-  phone            String
-  email            String?
-  passwordHash     String?
-  appointments     Appointment[]
-  encounters       Encounter[]
-  vitals           Vital[]
-  clinicalNotes    ClinicalNote[]
-  diagnoses        Diagnosis[]
-  prescriptions    Prescription[]
-  labOrders        LabOrder[]
-  documents        PatientDocument[]
-  consents         PatientConsent[]
-  activationTokens PatientActivationToken[]
-  invoices         Invoice[]
-  deletedAt        DateTime?
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  registrations    Registration[]
-  queueEntries     QueueEntry[]
-  medicalHistory   MedicalHistoryEntry[]
-  metabolicWorkups MetabolicWorkup[]
-  dispensings      Dispensing[]
-  referrals        Referral[]
-  procedures       Procedure[]
-  carePlans        CarePlan[]
-  followUps        FollowUp[]
+  id                String                   @id @default(cuid())
+  organizationId    String
+  organization      Organization             @relation(fields: [organizationId], references: [id])
+  clinicId          String?
+  clinic            Clinic?                  @relation(fields: [clinicId], references: [id])
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  phone             String
+  email             String?
+  passwordHash      String?
+  appointments      Appointment[]
+  encounters        Encounter[]
+  vitals            Vital[]
+  clinicalNotes     ClinicalNote[]
+  diagnoses         Diagnosis[]
+  prescriptions     Prescription[]
+  labOrders         LabOrder[]
+  documents         PatientDocument[]
+  consents          PatientConsent[]
+  activationTokens  PatientActivationToken[]
+  invoices          Invoice[]
+  deletedAt         DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  registrations     Registration[]
+  queueEntries      QueueEntry[]
+  medicalHistory    MedicalHistoryEntry[]
+  metabolicWorkups  MetabolicWorkup[]
+  dispensings       Dispensing[]
+  referrals         Referral[]
+  procedures        Procedure[]
+  carePlans         CarePlan[]
+  followUps         FollowUp[]
+  reviewRequests    ReviewRequest[]
+  reviews           Review[]
+  leadsReferred     Lead[]                   @relation("LeadReferredBy")
+  convertedFromLead Lead?                    @relation("LeadConvertedTo")
+  insurancePolicies InsurancePolicy[]
+  insuranceCases    InsuranceCase[]
+  staffTasks        StaffTask[]
+  notifications     Notification[]
+  messageThreads    MessageThread[]
 
   // Nullable-safe: Postgres doesn't treat NULLs as equal for uniqueness,
   // so many patients with no email yet is fine — this only rejects two
@@ -455,6 +495,7 @@ model Encounter {
   referrals        Referral[]
   procedures       Procedure[]
   carePlans        CarePlan[]
+  insuranceCases   InsuranceCase[]
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -498,22 +539,24 @@ model Vital {
 /// the thread, e.g. created in error, is different from amending a
 /// finalized version's content).
 model ClinicalNote {
-  id                   String                @id @default(cuid())
+  id                   String                   @id @default(cuid())
   organizationId       String
-  organization         Organization          @relation(fields: [organizationId], references: [id])
+  organization         Organization             @relation(fields: [organizationId], references: [id])
   patientId            String
-  patient              Patient               @relation(fields: [patientId], references: [id])
+  patient              Patient                  @relation(fields: [patientId], references: [id])
   encounterId          String
-  encounter            Encounter             @relation(fields: [encounterId], references: [id])
+  encounter            Encounter                @relation(fields: [encounterId], references: [id])
   versions             ClinicalNoteVersion[]
-  status               ClinicalRecordStatus  @default(DRAFT)
-  currentVersionNumber Int                   @default(0)
+  status               ClinicalRecordStatus     @default(DRAFT)
+  currentVersionNumber Int                      @default(0)
   deletedAt            DateTime?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  noteType             ClinicalNoteType      @default(CONSULTATION)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  noteType             ClinicalNoteType         @default(CONSULTATION)
   procedureId          String?
-  procedure            Procedure?            @relation(fields: [procedureId], references: [id])
+  procedure            Procedure?               @relation(fields: [procedureId], references: [id])
+  templateVersionId    String?
+  templateVersion      ClinicalTemplateVersion? @relation(fields: [templateVersionId], references: [id])
 
   @@index([organizationId, deletedAt])
   @@index([encounterId])
@@ -761,6 +804,7 @@ model PatientDocument {
   updatedAt              DateTime            @updatedAt
   registrationsAsIdProof Registration[]
   proceduresAsConsent    Procedure[]
+  insurancePolicies      InsurancePolicy[]
 
   @@index([organizationId, deletedAt])
   @@index([patientId])
@@ -932,6 +976,7 @@ enum PaymentMethod {
   CASH
   UPI
   CARD
+  INSURANCE
 }
 
 /// `number` is a per-organization sequence (allocated under an advisory
@@ -945,32 +990,33 @@ enum PaymentMethod {
 /// (payments minus refunds), recomputed in the same transaction as every
 /// Payment/Refund insert, so listing invoices never needs a sum query.
 model Invoice {
-  id             String        @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
   number         Int
   patientId      String
-  patient        Patient       @relation(fields: [patientId], references: [id])
+  patient        Patient         @relation(fields: [patientId], references: [id])
   encounterId    String?
-  encounter      Encounter?    @relation(fields: [encounterId], references: [id])
-  status         InvoiceStatus @default(ISSUED)
-  currency       String        @default("INR")
+  encounter      Encounter?      @relation(fields: [encounterId], references: [id])
+  status         InvoiceStatus   @default(ISSUED)
+  currency       String          @default("INR")
   subtotalMinor  Int
   taxMinor       Int
   totalMinor     Int
-  paidMinor      Int           @default(0)
+  paidMinor      Int             @default(0)
   notes          String?
   items          InvoiceItem[]
   payments       Payment[]
   issuedById     String
-  issuedBy       User          @relation("InvoiceIssuedBy", fields: [issuedById], references: [id])
+  issuedBy       User            @relation("InvoiceIssuedBy", fields: [issuedById], references: [id])
   voidedById     String?
-  voidedBy       User?         @relation("InvoiceVoidedBy", fields: [voidedById], references: [id])
+  voidedBy       User?           @relation("InvoiceVoidedBy", fields: [voidedById], references: [id])
   voidedAt       DateTime?
   voidReason     String?
   deletedAt      DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  insuranceCases InsuranceCase[]
 
   @@unique([organizationId, number])
   @@index([organizationId, deletedAt])
@@ -1512,6 +1558,8 @@ model Procedure {
   cancelReason      String?
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
+  reviewRequests    ReviewRequest[]
+  insuranceCases    InsuranceCase[]
 
   @@index([organizationId, status])
   @@index([patientId])
@@ -1633,4 +1681,527 @@ model FollowUp {
   @@index([patientId])
   @@index([assignedToId, status])
   @@map("follow_ups")
+}
+
+// =============================================================================
+// REVIEWS & TESTIMONIALS — reviews module. Consent-based: a request is only
+// made if the patient's latest MARKETING_COMMUNICATION consent is GRANTED;
+// publishing needs the patient's explicit publishConsent on the review.
+// =============================================================================
+
+enum ReviewStage {
+  AFTER_SECOND_CONSULTATION
+  AFTER_FIRST_FOLLOW_UP
+  AFTER_PROCEDURE
+}
+
+enum ReviewRequestStatus {
+  REQUESTED
+  SUBMITTED
+  EXPIRED
+  CANCELLED
+}
+
+enum ReviewFormat {
+  TEXT
+  VIDEO
+}
+
+enum ReviewModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// One ask, per patient per stage (per procedure for AFTER_PROCEDURE):
+/// dedupeKey = "<stage>:<procedureId or ->", unique per patient.
+model ReviewRequest {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient             @relation(fields: [patientId], references: [id])
+  stage          ReviewStage
+  procedureId    String?
+  procedure      Procedure?          @relation(fields: [procedureId], references: [id])
+  dedupeKey      String
+  status         ReviewRequestStatus @default(REQUESTED)
+  expiresAt      DateTime
+  review         Review?
+  requestedById  String
+  requestedBy    User                @relation(fields: [requestedById], references: [id])
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([organizationId, patientId, dedupeKey])
+  @@index([organizationId, status])
+  @@map("review_requests")
+}
+
+/// The patient's submitted review. Content (rating, comment, video,
+/// publishConsent) is fixed once submitted; only moderation fields
+/// change. A VIDEO testimonial stores object-storage metadata only (no
+/// upload client exists yet — same as PatientDocument).
+model Review {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  organization     Organization           @relation(fields: [organizationId], references: [id])
+  patientId        String
+  patient          Patient                @relation(fields: [patientId], references: [id])
+  requestId        String                 @unique
+  request          ReviewRequest          @relation(fields: [requestId], references: [id])
+  stage            ReviewStage
+  rating           Int
+  comment          String?
+  format           ReviewFormat           @default(TEXT)
+  videoStorageKey  String?
+  publishConsent   Boolean                @default(false)
+  moderationStatus ReviewModerationStatus @default(PENDING)
+  moderatedById    String?
+  moderatedBy      User?                  @relation(fields: [moderatedById], references: [id])
+  moderatedAt      DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([organizationId, moderationStatus])
+  @@index([patientId])
+  @@map("reviews")
+}
+
+// =============================================================================
+// MARKETING FUNNEL & CRM — leads and campaigns modules. A Lead converts
+// into exactly one Patient (convertedPatientId) through the same
+// duplicate-detection PatientsService.register uses — never a parallel
+// patient record. See docs/workflows/marketing-funnel.md.
+// =============================================================================
+
+enum LeadSource {
+  WEBSITE
+  SOCIAL_MEDIA
+  CAMPAIGN
+  REFERRAL
+  CAMP
+  WALK_IN
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  NURTURING
+  APPOINTMENT_BOOKED
+  CONVERTED
+  LOST
+}
+
+enum LeadActivityType {
+  CALL
+  MESSAGE
+  EMAIL
+  MEETING
+  NOTE
+  EDUCATION_SENT
+  STATUS_CHANGE
+}
+
+enum CampaignType {
+  DIGITAL
+  HEALTH_CAMP
+  EVENT
+  REFERRAL_PROGRAM
+  OTHER
+}
+
+enum CampaignStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/// Includes health camps (type HEALTH_CAMP, with location + dates).
+model Campaign {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  name           String
+  type           CampaignType
+  channel        String?
+  status         CampaignStatus @default(PLANNED)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  location       String?
+  budgetMinor    Int?
+  notes          String?
+  leads          Lead[]
+  createdById    String
+  createdBy      User           @relation(fields: [createdById], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@map("campaigns")
+}
+
+/// A prospective patient. Contact consent is recorded on the lead itself
+/// (there's no Patient yet to hang a PatientConsent on); it carries over
+/// as a MARKETING_COMMUNICATION consent on conversion.
+model Lead {
+  id                  String         @id @default(cuid())
+  organizationId      String
+  organization        Organization   @relation(fields: [organizationId], references: [id])
+  firstName           String
+  lastName            String?
+  phone               String
+  email               String?
+  source              LeadSource
+  campaignId          String?
+  campaign            Campaign?      @relation(fields: [campaignId], references: [id])
+  referredByPatientId String?
+  referredByPatient   Patient?       @relation("LeadReferredBy", fields: [referredByPatientId], references: [id])
+  ownerId             String?
+  owner               User?          @relation("LeadOwner", fields: [ownerId], references: [id])
+  status              LeadStatus     @default(NEW)
+  enquiry             String?
+  consentToContact    Boolean        @default(false)
+  consentRecordedAt   DateTime?
+  nextFollowUpAt      DateTime?
+  lostReason          String?
+  convertedPatientId  String?        @unique
+  convertedPatient    Patient?       @relation("LeadConvertedTo", fields: [convertedPatientId], references: [id])
+  convertedAt         DateTime?
+  activities          LeadActivity[]
+  deletedAt           DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, deletedAt])
+  @@index([phone])
+  @@index([ownerId, nextFollowUpAt])
+  @@map("leads")
+}
+
+/// Append-only nurture/touchpoint history (REVOKE UPDATE, DELETE).
+model LeadActivity {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  leadId         String
+  lead           Lead             @relation(fields: [leadId], references: [id])
+  type           LeadActivityType
+  notes          String?
+  actorId        String
+  actor          User             @relation(fields: [actorId], references: [id])
+  createdAt      DateTime         @default(now())
+
+  @@index([organizationId])
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+// =============================================================================
+// INSURANCE — insurance module. A case moves through
+// eligibility -> pre-auth -> claim -> settlement; every transition is an
+// append-only InsuranceCaseEvent (the communication/history log).
+// Settlement records a Payment (method INSURANCE) on the linked invoice.
+// No insurer API is contracted: every step is recorded by insurance staff.
+// =============================================================================
+
+enum InsuranceCaseStatus {
+  ELIGIBILITY_CHECK
+  PRE_AUTH_REQUESTED
+  PRE_AUTH_APPROVED
+  PRE_AUTH_DENIED
+  CLAIM_SUBMITTED
+  CLAIM_APPROVED
+  CLAIM_PARTIALLY_APPROVED
+  CLAIM_REJECTED
+  SETTLED
+  CLOSED
+}
+
+model InsurancePolicy {
+  id              String           @id @default(cuid())
+  organizationId  String
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  patientId       String
+  patient         Patient          @relation(fields: [patientId], references: [id])
+  insurerName     String
+  tpaName         String?
+  policyNumber    String
+  memberId        String?
+  sumInsuredMinor Int?
+  validFrom       DateTime?        @db.Date
+  validTo         DateTime?        @db.Date
+  cardDocumentId  String?
+  cardDocument    PatientDocument? @relation(fields: [cardDocumentId], references: [id])
+  isActive        Boolean          @default(true)
+  cases           InsuranceCase[]
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([patientId])
+  @@map("insurance_policies")
+}
+
+model InsuranceCase {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  organization         Organization         @relation(fields: [organizationId], references: [id])
+  patientId            String
+  patient              Patient              @relation(fields: [patientId], references: [id])
+  policyId             String
+  policy               InsurancePolicy      @relation(fields: [policyId], references: [id])
+  encounterId          String?
+  encounter            Encounter?           @relation(fields: [encounterId], references: [id])
+  procedureId          String?
+  procedure            Procedure?           @relation(fields: [procedureId], references: [id])
+  invoiceId            String?
+  invoice              Invoice?             @relation(fields: [invoiceId], references: [id])
+  status               InsuranceCaseStatus  @default(ELIGIBILITY_CHECK)
+  requestedAmountMinor Int?
+  approvedAmountMinor  Int?
+  settledAmountMinor   Int?
+  preAuthReference     String?
+  claimReference       String?
+  events               InsuranceCaseEvent[]
+  createdById          String
+  createdBy            User                 @relation(fields: [createdById], references: [id])
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([organizationId, status])
+  @@index([patientId])
+  @@map("insurance_cases")
+}
+
+/// Append-only (REVOKE UPDATE, DELETE): every status change and every
+/// logged communication with the insurer/TPA.
+model InsuranceCaseEvent {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  caseId         String
+  case           InsuranceCase        @relation(fields: [caseId], references: [id])
+  fromStatus     InsuranceCaseStatus?
+  toStatus       InsuranceCaseStatus
+  amountMinor    Int?
+  note           String?
+  actorId        String
+  actor          User                 @relation(fields: [actorId], references: [id])
+  createdAt      DateTime             @default(now())
+
+  @@index([organizationId])
+  @@index([caseId, createdAt])
+  @@map("insurance_case_events")
+}
+
+// =============================================================================
+// CLINICAL TEMPLATE ENGINE — clinical-templates module. A template is a
+// mutable header; its content lives in append-only versions, so a note
+// records exactly which template version it started from.
+// =============================================================================
+
+model ClinicalTemplate {
+  id             String                    @id @default(cuid())
+  organizationId String
+  organization   Organization              @relation(fields: [organizationId], references: [id])
+  name           String
+  noteType       ClinicalNoteType
+  specialty      String?
+  isActive       Boolean                   @default(true)
+  currentVersion Int                       @default(1)
+  versions       ClinicalTemplateVersion[]
+  createdById    String
+  createdBy      User                      @relation(fields: [createdById], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@index([organizationId, deletedAt])
+  @@index([organizationId, noteType])
+  @@map("clinical_templates")
+}
+
+/// Append-only (REVOKE UPDATE, DELETE). `body` holds the SOAP section
+/// prompts/defaults and any structured fields, as JSON validated by
+/// @serenemed/validation's clinicalTemplateBodySchema.
+model ClinicalTemplateVersion {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  templateId     String
+  template       ClinicalTemplate @relation(fields: [templateId], references: [id])
+  version        Int
+  body           Json
+  notes          ClinicalNote[]
+  createdById    String
+  createdBy      User             @relation(fields: [createdById], references: [id])
+  createdAt      DateTime         @default(now())
+
+  @@unique([templateId, version])
+  @@index([organizationId])
+  @@map("clinical_template_versions")
+}
+
+// =============================================================================
+// CLINIC COMMAND CENTRE — scheduling (DoctorAvailability), StaffTask and
+// Notification (notifications module). Notifications are in-app only: no
+// SMS/WhatsApp/email provider is contracted.
+// =============================================================================
+
+/// A doctor's recurring weekly OPD hours (dayOfWeek 0 = Sunday,
+/// clinic-local "HH:MM" times), used to compute bookable slots.
+model DoctorAvailability {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  doctorId       String
+  doctor         User         @relation("DoctorAvailability", fields: [doctorId], references: [id])
+  clinicId       String?
+  clinic         Clinic?      @relation(fields: [clinicId], references: [id])
+  dayOfWeek      Int
+  startTime      String
+  endTime        String
+  slotMinutes    Int          @default(15)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, doctorId, dayOfWeek])
+  @@map("doctor_availability")
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// Team task assignment and personal reminders (assignee = creator).
+model StaffTask {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  title          String
+  description    String?
+  assigneeId     String
+  assignee       User         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById    String
+  createdBy      User         @relation("TaskCreator", fields: [createdById], references: [id])
+  patientId      String?
+  patient        Patient?     @relation(fields: [patientId], references: [id])
+  dueAt          DateTime?
+  priority       TaskPriority @default(NORMAL)
+  status         TaskStatus   @default(OPEN)
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, assigneeId, status])
+  @@map("staff_tasks")
+}
+
+enum NotificationType {
+  PHARMACY_PREPARE
+  LAB_PREPARE
+  LAB_RESULT_READY
+  REFERRAL_RECEIVED
+  FOLLOW_UP_ESCALATED
+  TASK_ASSIGNED
+  MESSAGE_RECEIVED
+  GENERAL
+}
+
+/// In-app notification to exactly one of: a staff user, every staff
+/// user with a role (first to acknowledge clears it), or a patient.
+/// Titles/bodies must not carry clinical detail — they point at the
+/// entity (entityType/entityId) instead.
+model Notification {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  type               NotificationType
+  recipientUserId    String?
+  recipientUser      User?            @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientRole      StaffRole?
+  recipientPatientId String?
+  recipientPatient   Patient?         @relation(fields: [recipientPatientId], references: [id], onDelete: Cascade)
+  title              String
+  body               String?
+  entityType         String?
+  entityId           String?
+  readAt             DateTime?
+  readById           String?
+  createdAt          DateTime         @default(now())
+
+  @@index([organizationId, recipientUserId, readAt])
+  @@index([organizationId, recipientRole, readAt])
+  @@index([organizationId, recipientPatientId, readAt])
+  @@map("notifications")
+}
+
+// =============================================================================
+// PATIENT MESSAGES — messages between a patient and the clinic team.
+// =============================================================================
+
+enum MessageThreadStatus {
+  OPEN
+  CLOSED
+}
+
+enum MessageSenderType {
+  USER
+  PATIENT
+}
+
+model MessageThread {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  patientId      String
+  patient        Patient             @relation(fields: [patientId], references: [id])
+  subject        String
+  status         MessageThreadStatus @default(OPEN)
+  assignedToId   String?
+  assignedTo     User?               @relation("ThreadAssignee", fields: [assignedToId], references: [id])
+  lastMessageAt  DateTime            @default(now())
+  messages       Message[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId, status, lastMessageAt])
+  @@index([patientId])
+  @@map("message_threads")
+}
+
+/// A message's body never changes once sent; only the read stamps move.
+model Message {
+  id              String            @id @default(cuid())
+  organizationId  String
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  threadId        String
+  thread          MessageThread     @relation(fields: [threadId], references: [id])
+  senderType      MessageSenderType
+  senderUserId    String?
+  senderUser      User?             @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+  body            String
+  readByPatientAt DateTime?
+  readByStaffAt   DateTime?
+  createdAt       DateTime          @default(now())
+
+  @@index([organizationId])
+  @@index([threadId, createdAt])
+  @@map("messages")
 }
