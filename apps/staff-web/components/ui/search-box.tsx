@@ -15,7 +15,7 @@ export function SearchBox({
       />
       <input
         type="search"
-        className="h-11 w-full rounded-control border border-control bg-surface pl-10 pr-3 text-base text-fg placeholder:text-fg-subtle"
+        className="h-10 w-full rounded-control border border-control bg-surface pl-10 pr-3 text-base text-fg placeholder:text-fg-subtle"
         {...props}
       />
     </div>

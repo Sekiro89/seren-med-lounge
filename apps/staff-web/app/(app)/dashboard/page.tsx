@@ -307,7 +307,7 @@ export default function ConsultationsPage() {
     {
       header: 'Scheduled',
       render: (a) => (
-        <span className="tabular">
+        <span className="tabular font-mono">
           {formatDate(a.scheduledAt)} {formatTime(a.scheduledAt)}
         </span>
       ),

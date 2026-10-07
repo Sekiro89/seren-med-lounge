@@ -139,14 +139,14 @@ export function InvoiceDrawer({
                           <p className="font-medium">{item.description}</p>
                           <p className="text-fg-subtle">{humanize(item.itemType)}</p>
                         </td>
-                        <td className="tabular px-3 py-2 text-right">{item.quantity}</td>
-                        <td className="tabular px-3 py-2 text-right">
+                        <td className="tabular font-mono px-3 py-2 text-right">{item.quantity}</td>
+                        <td className="tabular font-mono px-3 py-2 text-right">
                           {formatMoney(item.unitPriceMinor)}
                         </td>
-                        <td className="tabular px-3 py-2 text-right">
+                        <td className="tabular font-mono px-3 py-2 text-right">
                           {formatMoney(item.taxMinor)}
                         </td>
-                        <td className="tabular px-3 py-2 text-right font-medium">
+                        <td className="tabular font-mono px-3 py-2 text-right font-medium">
                           {formatMoney(item.lineTotalMinor)}
                         </td>
                       </tr>
@@ -154,7 +154,7 @@ export function InvoiceDrawer({
                   </tbody>
                 </table>
               </div>
-              <dl className="tabular mt-3 space-y-1 text-sm">
+              <dl className="tabular font-mono mt-3 space-y-1 text-sm">
                 {(
                   [
                     ['Subtotal', current.subtotalMinor],

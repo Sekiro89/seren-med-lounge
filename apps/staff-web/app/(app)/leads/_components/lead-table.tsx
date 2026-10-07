@@ -65,7 +65,7 @@ export function LeadsTable({
         }
         const late = new Date(r.nextFollowUpAt).getTime() < now;
         return (
-          <span className={`tabular ${late ? 'font-medium text-danger-fg' : ''}`}>
+          <span className={`tabular font-mono ${late ? 'font-medium text-danger-fg' : ''}`}>
             {formatDate(r.nextFollowUpAt)} {formatTime(r.nextFollowUpAt)}
             {late && <span className="ml-1.5 text-xs">Overdue</span>}
           </span>

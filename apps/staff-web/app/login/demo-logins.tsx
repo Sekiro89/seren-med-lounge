@@ -31,9 +31,12 @@ export function DemoLogins({
   disabled?: boolean;
 }) {
   return (
-    <div className="mt-8 rounded-panel border border-dashed border-control p-4">
-      <p className="text-[13px] font-semibold text-fg">Demo roles (development only)</p>
-      <p className="mb-3 mt-0.5 text-xs text-fg-subtle">Click a role to sign in as them.</p>
+    <div className="section-rule mt-12 pt-4">
+      <p className="text-sm font-semibold text-fg">
+        Demo roles{' '}
+        <span className="font-mono text-xs font-normal text-fg-subtle">development only</span>
+      </p>
+      <p className="mb-4 mt-0.5 text-[13px] text-fg-muted">Click a role to sign in as them.</p>
       <div className="flex flex-wrap gap-2">
         {DEMO_ROLES.map((role) => (
           <button
@@ -41,7 +44,7 @@ export function DemoLogins({
             type="button"
             disabled={disabled}
             onClick={() => onPick(role.email, DEMO_PASSWORD)}
-            className="h-8 cursor-pointer rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-fg-muted transition-colors hover:border-control hover:bg-surface-muted hover:text-fg disabled:opacity-50"
+            className="h-8 cursor-pointer rounded-control border border-control bg-surface px-3 text-[13px] font-medium text-fg transition-colors hover:border-fg hover:bg-surface-muted disabled:opacity-50"
           >
             {role.label}
           </button>

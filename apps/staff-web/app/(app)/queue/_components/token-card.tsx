@@ -52,7 +52,7 @@ export function TokenCard({
   const work = workHref(row);
 
   return (
-    <article className="rounded-control border border-line bg-surface p-4 shadow-card">
+    <article className="rounded-control border border-control bg-surface p-4">
       <div className="flex items-start gap-3">
         <span className="tabular flex h-11 min-w-14 items-center justify-center rounded-control bg-primary-subtle px-2 font-mono text-lg font-semibold text-primary-subtle-fg">
           {formatToken(row.tokenNumber)}

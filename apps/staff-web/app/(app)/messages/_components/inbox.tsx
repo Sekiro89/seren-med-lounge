@@ -66,7 +66,7 @@ function InboxInner({ selectedId }: { selectedId?: string }) {
   return (
     <>
       <PageHeader title="Messages" description="Conversations with patients." />
-      <Card className="flex h-[calc(100dvh-14rem)] min-h-[32rem] overflow-hidden">
+      <Card className="flex h-[calc(100dvh-16.5rem)] min-h-[32rem] overflow-hidden">
         <section
           aria-label="Conversations"
           className={`${selectedId ? 'hidden lg:flex' : 'flex'} w-full flex-col border-line lg:w-[380px] lg:shrink-0 lg:border-r`}
@@ -128,7 +128,7 @@ function InboxInner({ selectedId }: { selectedId?: string }) {
                     >
                       <span className="flex items-start justify-between gap-3">
                         <PersonCell name={fullName(t.patient)} />
-                        <span className="tabular shrink-0 pt-1 text-xs text-fg-subtle">
+                        <span className="tabular font-mono shrink-0 pt-1 text-xs text-fg-subtle">
                           {lastSeen(t.lastMessageAt)}
                         </span>
                       </span>

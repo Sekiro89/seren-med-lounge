@@ -120,7 +120,7 @@ export default function FollowUpsPage() {
           <PersonCell name={fullName(r.patient)} />
           <a
             href={`tel:${r.patient.phone}`}
-            className="tabular mt-1 ml-11 inline-flex items-center gap-1 text-xs text-primary-subtle-fg hover:underline"
+            className="tabular font-mono mt-1 ml-11 inline-flex items-center gap-1 text-xs text-primary-subtle-fg hover:underline"
           >
             <Phone size={12} aria-hidden="true" />
             {r.patient.phone}
@@ -145,7 +145,7 @@ export default function FollowUpsPage() {
       render: (r) => {
         const late = isOpen(r) && new Date(r.dueAt).getTime() < now;
         return (
-          <span className={`tabular ${late ? 'font-medium text-danger-fg' : ''}`}>
+          <span className={`tabular font-mono ${late ? 'font-medium text-danger-fg' : ''}`}>
             {formatDate(r.dueAt)} {formatTime(r.dueAt)}
             {late && <span className="ml-1.5 text-xs">Overdue</span>}
           </span>

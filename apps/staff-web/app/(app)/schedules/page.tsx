@@ -138,7 +138,7 @@ export default function SchedulesPage() {
                             {today.map((w) => (
                               <span
                                 key={w.id}
-                                className="tabular inline-flex items-center gap-2 rounded-control bg-primary-subtle py-1 pl-3 pr-1 text-sm text-primary-subtle-fg"
+                                className="tabular font-mono inline-flex items-center gap-2 rounded-control bg-primary-subtle py-1 pl-3 pr-1 text-sm text-primary-subtle-fg"
                               >
                                 {w.startTime} to {w.endTime}
                                 <span className="text-[12px] opacity-80">
@@ -150,7 +150,7 @@ export default function SchedulesPage() {
                                     setRemoving({ window: w, doctor: doctor.fullName })
                                   }
                                   aria-label={`Remove ${DAYS[day]} ${w.startTime} to ${w.endTime} for ${doctor.fullName}`}
-                                  className="flex size-7 cursor-pointer items-center justify-center rounded-full hover:bg-surface"
+                                  className="flex size-7 cursor-pointer items-center justify-center rounded-control hover:bg-surface"
                                 >
                                   <X size={14} aria-hidden="true" />
                                 </button>

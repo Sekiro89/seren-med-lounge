@@ -96,7 +96,7 @@ export function PatientPicker({
         />
       </Field>
       {showResults && (
-        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-control border border-line bg-surface shadow-popover">
+        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto border border-control bg-surface">
           {searching ? (
             <li className="px-3 py-2 text-[13px] text-fg-subtle">Searching</li>
           ) : results.length === 0 ? (

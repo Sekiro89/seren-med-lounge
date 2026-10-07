@@ -237,7 +237,7 @@ export function NewCaseDialog({
                             />
                             <span className="min-w-0 text-sm">
                               <span className="block font-medium">{p.insurerName}</span>
-                              <span className="tabular block text-[13px] text-fg-muted">
+                              <span className="tabular font-mono block text-[13px] text-fg-muted">
                                 Policy {p.policyNumber}
                                 {p.tpaName ? `, TPA ${p.tpaName}` : ''}
                               </span>
@@ -354,7 +354,7 @@ export function NewCaseDialog({
                 min={0}
                 step="0.01"
                 inputMode="decimal"
-                className="tabular text-right"
+                className="tabular font-mono text-right"
                 value={amount}
                 {...invalidProps(errors['case-amount'])}
                 onChange={(e) => setAmount(e.target.value)}

@@ -86,7 +86,7 @@ function PatientsDesk() {
         </Link>
       ),
     },
-    { header: 'Phone', render: (p) => <span className="tabular">{p.phone}</span> },
+    { header: 'Phone', render: (p) => <span className="tabular font-mono">{p.phone}</span> },
     {
       header: 'Email',
       render: (p) => p.email ?? <span className="text-fg-subtle">Not given</span>,

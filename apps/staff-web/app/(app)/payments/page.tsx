@@ -21,6 +21,7 @@ import { Select } from '../../../components/ui/fields';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
+import { KPI_STRIP } from '../../../components/ui/kpi-tile';
 import { formatDate, formatMoney, formatTime, fullName, humanize } from '../../../lib/format';
 import { homeFor } from '../../../lib/nav';
 import { can } from '../../../lib/permissions';
@@ -146,6 +147,7 @@ function PaymentsLedger() {
     {
       header: 'Amount',
       align: 'right',
+      numeric: true,
       render: (p) => <span className="font-medium">{formatMoney(p.amountMinor)}</span>,
     },
     {
@@ -204,7 +206,7 @@ function PaymentsLedger() {
         </div>
       </Card>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className={`mb-6 sm:grid-cols-3 ${KPI_STRIP}`}>
         <Total label="Collected" value={collected} loading={loading} />
         <Total label="Refunded" value={refunded} loading={loading} />
         <Total
@@ -279,7 +281,7 @@ function Total({
   strong?: boolean;
 }) {
   return (
-    <div className="rounded-panel border border-line bg-surface px-6 py-5 shadow-card">
+    <div className="bg-surface px-6 py-5">
       <p className="text-[13px] font-medium text-fg-muted">{label}</p>
       {loading ? (
         <Skeleton className="mt-2 h-8 w-32" />

@@ -42,13 +42,14 @@ export function BatchTable({
     {
       header: 'On hand',
       align: 'right',
+      numeric: true,
       render: (b) => (
         <span>
           {b.quantityOnHand} <span className="text-fg-subtle">{b.medication.unit}</span>
         </span>
       ),
     },
-    { header: 'Received', align: 'right', render: (b) => b.quantityReceived },
+    { header: 'Received', align: 'right', numeric: true, render: (b) => b.quantityReceived },
     {
       header: 'Supplier',
       render: (b) => b.supplier ?? <span className="text-fg-subtle">Not recorded</span>,

@@ -320,7 +320,7 @@ function WhoIsCheckingIn({ target }: { target: CheckInTarget }) {
         <Avatar name={target.patientName} size={40} />
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-fg">{target.patientName}</p>
-          <p className="tabular text-[13px] text-fg-muted">
+          <p className="tabular font-mono text-[13px] text-fg-muted">
             {target.dateOfBirth
               ? `Born ${formatDate(target.dateOfBirth)} (${ageLabel(target.dateOfBirth)})`
               : 'Date of birth not on file'}
@@ -331,7 +331,9 @@ function WhoIsCheckingIn({ target }: { target: CheckInTarget }) {
       {target.scheduledAt && (
         <p className="mt-3 border-t border-line pt-3 text-[13px] text-fg-muted">
           Booked for{' '}
-          <span className="tabular font-medium text-fg">{formatTime(target.scheduledAt)}</span>
+          <span className="tabular font-mono font-medium text-fg">
+            {formatTime(target.scheduledAt)}
+          </span>
           {target.doctorName ? ` with ${target.doctorName}` : ''}
           {target.entrySource ? ` · ${humanize(target.entrySource)}` : ''}
         </p>

@@ -30,7 +30,7 @@ export function BarList({
         <li key={row.key} className="text-sm">
           <div className="flex items-baseline justify-between gap-4">
             <span className="min-w-0 truncate text-fg">{row.label}</span>
-            <span className="tabular shrink-0 font-medium text-fg">
+            <span className="tabular font-mono shrink-0 font-medium text-fg">
               {row.display ?? row.value.toLocaleString('en-IN')}
             </span>
           </div>

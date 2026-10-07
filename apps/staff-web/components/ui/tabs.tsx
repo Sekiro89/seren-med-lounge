@@ -48,20 +48,16 @@ export function Tabs<K extends string>({
               tabIndex={active ? 0 : -1}
               onClick={() => onChange(tab.key)}
               onKeyDown={(event) => onKeyDown(event, index)}
-              className={`flex h-12 shrink-0 cursor-pointer items-center gap-2 border-b-2 text-sm font-medium transition-colors ${
+              className={`flex h-12 shrink-0 cursor-pointer items-center gap-2 border-b-2 text-sm transition-colors ${
                 active
-                  ? 'border-primary text-primary-subtle-fg'
-                  : 'border-transparent text-fg-muted hover:text-fg'
+                  ? 'border-primary font-semibold text-fg'
+                  : 'border-transparent font-medium text-fg-muted hover:text-fg'
               }`}
             >
               {tab.label}
               {tab.count !== undefined && (
                 <span
-                  className={`tabular rounded-control px-1.5 text-xs ${
-                    active
-                      ? 'bg-primary-subtle text-primary-subtle-fg'
-                      : 'bg-surface-muted text-fg-muted'
-                  }`}
+                  className={`font-mono text-xs ${active ? 'text-primary-subtle-fg' : 'text-fg-subtle'}`}
                 >
                   {tab.count}
                 </span>

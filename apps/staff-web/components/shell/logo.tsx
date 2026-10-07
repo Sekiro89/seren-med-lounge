@@ -1,21 +1,18 @@
-/** Monogram + wordmark. Swap for the official SVG once it's supplied. */
-export function Logo({ tone = 'default' }: { tone?: 'default' | 'light' }) {
-  const light = tone === 'light';
+/**
+ * The wordmark: "SereneMed" in Plex Sans 600 with "staff" in Plex Mono
+ * (design system 17, until the official SVG logo is supplied).
+ */
+export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <span className="inline-flex items-baseline gap-2">
       <span
-        aria-hidden="true"
-        className={`flex size-8 items-center justify-center rounded-control text-base font-semibold ${
-          light ? 'bg-surface text-primary-subtle-fg' : 'bg-primary text-on-primary'
-        }`}
-      >
-        S
-      </span>
-      <span
-        className={`text-[17px] font-semibold tracking-tight ${light ? 'text-on-primary' : 'text-fg'}`}
+        className={`font-semibold tracking-[-0.01em] text-fg ${size === 'lg' ? 'text-[22px]' : 'text-[17px]'}`}
       >
         SereneMed
       </span>
-    </div>
+      <span className={`font-mono text-fg-subtle ${size === 'lg' ? 'text-[13px]' : 'text-[11px]'}`}>
+        staff
+      </span>
+    </span>
   );
 }

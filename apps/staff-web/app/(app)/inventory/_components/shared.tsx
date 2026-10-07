@@ -67,7 +67,7 @@ export function ExpiryCell({ iso }: { iso: string }) {
   const days = daysUntil(iso);
   return (
     <span className="flex items-center gap-2 whitespace-nowrap">
-      <span className="tabular">{formatExpiry(iso)}</span>
+      <span className="tabular font-mono">{formatExpiry(iso)}</span>
       {days < 0 ? (
         <Badge tone="danger">Expired</Badge>
       ) : days < EXPIRY_WARNING_DAYS ? (

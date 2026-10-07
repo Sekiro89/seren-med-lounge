@@ -107,7 +107,7 @@ export function RecordPaymentDialog({
             min={0}
             step="0.01"
             inputMode="decimal"
-            className="tabular text-right"
+            className="tabular font-mono text-right"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
@@ -197,7 +197,7 @@ export function RefundDialog({
             min={0}
             step="0.01"
             inputMode="decimal"
-            className="tabular text-right"
+            className="tabular font-mono text-right"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />

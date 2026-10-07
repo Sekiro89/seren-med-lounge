@@ -21,7 +21,7 @@ import {
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
 import { EmptyState } from '../../../components/ui/empty-state';
-import { KpiTile } from '../../../components/ui/kpi-tile';
+import { KPI_STRIP, KpiTile } from '../../../components/ui/kpi-tile';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
@@ -171,7 +171,7 @@ export default function QueuePage() {
       )}
 
       {view === 'board' && (
-        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className={`mb-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 ${KPI_STRIP}`}>
           <KpiTile
             label="In the clinic now"
             value={active.length}

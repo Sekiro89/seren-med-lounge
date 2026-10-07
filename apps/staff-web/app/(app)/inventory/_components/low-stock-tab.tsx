@@ -43,13 +43,14 @@ export function LowStockTab({
     {
       header: 'Usable on hand',
       align: 'right',
+      numeric: true,
       render: (m) => (
         <span className={m.usableOnHand === 0 ? 'font-semibold text-danger-fg' : ''}>
           {m.usableOnHand} <span className="text-fg-subtle">{m.unit}</span>
         </span>
       ),
     },
-    { header: 'Reorder level', align: 'right', render: (m) => m.reorderLevel ?? 0 },
+    { header: 'Reorder level', align: 'right', numeric: true, render: (m) => m.reorderLevel ?? 0 },
     {
       header: 'Level',
       render: (m) => <LevelBar usable={m.usableOnHand} reorder={m.reorderLevel ?? 0} />,

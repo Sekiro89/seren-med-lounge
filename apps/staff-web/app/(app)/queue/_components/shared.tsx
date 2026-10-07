@@ -88,5 +88,5 @@ export function WaitTime({ minutes }: { minutes: number }) {
       : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
   const tone =
     minutes >= 40 ? 'text-danger-fg' : minutes >= 20 ? 'text-warning-fg' : 'text-fg-muted';
-  return <span className={`tabular text-[13px] font-medium ${tone}`}>{text}</span>;
+  return <span className={`tabular font-mono text-[13px] font-medium ${tone}`}>{text}</span>;
 }

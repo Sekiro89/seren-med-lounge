@@ -412,11 +412,11 @@ function CandidateSummary({ patient, bare }: { patient: PatientProfile; bare?: b
       <dt className="text-fg-muted">Name</dt>
       <dd className="font-medium text-fg">{fullName(patient)}</dd>
       <dt className="text-fg-muted">Date of birth</dt>
-      <dd className="tabular text-fg">
+      <dd className="tabular font-mono text-fg">
         {formatDate(patient.dateOfBirth)} ({ageLabel(patient.dateOfBirth)})
       </dd>
       <dt className="text-fg-muted">Phone</dt>
-      <dd className="tabular text-fg">{patient.phone}</dd>
+      <dd className="tabular font-mono text-fg">{patient.phone}</dd>
     </dl>
   );
 }

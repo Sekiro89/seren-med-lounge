@@ -48,7 +48,7 @@ export function Dialog({
         if (event.target === ref.current) onClose();
       }}
       aria-labelledby="dialog-title"
-      className={`${placement} border-line bg-surface p-0 text-fg shadow-popover backdrop:bg-fg/40`}
+      className={`${placement} border-line bg-surface p-0 text-fg backdrop:bg-fg/45`}
     >
       <div className="flex h-full max-h-dvh flex-col">
         <div className="flex items-start justify-between gap-4 border-b border-line px-7 py-5">

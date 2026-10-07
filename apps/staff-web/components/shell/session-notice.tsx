@@ -21,7 +21,7 @@ export function SessionNotice() {
   return (
     <div
       role="status"
-      className="fixed inset-x-0 top-4 z-50 mx-auto w-[calc(100%-2rem)] max-w-sm rounded-control border border-line bg-warning-bg px-4 py-3 text-sm text-warning-fg shadow-popover"
+      className="fixed inset-x-0 top-4 z-50 mx-auto w-[calc(100%-2rem)] max-w-sm rounded-control border border-warning-fg bg-warning-bg px-4 py-3 text-sm text-warning-fg"
     >
       Your session expired. Please sign in again.
     </div>

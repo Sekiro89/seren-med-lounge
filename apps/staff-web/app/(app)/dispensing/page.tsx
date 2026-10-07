@@ -144,7 +144,9 @@ export default function DispensingPage() {
     },
     {
       header: 'Issued',
-      render: (r) => <span className="text-fg-muted">{timeAgo(r.prescription.createdAt)}</span>,
+      render: (r) => (
+        <span className="font-mono text-fg-muted">{timeAgo(r.prescription.createdAt)}</span>
+      ),
     },
     {
       header: 'Action',
@@ -259,20 +261,22 @@ export default function DispensingPage() {
       )}
 
       <Card>
-        <Tabs
-          label="Dispensing stages"
-          value={tab}
-          onChange={setTab}
-          tabs={[
-            { key: 'prepare', label: 'To prepare', count: pending.data?.length },
-            {
-              key: 'progress',
-              label: 'In progress',
-              count: dispensings.data ? inProgress.length : undefined,
-            },
-            { key: 'completed', label: 'Completed' },
-          ]}
-        />
+        <div className="px-6">
+          <Tabs
+            label="Dispensing stages"
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { key: 'prepare', label: 'To prepare', count: pending.data?.length },
+              {
+                key: 'progress',
+                label: 'In progress',
+                count: dispensings.data ? inProgress.length : undefined,
+              },
+              { key: 'completed', label: 'Completed' },
+            ]}
+          />
+        </div>
 
         {failed ? (
           <div className="p-4">

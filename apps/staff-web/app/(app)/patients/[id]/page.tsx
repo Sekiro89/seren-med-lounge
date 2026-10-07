@@ -11,6 +11,8 @@ import { can } from '../../../../lib/permissions';
 import { useStaff } from '../../../../lib/staff-context';
 import { useApi } from '../../../../lib/use-api';
 import { PatientBanner, type HistoryEntry } from '../_components/patient-banner';
+import { usePageCrumb } from '../../../../components/shell/breadcrumb';
+import { fullName } from '../../../../lib/format';
 import { Skeleton } from '../../../../components/ui/skeleton';
 import { EmptyState } from '../../../../components/ui/empty-state';
 import { Button } from '../../../../components/ui/button';
@@ -28,6 +30,8 @@ export default function PatientRecordPage({ params }: { params: Promise<{ id: st
   const history = useApi<HistoryEntry[]>(
     allowed && canClinical ? `/medical-history?patientId=${encodeURIComponent(id)}` : null,
   );
+
+  usePageCrumb(patient ? fullName(patient) : undefined);
 
   if (!allowed) {
     return (

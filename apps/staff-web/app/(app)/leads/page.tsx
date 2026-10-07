@@ -6,7 +6,7 @@ import { CheckCircle, Info, Megaphone, Plus, UsersThree, X, Clock } from '@phosp
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
 import { EmptyState } from '../../../components/ui/empty-state';
-import { KpiTile } from '../../../components/ui/kpi-tile';
+import { KPI_STRIP, KpiTile } from '../../../components/ui/kpi-tile';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { SearchBox } from '../../../components/ui/search-box';
@@ -166,7 +166,7 @@ export default function LeadsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <div className={`grid-cols-1 sm:grid-cols-3 ${KPI_STRIP}`}>
         <KpiTile
           label="Open leads"
           value={open}

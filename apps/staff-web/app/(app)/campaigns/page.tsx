@@ -170,12 +170,12 @@ function CampaignCard({ campaign: c }: { campaign: CampaignRow }) {
   return (
     <Link
       href={`/campaigns/${c.id}`}
-      className="block h-full rounded-panel border border-line bg-surface p-6 shadow-card transition-[box-shadow,border-color] duration-150 hover:border-primary/30 hover:shadow-card-hover"
+      className="block h-full border border-line bg-surface p-6 transition-colors duration-150 hover:border-primary"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-fg">{c.name}</h2>
-          <p className="tabular mt-1 text-[13px] text-fg-muted">{dateRange(c)}</p>
+          <p className="tabular font-mono mt-1 text-[13px] text-fg-muted">{dateRange(c)}</p>
         </div>
         <CampaignStatusBadge status={c.status} />
       </div>
@@ -195,7 +195,7 @@ function CampaignCard({ campaign: c }: { campaign: CampaignRow }) {
       {detail.loading ? (
         <Skeleton className="mt-3 h-5 w-full" />
       ) : detail.data ? (
-        <p className="tabular mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-fg-muted">
+        <p className="tabular font-mono mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-fg-muted">
           {FUNNEL_ORDER.map((s) => (
             <span key={s}>
               {FUNNEL_LABELS[s]}{' '}

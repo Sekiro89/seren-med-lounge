@@ -5,7 +5,7 @@ import { EmptyState } from '../components/ui/empty-state';
 export default function NotFound() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg items-center justify-center bg-bg px-6">
-      <div className="w-full rounded-panel border border-line bg-surface shadow-card">
+      <div className="w-full rounded-panel border border-line bg-surface">
         <EmptyState
           icon={MagnifyingGlassMinus}
           title="This page doesn't exist"

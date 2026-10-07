@@ -52,7 +52,7 @@ export function PatientPicker({
           <Avatar name={fullName(value)} size={32} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{fullName(value)}</p>
-            <p className="tabular text-[13px] text-fg-muted">{value.phone}</p>
+            <p className="tabular font-mono text-[13px] text-fg-muted">{value.phone}</p>
           </div>
           <button
             type="button"
@@ -100,7 +100,7 @@ export function PatientPicker({
                   className="flex w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-muted"
                 >
                   <span className="font-medium">{fullName(p)}</span>
-                  <span className="tabular text-[13px] text-fg-muted">{p.phone}</span>
+                  <span className="tabular font-mono text-[13px] text-fg-muted">{p.phone}</span>
                 </button>
               </li>
             ))

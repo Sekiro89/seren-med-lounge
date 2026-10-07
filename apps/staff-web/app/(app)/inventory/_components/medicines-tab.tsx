@@ -71,6 +71,7 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
     {
       header: 'Price',
       align: 'right',
+      numeric: true,
       render: (m) =>
         m.unitPriceMinor === null ? (
           <span className="text-fg-subtle">Not set</span>
@@ -81,6 +82,7 @@ export function MedicinesTab({ version, onChanged }: { version: number; onChange
     {
       header: 'Reorder level',
       align: 'right',
+      numeric: true,
       render: (m) => m.reorderLevel ?? <span className="text-fg-subtle">Not set</span>,
     },
     {

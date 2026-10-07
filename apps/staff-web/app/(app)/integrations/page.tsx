@@ -83,7 +83,10 @@ export default function IntegrationsPage() {
             if (providers.length === 0) return null;
             return (
               <section key={group} aria-labelledby={`group-${group}`}>
-                <h2 id={`group-${group}`} className="mb-3 text-base font-semibold text-fg">
+                <h2
+                  id={`group-${group}`}
+                  className="section-rule mb-3 pt-3 text-base font-semibold text-fg"
+                >
                   {group}
                 </h2>
                 <Card className="divide-y divide-line">
@@ -100,7 +103,7 @@ export default function IntegrationsPage() {
                           <div className="flex flex-wrap items-center gap-3">
                             <h3 className="text-[15px] font-medium text-fg">{definition.label}</h3>
                             {list.loading ? (
-                              <Skeleton className="h-5 w-24 rounded-full" />
+                              <Skeleton className="h-5 w-24" />
                             ) : (
                               <Badge tone={status.tone}>{status.label}</Badge>
                             )}

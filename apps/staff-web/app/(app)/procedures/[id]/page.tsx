@@ -208,7 +208,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
         <>
           <section
             aria-label="Patient and procedure"
-            className="rounded-panel border border-line bg-surface shadow-card"
+            className="rounded-panel border border-line bg-surface"
           >
             <div className="flex flex-wrap items-center gap-x-6 gap-y-4 px-6 py-5">
               <Avatar name={fullName(procedure.patient)} size={48} />
@@ -291,7 +291,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
             <dl className="grid gap-x-8 gap-y-6 px-6 py-6 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-[13px] text-fg-subtle">Scheduled for</dt>
-                <dd className="tabular mt-1 text-fg">
+                <dd className="tabular font-mono mt-1 text-fg">
                   {procedure.scheduledAt
                     ? `${formatDate(procedure.scheduledAt)} ${formatTime(procedure.scheduledAt)}`
                     : 'Not scheduled'}
@@ -310,7 +310,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
               <div>
                 <dt className="text-[13px] text-fg-subtle">Estimate</dt>
                 <dd className="mt-1 flex items-center gap-3 text-fg">
-                  <span className="tabular">
+                  <span className="tabular font-mono">
                     {procedure.estimateMinor === null
                       ? 'None'
                       : formatMoney(procedure.estimateMinor)}
@@ -549,7 +549,7 @@ export default function ProcedureRecordPage({ params }: { params: Promise<{ id: 
                         <Badge tone={note.status === 'FINALIZED' ? 'success' : 'warning'}>
                           {humanize(note.status)}
                         </Badge>
-                        <span className="tabular text-[13px] text-fg-subtle">
+                        <span className="tabular font-mono text-[13px] text-fg-subtle">
                           {formatDate(note.createdAt)}
                         </span>
                       </div>

@@ -7,7 +7,7 @@ import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
 import { DataTable, type Column } from '../../../components/ui/data-table';
 import { EmptyState } from '../../../components/ui/empty-state';
-import { KpiTile } from '../../../components/ui/kpi-tile';
+import { KPI_STRIP, KpiTile } from '../../../components/ui/kpi-tile';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { StatusBadge } from '../../../components/ui/badge';
@@ -87,11 +87,12 @@ function BillingDesk() {
       header: 'Patient',
       render: (i) => <PersonCell name={fullName(i.patient)} />,
     },
-    { header: 'Total', align: 'right', render: (i) => formatMoney(i.totalMinor) },
-    { header: 'Paid', align: 'right', render: (i) => formatMoney(i.paidMinor) },
+    { header: 'Total', align: 'right', numeric: true, render: (i) => formatMoney(i.totalMinor) },
+    { header: 'Paid', align: 'right', numeric: true, render: (i) => formatMoney(i.paidMinor) },
     {
       header: 'Balance',
       align: 'right',
+      numeric: true,
       render: (i) => (
         <span className="font-medium">
           {formatMoney(i.status === 'VOID' ? 0 : i.totalMinor - i.paidMinor)}
@@ -101,7 +102,7 @@ function BillingDesk() {
     { header: 'Status', render: (i) => <StatusBadge domain="invoice" status={i.status} /> },
     {
       header: 'Created',
-      render: (i) => <span className="text-fg-muted">{formatDate(i.createdAt)}</span>,
+      render: (i) => <span className="font-mono text-fg-muted">{formatDate(i.createdAt)}</span>,
     },
   ];
 
@@ -117,7 +118,7 @@ function BillingDesk() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className={`mb-6 sm:grid-cols-3 ${KPI_STRIP}`}>
         <KpiTile
           label="Outstanding balance"
           value={outstanding === undefined ? undefined : formatMoney(outstanding)}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, EyeSlash, ListChecks, ShieldCheck, UsersThree } from '@phosphor-icons/react';
+import { Eye, EyeSlash } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -71,66 +71,30 @@ export default function StaffLoginPage() {
     : undefined;
 
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-      <aside className="relative hidden overflow-hidden bg-brand-deep p-12 text-brand-deep-fg lg:flex lg:flex-col lg:justify-between">
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-32 -top-32 size-[420px] rounded-full border border-brand-deep-fg/10"
-        />
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-40 -left-24 size-[480px] rounded-full border border-brand-deep-fg/10"
-        />
-        <Logo tone="light" />
-        <div className="relative max-w-md">
-          <h2 className="text-4xl font-semibold leading-tight tracking-tight text-on-primary">
-            Every visit, in one calm workspace.
-          </h2>
-          <ul className="mt-10 flex flex-col gap-6">
-            {[
-              {
-                icon: UsersThree,
-                title: 'The right desk for every role',
-                text: 'Reception, nurses, doctors, pharmacy and billing each see only what they need.',
-              },
-              {
-                icon: ListChecks,
-                title: 'One record per patient',
-                text: 'Visits, prescriptions, labs and bills stay together from first call to follow-up.',
-              },
-              {
-                icon: ShieldCheck,
-                title: 'Every action on the record',
-                text: 'Clinical notes are versioned and every change is audited.',
-              },
-            ].map(({ icon: IconComponent, title, text }) => (
-              <li key={title} className="flex gap-4">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-brand-deep-fg/10 text-on-primary">
-                  <IconComponent size={22} aria-hidden="true" />
-                </span>
-                <span>
-                  <span className="block font-medium text-on-primary">{title}</span>
-                  <span className="mt-0.5 block text-sm leading-relaxed">{text}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+    <main className="flex min-h-dvh flex-col bg-surface">
+      <header className="border-b border-line">
+        <div className="mx-auto flex h-16 max-w-[1440px] items-center px-5 lg:px-10">
+          <Logo />
         </div>
-        <p className="relative text-[13px]">SereneMed Lounge, Digital Clinic Operating System</p>
-      </aside>
+      </header>
 
-      <section className="flex items-center justify-center bg-bg px-6 py-12">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <Logo />
-          </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-fg">Welcome back</h1>
-          <p className="mb-8 mt-2 text-sm text-fg-muted">Sign in to your clinic workspace.</p>
+      <section className="flex flex-1 justify-center px-5 py-16 lg:py-24">
+        <div className="w-full max-w-[26rem]">
+          <p className="font-mono text-xs uppercase tracking-[0.08em] text-fg-subtle">
+            SereneMed Lounge
+          </p>
+          {/* The one serif line on the page (design system 14a). */}
+          <h1 className="mt-2 font-serif text-[2rem] font-medium leading-10 tracking-tight text-fg">
+            Clinic staff sign in
+          </h1>
+          <p className="mt-2 text-sm text-fg-muted">
+            Use the email and password your clinic administrator gave you.
+          </p>
 
           <form
             onSubmit={handleSubmit(onSubmit)}
             onChange={clearOnEditRhf(clearErrors, () => setServerError(null))}
-            className="flex flex-col gap-5"
+            className="section-rule mt-8 flex flex-col gap-5 border-x border-b border-x-line border-b-line px-6 pb-7 pt-6"
             noValidate
           >
             <Field label={req('Email')} htmlFor="email" error={emailMessage}>
@@ -176,18 +140,18 @@ export default function StaffLoginPage() {
             {serverError && (
               <p
                 role="alert"
-                className="rounded-control bg-danger-bg px-3 py-2.5 text-sm text-danger-fg"
+                className="rounded-control border-l-2 border-danger-fg bg-danger-bg px-3 py-2.5 text-sm text-danger-fg"
               >
                 {serverError}
               </p>
             )}
 
-            <Button type="submit" loading={isSubmitting} className="h-11 w-full text-[15px]">
+            <Button type="submit" loading={isSubmitting} className="mt-1 w-full">
               Sign in
             </Button>
           </form>
 
-          <p className="mt-8 text-center text-[13px] text-fg-subtle">
+          <p className="mt-6 text-[13px] text-fg-muted">
             Trouble signing in? Ask your clinic administrator.
           </p>
 

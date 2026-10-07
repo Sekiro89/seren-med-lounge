@@ -134,11 +134,11 @@ export default function ReviewsPage() {
     },
     {
       header: 'Requested',
-      render: (r) => <span className="tabular">{formatDate(r.createdAt)}</span>,
+      render: (r) => <span className="tabular font-mono">{formatDate(r.createdAt)}</span>,
     },
     {
       header: 'Expires',
-      render: (r) => <span className="tabular">{formatDate(r.expiresAt)}</span>,
+      render: (r) => <span className="tabular font-mono">{formatDate(r.expiresAt)}</span>,
     },
     {
       header: 'Actions',

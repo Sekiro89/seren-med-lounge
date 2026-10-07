@@ -48,7 +48,9 @@ export default function TemplatesPage() {
       render: (t) => (
         <div>
           <p className="font-medium text-fg">{t.name}</p>
-          <p className="tabular text-xs text-fg-muted">Updated {formatDate(t.updatedAt)}</p>
+          <p className="tabular font-mono text-xs text-fg-muted">
+            Updated {formatDate(t.updatedAt)}
+          </p>
         </div>
       ),
     },
@@ -57,7 +59,7 @@ export default function TemplatesPage() {
       header: 'Specialty',
       render: (t) => t.specialty ?? <span className="text-fg-subtle">All</span>,
     },
-    { header: 'Version', align: 'right', render: (t) => t.currentVersion },
+    { header: 'Version', align: 'right', numeric: true, render: (t) => t.currentVersion },
     {
       header: 'Status',
       render: (t) =>

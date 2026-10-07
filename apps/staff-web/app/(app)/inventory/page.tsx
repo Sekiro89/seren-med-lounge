@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Plus, TrendDown, Timer, Pill } from '@phosphor-icons/react';
 import { Button } from '../../../components/ui/button';
 import { Card } from '../../../components/ui/card';
-import { KpiTile } from '../../../components/ui/kpi-tile';
+import { KPI_STRIP, KpiTile } from '../../../components/ui/kpi-tile';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { Select } from '../../../components/ui/fields';
@@ -74,7 +74,7 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className={`mb-6 sm:grid-cols-3 ${KPI_STRIP}`}>
         <KpiTile
           label="Medicines in catalogue"
           value={catalogue.data?.length}
@@ -100,7 +100,7 @@ export default function InventoryPage() {
       </div>
 
       <Card>
-        <div className="px-5">
+        <div className="px-6">
           <Tabs
             label="Inventory views"
             value={tab}

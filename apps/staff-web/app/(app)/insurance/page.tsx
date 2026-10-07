@@ -81,12 +81,14 @@ export default function InsurancePage() {
     {
       header: 'Requested',
       align: 'right',
-      render: (r) => <span className="tabular">{money(r.requestedAmountMinor)}</span>,
+      numeric: true,
+      render: (r) => <span className="tabular font-mono">{money(r.requestedAmountMinor)}</span>,
     },
     {
       header: 'Approved',
       align: 'right',
-      render: (r) => <span className="tabular">{money(r.approvedAmountMinor)}</span>,
+      numeric: true,
+      render: (r) => <span className="tabular font-mono">{money(r.approvedAmountMinor)}</span>,
     },
     {
       header: 'Status',
@@ -94,7 +96,7 @@ export default function InsurancePage() {
     },
     {
       header: 'Updated',
-      render: (r) => <span className="text-fg-muted">{formatDate(r.updatedAt)}</span>,
+      render: (r) => <span className="font-mono text-fg-muted">{formatDate(r.updatedAt)}</span>,
     },
   ];
 

@@ -147,7 +147,7 @@ export function TransitionDialog({
               min={0}
               step="0.01"
               inputMode="decimal"
-              className="tabular text-right"
+              className="tabular font-mono text-right"
               value={amount}
               {...requiredProps}
               {...invalidProps(errors['step-amount'])}
@@ -284,7 +284,7 @@ export function SettleDialog({
         <p className="text-sm text-fg-muted">
           Settling records an insurance payment on the linked invoice and cannot be undone. The
           payment cannot be more than the approved amount of{' '}
-          <span className="tabular font-medium text-fg">{formatMoney(cap)}</span>.
+          <span className="tabular font-mono font-medium text-fg">{formatMoney(cap)}</span>.
         </p>
         {!detail.invoiceId && (
           <p className="rounded-control bg-warning-bg px-3 py-2 text-sm text-warning-fg">
@@ -303,7 +303,7 @@ export function SettleDialog({
             min={0}
             step="0.01"
             inputMode="decimal"
-            className="tabular text-right"
+            className="tabular font-mono text-right"
             value={amount}
             {...requiredProps}
             {...invalidProps(errors['settle-amount'])}

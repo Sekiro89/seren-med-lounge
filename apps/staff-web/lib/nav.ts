@@ -32,7 +32,7 @@ import type { Permission } from '@serenemed/permissions';
 import { can } from './permissions';
 
 /**
- * The whole sidebar, from docs/design/DESIGN_SYSTEM.md section 6.3. Each
+ * The whole navigation, from docs/design/DESIGN_SYSTEM.md section 6.3. Each
  * item names the permission(s) that unlock it; the menu is filtered with
  * `can()`, so a role only ever sees what it can use (hide, don't disable).
  * This only shapes the UI. The API re-checks every request.
@@ -265,6 +265,50 @@ export function navFor(role: StaffRole | undefined): NavGroup[] {
     ...group,
     items: group.items.filter((item) => canSee(role, item)),
   })).filter((group) => group.items.length > 0);
+}
+
+/**
+ * The top bar's primary tabs per role: the "Primary tab for" column of
+ * design system 6.3, at most six, in the order the role uses them. Every
+ * other item the role can see sits under More, grouped by area. The list
+ * is still filtered with `canSee`, so a tab never shows without access.
+ */
+const PRIMARY_TABS: Record<StaffRole, string[]> = {
+  [StaffRole.ADMINISTRATOR]: ['/today', '/patients', '/appointments', '/reports'],
+  [StaffRole.RECEPTION]: ['/today', '/queue', '/appointments', '/patients'],
+  [StaffRole.NURSE]: ['/today', '/queue', '/patients', '/follow-ups'],
+  [StaffRole.JUNIOR_DOCTOR]: ['/today', '/queue', '/dashboard', '/patients', '/labs'],
+  [StaffRole.SENIOR_DOCTOR]: ['/today', '/queue', '/dashboard', '/patients', '/labs'],
+  [StaffRole.SURGERY_COORDINATOR]: ['/today', '/procedures'],
+  [StaffRole.LAB_TECHNICIAN]: ['/today', '/queue', '/labs'],
+  [StaffRole.PHARMACY]: ['/today', '/queue', '/dispensing', '/inventory'],
+  [StaffRole.BILLING]: ['/today', '/queue', '/billing', '/payments'],
+  [StaffRole.INSURANCE]: ['/today', '/insurance'],
+  [StaffRole.MARKETING]: ['/today', '/leads', '/campaigns', '/reviews'],
+};
+
+const ALL_ITEMS = NAV.flatMap((group) => group.items);
+
+/** The role's primary tabs (max six), already permission-filtered. */
+export function primaryTabsFor(role: StaffRole | undefined): NavItem[] {
+  const hrefs = role ? PRIMARY_TABS[role] : ['/today'];
+  return hrefs
+    .map((href) => ALL_ITEMS.find((item) => item.href === href))
+    .filter((item): item is NavItem => !!item && canSee(role, item))
+    .slice(0, 6);
+}
+
+/** Everything else the role can see, grouped by area, for the More menu. */
+export function moreNavFor(role: StaffRole | undefined): NavGroup[] {
+  const primary = new Set(primaryTabsFor(role).map((item) => item.href));
+  return navFor(role)
+    .map((group) => ({ ...group, items: group.items.filter((item) => !primary.has(item.href)) }))
+    .filter((group) => group.items.length > 0);
+}
+
+/** True when `pathname` is this item's page or one of its detail pages. */
+export function isActive(pathname: string, item: NavItem): boolean {
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
 /** Flat lookup used by placeholder pages and the page title. */

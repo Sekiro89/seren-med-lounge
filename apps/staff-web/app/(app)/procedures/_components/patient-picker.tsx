@@ -100,7 +100,7 @@ export function PatientPicker({
                   className="flex w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-muted"
                 >
                   <span className="font-medium text-fg">{fullName(p)}</span>
-                  <span className="tabular text-fg-subtle">{p.phone}</span>
+                  <span className="tabular font-mono text-fg-subtle">{p.phone}</span>
                 </button>
               </li>
             ))}

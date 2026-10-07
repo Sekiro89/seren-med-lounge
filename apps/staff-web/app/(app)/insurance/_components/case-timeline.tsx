@@ -79,7 +79,9 @@ export function CaseTimeline({ events }: { events: CaseEvent[] }) {
                 <Badge tone={STATUS_TONE[e.toStatus]}>{STATUS_LABEL[e.toStatus]}</Badge>
               )}
               {e.amountMinor !== null && (
-                <span className="tabular text-sm text-fg-muted">{formatMoney(e.amountMinor)}</span>
+                <span className="tabular font-mono text-sm text-fg-muted">
+                  {formatMoney(e.amountMinor)}
+                </span>
               )}
             </div>
             <time dateTime={e.createdAt} className="text-[13px] text-fg-subtle">

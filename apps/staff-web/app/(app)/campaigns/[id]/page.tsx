@@ -139,7 +139,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               </div>
               <p className="mt-2 flex flex-wrap items-center gap-3 text-sm text-fg-muted">
                 <Badge tone="neutral">{TYPE_LABELS[c.type] ?? c.type}</Badge>
-                <span className="tabular">{dateRange(c)}</span>
+                <span className="tabular font-mono">{dateRange(c)}</span>
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -189,7 +189,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               {c.channel && <Detail label="Channel">{c.channel}</Detail>}
               <Detail label="Budget">
                 {c.budgetMinor !== null ? (
-                  <span className="tabular">{formatMoney(c.budgetMinor)}</span>
+                  <span className="tabular font-mono">{formatMoney(c.budgetMinor)}</span>
                 ) : (
                   <span className="text-fg-subtle">Not set</span>
                 )}

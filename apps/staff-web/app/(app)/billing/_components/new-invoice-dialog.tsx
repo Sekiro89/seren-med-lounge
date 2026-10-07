@@ -222,7 +222,7 @@ export function NewInvoiceDialog({
                       aria-required="true"
                       aria-invalid={itemErrors?.quantity ? true : undefined}
                       inputMode="numeric"
-                      className="tabular text-right"
+                      className="tabular font-mono text-right"
                       {...register(`items.${index}.quantity`, {
                         validate: (v) =>
                           (v !== '' &&
@@ -248,7 +248,7 @@ export function NewInvoiceDialog({
                       required
                       aria-required="true"
                       aria-invalid={itemErrors?.unitPrice ? true : undefined}
-                      className="tabular text-right"
+                      className="tabular font-mono text-right"
                       {...register(`items.${index}.unitPrice`, {
                         validate: (v) => validMoney(v, true) ?? true,
                       })}
@@ -267,7 +267,7 @@ export function NewInvoiceDialog({
                       max={MAX_RUPEES}
                       step="0.01"
                       inputMode="decimal"
-                      className="tabular text-right"
+                      className="tabular font-mono text-right"
                       {...register(`items.${index}.tax`, {
                         validate: (v) => validMoney(v, false) ?? true,
                       })}
@@ -275,7 +275,7 @@ export function NewInvoiceDialog({
                   </Field>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="tabular text-[13px] text-fg-muted">
+                  <p className="tabular font-mono text-[13px] text-fg-muted">
                     Line total{' '}
                     <span className="font-mono font-medium text-fg">
                       {formatMoney(lineTotalPaise(watched?.[index] ?? field))}

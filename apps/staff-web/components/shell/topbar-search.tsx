@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { MagnifyingGlass } from '@phosphor-icons/react';
 
@@ -9,8 +9,12 @@ import { MagnifyingGlass } from '@phosphor-icons/react';
  * to the search; Cmd/Ctrl+K focuses the field. Only shown to roles that
  * may read patients.
  */
+const noop = () => () => {};
+const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
 export function TopbarSearch() {
   const router = useRouter();
+  const mac = useSyncExternalStore(noop, isMac, () => false);
   const input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
 
@@ -34,10 +38,10 @@ export function TopbarSearch() {
         router.push(q ? `/patients?q=${encodeURIComponent(q)}` : '/patients');
         input.current?.blur();
       }}
-      className="relative hidden w-full max-w-sm md:block"
+      className="relative hidden w-52 md:block lg:w-44 xl:w-60 2xl:w-[280px]"
     >
       <MagnifyingGlass
-        size={18}
+        size={16}
         aria-hidden="true"
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle"
       />
@@ -48,14 +52,14 @@ export function TopbarSearch() {
         type="search"
         maxLength={100}
         aria-label="Search patients"
-        placeholder="Search patients by name or phone"
-        className="h-9 w-full rounded-control border border-line bg-surface-muted pl-10 pr-14 text-sm text-fg placeholder:text-fg-subtle focus:border-control focus:bg-surface"
+        placeholder="Search patients"
+        className="h-9 w-full rounded-control border border-control bg-surface pl-9 pr-12 text-sm text-fg placeholder:text-fg-subtle"
       />
       <kbd
         aria-hidden="true"
-        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-line bg-surface px-1.5 font-mono text-[11px] text-fg-subtle"
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-control border border-line px-1 font-mono text-[11px] text-fg-muted"
       >
-        Ctrl K
+        {mac ? '⌘K' : 'Ctrl K'}
       </kbd>
     </form>
   );

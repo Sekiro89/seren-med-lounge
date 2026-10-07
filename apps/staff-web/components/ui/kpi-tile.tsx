@@ -53,13 +53,23 @@ export function KpiTile({
     </>
   );
 
-  const base = 'block rounded-panel border border-line bg-surface p-6 shadow-card';
+  const base = 'block rounded-panel border border-line bg-surface p-6';
   if (href) {
     return (
-      <Link href={href} className={`${base} transition-colors duration-150 hover:border-primary`}>
+      <Link
+        href={href}
+        className={`${base} transition-colors duration-150 hover:border-primary hover:bg-surface-muted`}
+      >
         {body}
       </Link>
     );
   }
   return <div className={base}>{body}</div>;
 }
+
+/**
+ * Put on the grid that holds a row of KpiTiles: one white sheet with the
+ * figures split by hairlines (design system 14a) instead of separate boxes.
+ */
+export const KPI_STRIP =
+  'grid border-l border-t border-line bg-surface [&>*]:border-0! [&>*]:border-r! [&>*]:border-b! [&>*]:border-line!';

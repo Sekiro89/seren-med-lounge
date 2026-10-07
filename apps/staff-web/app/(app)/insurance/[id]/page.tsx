@@ -34,7 +34,7 @@ function Amount({ label, value, hint }: { label: string; value: number | null; h
   return (
     <div>
       <dt className="text-[13px] text-fg-muted">{label}</dt>
-      <dd className="tabular mt-1 text-xl font-semibold">
+      <dd className="tabular font-mono mt-1 text-xl font-semibold">
         {value === null ? <span className="text-fg-subtle">Not recorded</span> : formatMoney(value)}
       </dd>
       {hint && <p className="mt-1 text-[13px] text-fg-subtle">{hint}</p>}

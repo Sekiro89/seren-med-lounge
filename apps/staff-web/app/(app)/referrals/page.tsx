@@ -98,7 +98,9 @@ export default function ReferralsPage() {
       render: (r) => (
         <span>
           {r.referredBy.fullName}
-          <span className="tabular block text-xs text-fg-subtle">{formatDate(r.createdAt)}</span>
+          <span className="tabular font-mono block text-xs text-fg-subtle">
+            {formatDate(r.createdAt)}
+          </span>
         </span>
       ),
     },

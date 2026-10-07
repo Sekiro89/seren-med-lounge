@@ -99,7 +99,7 @@ function ResultForm({
                   {describeResult(r)}
                   {i === 0 && <span className="ml-2 text-xs text-fg-subtle">Current</span>}
                 </span>
-                <span className="tabular text-[13px] text-fg-subtle">
+                <span className="tabular font-mono text-[13px] text-fg-subtle">
                   {formatDate(r.createdAt)} {formatTime(r.createdAt)}
                 </span>
               </li>

@@ -2,12 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 
 /** A white sheet with a hairline border: square corners, no shadow (design system 4). */
 export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={`rounded-panel border border-line bg-surface shadow-card ${className}`}
-      {...props}
-    />
-  );
+  return <div className={`rounded-panel border border-line bg-surface ${className}`} {...props} />;
 }
 
 export function CardHeader({

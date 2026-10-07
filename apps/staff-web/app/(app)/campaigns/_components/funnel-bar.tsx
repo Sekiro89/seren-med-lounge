@@ -21,7 +21,7 @@ export function FunnelBar({ funnel, total }: { funnel: Funnel; total: number }) 
         {FUNNEL_ORDER.map((s) => (
           <div key={s}>
             <dt className="flex items-center gap-2 text-[13px] text-fg-muted">
-              <span aria-hidden="true" className={`size-2.5 rounded-full ${FUNNEL_FILL[s]}`} />
+              <span aria-hidden="true" className={`size-2.5 ${FUNNEL_FILL[s]}`} />
               {FUNNEL_LABELS[s]}
             </dt>
             <dd className="tabular mt-1 font-mono text-2xl font-semibold text-fg">{funnel[s]}</dd>

@@ -52,7 +52,7 @@ function OrderBlock({
           <PersonCell name={name} />
           <p className="pl-11 text-[13px] text-fg-subtle">
             Ordered by {order.author.fullName} on{' '}
-            <span className="tabular">
+            <span className="tabular font-mono">
               {formatDate(order.createdAt)} {formatTime(order.createdAt)}
             </span>
           </p>
@@ -77,7 +77,9 @@ function OrderBlock({
               <div className="flex items-center gap-4">
                 {current ? (
                   <div className="text-right">
-                    <p className="tabular text-sm font-medium text-fg">{describeResult(current)}</p>
+                    <p className="tabular font-mono text-sm font-medium text-fg">
+                      {describeResult(current)}
+                    </p>
                     <p className="text-[13px] text-fg-subtle">
                       {current.referenceRange ? `Reference ${current.referenceRange}` : 'No range'}
                       {item.results.length > 1 ? ', corrected' : ''}

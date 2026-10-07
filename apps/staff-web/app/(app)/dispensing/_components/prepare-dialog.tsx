@@ -147,7 +147,7 @@ function PrepareBody({
               {result.map((r, i) => (
                 <li key={i} className="flex justify-between gap-6 text-sm">
                   <span className="font-mono text-fg">{r.batchNumber}</span>
-                  <span className="tabular text-fg-muted">{r.quantity} units</span>
+                  <span className="tabular font-mono text-fg-muted">{r.quantity} units</span>
                 </li>
               ))}
             </ul>

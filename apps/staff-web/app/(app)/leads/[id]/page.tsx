@@ -203,7 +203,7 @@ export default function LeadPage({ params }: { params: Promise<{ id: string }> }
                 </h1>
                 <LeadStatusBadge status={lead.status} />
               </div>
-              <p className="tabular mt-2 text-sm text-fg-muted">
+              <p className="tabular font-mono mt-2 text-sm text-fg-muted">
                 {lead.phone}
                 {lead.email ? `, ${lead.email}` : ''}
               </p>
@@ -289,7 +289,7 @@ export default function LeadPage({ params }: { params: Promise<{ id: string }> }
                   </Detail>
                   <Detail label="Next follow-up">
                     {lead.nextFollowUpAt && !closed ? (
-                      <span className="tabular">
+                      <span className="tabular font-mono">
                         {formatDate(lead.nextFollowUpAt)} {formatTime(lead.nextFollowUpAt)}
                       </span>
                     ) : (
@@ -501,13 +501,11 @@ function Timeline({ activities }: { activities: LeadActivity[] }) {
         const TypeIcon = TIMELINE_ICONS[a.type] ?? NotePencil;
         return (
           <li key={a.id} className="flex gap-4 py-5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-muted text-fg-muted">
-              <TypeIcon size={18} aria-hidden="true" />
-            </span>
+            <TypeIcon size={20} aria-hidden="true" className="mt-px shrink-0 text-fg-muted" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-fg">
                 {TIMELINE_LABELS[a.type] ?? a.type}
-                <span className="tabular ml-2 font-normal text-fg-subtle">
+                <span className="ml-2 font-mono text-xs font-normal text-fg-subtle">
                   {formatDate(a.createdAt)} {formatTime(a.createdAt)}
                 </span>
               </p>

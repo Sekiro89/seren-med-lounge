@@ -143,7 +143,7 @@ export default function AuditLogPage() {
         <button
           type="button"
           onClick={() => setSelected(e)}
-          className="tabular cursor-pointer text-left text-fg hover:underline"
+          className="tabular font-mono cursor-pointer text-left text-fg hover:underline"
         >
           {formatDate(e.createdAt)}, {formatTime(e.createdAt)}
         </button>
@@ -162,7 +162,9 @@ export default function AuditLogPage() {
       render: (e) => (
         <span>
           {humanize(e.entityType)}
-          <span className="tabular ml-2 text-xs text-fg-subtle">{shortId(e.entityId)}</span>
+          <span className="tabular font-mono ml-2 text-xs text-fg-subtle">
+            {shortId(e.entityId)}
+          </span>
         </span>
       ),
     },
@@ -312,7 +314,9 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   return (
     <div className="flex items-start justify-between gap-6 py-3">
       <dt className="shrink-0 text-fg-muted">{label}</dt>
-      <dd className={`min-w-0 break-words text-right text-fg ${mono ? 'tabular' : ''}`}>{value}</dd>
+      <dd className={`min-w-0 break-words text-right text-fg ${mono ? 'tabular font-mono' : ''}`}>
+        {value}
+      </dd>
     </div>
   );
 }

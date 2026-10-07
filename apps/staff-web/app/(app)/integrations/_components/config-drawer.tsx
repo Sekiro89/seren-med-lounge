@@ -257,7 +257,7 @@ export function ConfigDrawer({
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <span className="flex items-center gap-2 text-[13px] text-fg-muted">
                         <Badge tone="success">Saved</Badge>
-                        <span className="tabular">{hint ?? ''}</span>
+                        <span className="tabular font-mono">{hint ?? ''}</span>
                       </span>
                       <span className="flex gap-1">
                         <Button
@@ -355,7 +355,7 @@ export function ConfigDrawer({
               >
                 <span
                   aria-hidden="true"
-                  className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-surface shadow-card transition-transform ${
+                  className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-surface transition-transform ${
                     enabled && complete ? 'translate-x-5' : ''
                   }`}
                 />

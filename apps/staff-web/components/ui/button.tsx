@@ -20,12 +20,12 @@ const VARIANTS: Record<ButtonVariant, string> = {
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3.5 text-[13px]',
+  sm: 'h-8 px-3 text-[13px]',
   md: 'h-10 px-5 text-sm',
 };
 
 /**
- * Design system button (docs/design/DESIGN_SYSTEM.md section 7): 8px
+ * Design system button (docs/design/DESIGN_SYSTEM.md section 7): 2px
  * radius, one primary per view, loading state keeps the label so the
  * width doesn't jump and double submits are blocked.
  */

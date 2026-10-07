@@ -78,7 +78,7 @@ export function DayChart({ points }: { points: DayPoint[] }) {
     <div ref={wrap} className="px-4 pb-4 pt-2">
       <div className="mb-2 flex flex-wrap items-center gap-5 px-2 text-[13px] text-fg-muted">
         <span className="flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block h-3 w-3 rounded-sm bg-primary" />
+          <span aria-hidden="true" className="inline-block h-3 w-3 bg-primary" />
           Visits
         </span>
         <span className="flex items-center gap-2">

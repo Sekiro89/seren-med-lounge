@@ -51,18 +51,18 @@ export function NotificationBell() {
         onClick={() => setOpen((v) => !v)}
         aria-label={items.length > 0 ? `Notifications, ${items.length} unread` : 'Notifications'}
         aria-expanded={open}
-        className="relative flex size-9 cursor-pointer items-center justify-center rounded-control text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
+        className="relative flex size-10 cursor-pointer items-center justify-center rounded-control text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
       >
         <Bell size={20} aria-hidden="true" />
         {items.length > 0 && (
-          <span className="tabular absolute right-1 top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-4 text-on-primary">
+          <span className="absolute right-0.5 top-0.5 flex min-w-4 items-center justify-center rounded-control bg-primary px-1 font-mono text-[10px] font-medium leading-4 text-on-primary">
             {items.length > 9 ? '9+' : items.length}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-30 w-80 rounded-panel border border-line bg-surface shadow-popover">
+        <div className="absolute right-0 top-12 z-30 w-80 border border-control bg-surface">
           <p className="border-b border-line px-4 py-3 text-sm font-semibold text-fg">
             Notifications
           </p>
@@ -81,7 +81,7 @@ export function NotificationBell() {
                     className="flex w-full cursor-pointer flex-col items-start px-4 py-3 text-left hover:bg-surface-muted"
                   >
                     <span className="text-sm font-medium text-fg">{n.title}</span>
-                    <span className="mt-0.5 text-xs text-fg-subtle">
+                    <span className="mt-0.5 font-mono text-xs text-fg-subtle">
                       {formatDate(n.createdAt)}, {formatTime(n.createdAt)}
                     </span>
                   </button>

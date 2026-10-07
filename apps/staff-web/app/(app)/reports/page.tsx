@@ -28,7 +28,7 @@ import {
   type DateRange,
   type RangePreset,
 } from '../../../components/ui/date-range';
-import { KpiTile } from '../../../components/ui/kpi-tile';
+import { KPI_STRIP, KpiTile } from '../../../components/ui/kpi-tile';
 import { NoAccess } from '../../../components/ui/no-access';
 import { PageHeader } from '../../../components/ui/page-header';
 import { Skeleton } from '../../../components/ui/skeleton';
@@ -111,21 +111,21 @@ export default function ReportsPage() {
           icon: CalendarCheck,
           text: 'Overdue follow-ups',
           count: data.care.followUpsOverdue,
-          tone: 'bg-warning-bg text-warning-fg',
+          tone: 'text-warning-fg',
         },
         {
           href: '/inventory',
           icon: Package,
           text: 'Stock batches expiring in 30 days',
           count: data.pharmacy.batchesExpiringIn30Days,
-          tone: 'bg-danger-bg text-danger-fg',
+          tone: 'text-danger-fg',
         },
         {
           href: '/billing',
           icon: Receipt,
           text: 'Invoices with a balance',
           count: data.money.outstandingInvoices,
-          tone: 'bg-info-bg text-info-fg',
+          tone: 'text-fg-muted',
         },
       ]
     : [];
@@ -171,7 +171,7 @@ export default function ReportsPage() {
         </Card>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={`sm:grid-cols-2 xl:grid-cols-3 ${KPI_STRIP}`}>
             <KpiTile
               label="Visits"
               value={visits}
@@ -404,11 +404,11 @@ export default function ReportsPage() {
                         href={item.href}
                         className="flex items-center gap-3 px-6 py-3.5 text-sm hover:bg-surface-muted"
                       >
-                        <span
-                          className={`flex size-8 shrink-0 items-center justify-center rounded-control ${item.count > 0 ? item.tone : 'bg-surface-muted text-fg-subtle'}`}
-                        >
-                          <item.icon size={18} aria-hidden="true" />
-                        </span>
+                        <item.icon
+                          size={20}
+                          aria-hidden="true"
+                          className={`shrink-0 ${item.count > 0 ? item.tone : 'text-fg-subtle'}`}
+                        />
                         <span className="flex-1 text-fg">{item.text}</span>
                         <span className="tabular font-mono font-semibold text-fg">
                           {item.count}

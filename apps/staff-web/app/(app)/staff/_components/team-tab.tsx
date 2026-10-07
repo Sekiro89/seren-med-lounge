@@ -72,7 +72,10 @@ export function TeamTab({
           <Badge tone="neutral">Switched off</Badge>
         ),
     },
-    { header: 'Added', render: (u) => <span className="tabular">{formatDate(u.createdAt)}</span> },
+    {
+      header: 'Added',
+      render: (u) => <span className="tabular font-mono">{formatDate(u.createdAt)}</span>,
+    },
     {
       header: 'Actions',
       align: 'right',
@@ -97,7 +100,7 @@ export function TeamTab({
             {menuFor === u.id && (
               <div
                 role="menu"
-                className="absolute right-0 z-10 mt-1 w-44 rounded-control border border-line bg-surface py-1 shadow-popover"
+                className="absolute right-0 z-10 mt-1 w-44 border border-control bg-surface py-1"
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') setMenuFor(null);
                 }}

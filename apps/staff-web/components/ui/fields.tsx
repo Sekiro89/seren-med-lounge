@@ -1,4 +1,5 @@
 import { isValidElement } from 'react';
+import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import type {
   InputHTMLAttributes,
   ReactNode,
@@ -39,7 +40,7 @@ export function Field({
     childProps['aria-required'] === 'true';
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-2 block text-sm font-medium text-fg">
+      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-fg">
         {label.replace(/ \*$/, '')}
         {isRequired && (
           <span aria-hidden="true" className="ml-0.5 text-danger-fg">
@@ -50,7 +51,8 @@ export function Field({
       {children}
       {helper && !error && <p className="mt-2 text-[13px] text-fg-subtle">{helper}</p>}
       {error && (
-        <p role="alert" className="mt-1.5 text-[13px] text-danger-fg">
+        <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-[13px] text-danger-fg">
+          <WarningCircle size={16} aria-hidden="true" className="mt-px shrink-0" />
           {error}
         </p>
       )}
@@ -60,14 +62,14 @@ export function Field({
 
 export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <input className={`h-11 ${fullWidthUnlessSet(className)} ${CONTROL} ${className}`} {...props} />
+    <input className={`h-10 ${fullWidthUnlessSet(className)} ${CONTROL} ${className}`} {...props} />
   );
 }
 
 export function Select({ className = '', ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`h-11 cursor-pointer ${fullWidthUnlessSet(className)} ${CONTROL} ${className}`}
+      className={`h-10 cursor-pointer ${fullWidthUnlessSet(className)} ${CONTROL} ${className}`}
       {...props}
     />
   );

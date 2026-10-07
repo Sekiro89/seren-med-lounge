@@ -105,7 +105,7 @@ export default function ProceduresPage() {
       header: 'Scheduled',
       render: (r) =>
         r.scheduledAt ? (
-          <span className="tabular">
+          <span className="tabular font-mono">
             {formatDate(r.scheduledAt)} {formatTime(r.scheduledAt)}
           </span>
         ) : (
@@ -120,11 +120,12 @@ export default function ProceduresPage() {
     {
       header: 'Estimate',
       align: 'right',
+      numeric: true,
       render: (r) =>
         r.estimateMinor === null ? (
           <span className="text-fg-subtle">None</span>
         ) : (
-          <span className="tabular">{formatMoney(r.estimateMinor)}</span>
+          <span className="tabular font-mono">{formatMoney(r.estimateMinor)}</span>
         ),
     },
     {

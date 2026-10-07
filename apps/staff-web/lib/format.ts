@@ -24,25 +24,32 @@ export function formatTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+// Newer ICU data abbreviates September as "Sept" in en-GB; the design system uses "Sep".
+const shortSep = (text: string) => text.replace(/\bSept\b/, 'Sep');
+
 /** `07 Oct 2026`. */
 export function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: CLINIC_TZ,
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(iso));
+  return shortSep(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: CLINIC_TZ,
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(iso)),
+  );
 }
 
 /** `Wednesday, 07 Oct 2026`. */
 export function formatLongDate(iso: string | Date): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: CLINIC_TZ,
-    weekday: 'long',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(typeof iso === 'string' ? new Date(iso) : iso);
+  return shortSep(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: CLINIC_TZ,
+      weekday: 'long',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(typeof iso === 'string' ? new Date(iso) : iso),
+  );
 }
 
 /** Paise to rupees, Indian digit grouping: 12345000 -> ₹1,23,450.00 */

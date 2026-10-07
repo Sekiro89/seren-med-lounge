@@ -173,7 +173,10 @@ const REFERRAL_STATUS = { OPEN: 'info', COMPLETED: 'success', CANCELLED: 'neutra
 
 function ReferralsTab({ path }: { path: string }) {
   const columns: Column<ReferralRow>[] = [
-    { header: 'Date', render: (r) => <span className="tabular">{formatDate(r.createdAt)}</span> },
+    {
+      header: 'Date',
+      render: (r) => <span className="tabular font-mono">{formatDate(r.createdAt)}</span>,
+    },
     {
       header: 'Referred to',
       render: (r) => (
@@ -236,7 +239,7 @@ function CarePlansTab({ path }: { path: string }) {
   const columns: Column<CarePlanRow>[] = [
     {
       header: 'Started',
-      render: (c) => <span className="tabular">{formatDate(c.createdAt)}</span>,
+      render: (c) => <span className="tabular font-mono">{formatDate(c.createdAt)}</span>,
     },
     { header: 'Plan', render: (c) => <span className="font-medium">{c.title}</span> },
     {
@@ -253,7 +256,7 @@ function CarePlansTab({ path }: { path: string }) {
       render: (c) => {
         const open = c.followUps.filter((f) => f.status === 'PENDING' || f.status === 'ESCALATED');
         return (
-          <span className="tabular">
+          <span className="tabular font-mono">
             {open.length} open of {c.followUps.length}
           </span>
         );
@@ -295,7 +298,10 @@ interface FollowUpRow {
 
 function FollowUpsTab({ path }: { path: string }) {
   const columns: Column<FollowUpRow>[] = [
-    { header: 'Due', render: (f) => <span className="tabular">{formatDate(f.dueAt)}</span> },
+    {
+      header: 'Due',
+      render: (f) => <span className="tabular font-mono">{formatDate(f.dueAt)}</span>,
+    },
     { header: 'Type', render: (f) => <span className="font-medium">{humanize(f.type)}</span> },
     {
       header: 'Notes',
@@ -346,7 +352,10 @@ const DISPENSING_TONE = {
 
 function DispensingTab({ path }: { path: string }) {
   const columns: Column<DispensingRow>[] = [
-    { header: 'Date', render: (d) => <span className="tabular">{formatDate(d.createdAt)}</span> },
+    {
+      header: 'Date',
+      render: (d) => <span className="tabular font-mono">{formatDate(d.createdAt)}</span>,
+    },
     {
       header: 'Medication',
       render: (d) => (
@@ -356,7 +365,7 @@ function DispensingTab({ path }: { path: string }) {
         </span>
       ),
     },
-    { header: 'Quantity', align: 'right', render: (d) => d.quantity },
+    { header: 'Quantity', align: 'right', numeric: true, render: (d) => d.quantity },
     { header: 'Fulfilment', render: (d) => humanize(d.mode) },
     {
       header: 'Status',
@@ -397,13 +406,17 @@ function InvoicesTab({ path }: { path: string }) {
       header: 'Invoice',
       render: (i) => <span className="tabular font-mono font-medium">#{i.number}</span>,
     },
-    { header: 'Date', render: (i) => <span className="tabular">{formatDate(i.createdAt)}</span> },
+    {
+      header: 'Date',
+      render: (i) => <span className="tabular font-mono">{formatDate(i.createdAt)}</span>,
+    },
     { header: 'Status', render: (i) => <StatusBadge domain="invoice" status={i.status} /> },
-    { header: 'Total', align: 'right', render: (i) => formatMoney(i.totalMinor) },
-    { header: 'Paid', align: 'right', render: (i) => formatMoney(i.paidMinor) },
+    { header: 'Total', align: 'right', numeric: true, render: (i) => formatMoney(i.totalMinor) },
+    { header: 'Paid', align: 'right', numeric: true, render: (i) => formatMoney(i.paidMinor) },
     {
       header: 'Balance',
       align: 'right',
+      numeric: true,
       render: (i) => (
         <span className="font-medium">
           {i.status === 'VOID' ? muted('Void') : formatMoney(i.totalMinor - i.paidMinor)}
@@ -457,7 +470,7 @@ function InsuranceTab({ path }: { path: string }) {
       header: 'Valid',
       render: (p) =>
         p.validFrom || p.validTo ? (
-          <span className="tabular">
+          <span className="tabular font-mono">
             {date(p.validFrom)} to {date(p.validTo)}
           </span>
         ) : (
@@ -467,6 +480,7 @@ function InsuranceTab({ path }: { path: string }) {
     {
       header: 'Sum insured',
       align: 'right',
+      numeric: true,
       render: (p) =>
         p.sumInsuredMinor === null ? muted('Not set') : formatMoney(p.sumInsuredMinor),
     },
@@ -533,13 +547,13 @@ function Overview({
         />
         <dl className="grid grid-cols-[auto_1fr] gap-x-8 gap-y-3 px-5 py-5 text-sm">
           <dt className="text-fg-muted">Phone</dt>
-          <dd className="tabular text-fg">{patient.phone}</dd>
+          <dd className="tabular font-mono text-fg">{patient.phone}</dd>
           <dt className="text-fg-muted">Email</dt>
           <dd className="text-fg">{patient.email ?? muted('Not given')}</dd>
           <dt className="text-fg-muted">Date of birth</dt>
-          <dd className="tabular text-fg">{formatDate(patient.dateOfBirth)}</dd>
+          <dd className="tabular font-mono text-fg">{formatDate(patient.dateOfBirth)}</dd>
           <dt className="text-fg-muted">Registered</dt>
-          <dd className="tabular text-fg">{formatDate(patient.createdAt)}</dd>
+          <dd className="tabular font-mono text-fg">{formatDate(patient.createdAt)}</dd>
           <dt className="text-fg-muted">Patient portal</dt>
           <dd>
             <Badge tone={patient.hasAccount ? 'success' : 'neutral'}>
@@ -839,7 +853,7 @@ function TimelineTab({ patientId }: { patientId: string }) {
           })}
         </div>
         {data && (
-          <span className="tabular text-[13px] text-fg-subtle">
+          <span className="tabular font-mono text-[13px] text-fg-subtle">
             {entries.length} of {data.length} entries
           </span>
         )}
@@ -895,7 +909,7 @@ function TimelineTab({ patientId }: { patientId: string }) {
                     <li key={entry.id} className="relative pb-5 last:pb-0">
                       <span
                         aria-hidden="true"
-                        className="absolute -left-[37px] top-0 flex size-7 items-center justify-center rounded-full border border-line bg-surface text-fg-muted"
+                        className="absolute -left-[37px] top-0 flex size-7 items-center justify-center border border-line bg-surface text-fg-muted"
                       >
                         <KindIcon size={15} />
                       </span>
@@ -922,7 +936,9 @@ function TimelineTab({ patientId }: { patientId: string }) {
                               Open visit
                             </Link>
                           )}
-                          <span className="tabular text-fg-subtle">{formatTime(entry.at)}</span>
+                          <span className="tabular font-mono text-fg-subtle">
+                            {formatTime(entry.at)}
+                          </span>
                         </div>
                       </div>
                     </li>
@@ -1023,7 +1039,10 @@ function DocumentsTab({ patientId, role }: { patientId: string; role: StaffRole 
       header: 'Kind',
       render: (d) => <span className="text-fg-muted">{fileKind(d.mimeType)}</span>,
     },
-    { header: 'Added', render: (d) => <span className="tabular">{formatDate(d.createdAt)}</span> },
+    {
+      header: 'Added',
+      render: (d) => <span className="tabular font-mono">{formatDate(d.createdAt)}</span>,
+    },
     { header: 'By', render: (d) => d.uploadedBy?.fullName ?? muted('Unknown') },
     ...(canWrite
       ? [
@@ -1415,7 +1434,7 @@ function ConsentTab({ patientId, role }: { patientId: string; role: StaffRole | 
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-[13px] text-fg-subtle">
-                    <span className="tabular">
+                    <span className="tabular font-mono">
                       {entry
                         ? `${formatDate(entry.createdAt)}, ${formatTime(entry.createdAt)}${entry.recordedBy ? ` by ${entry.recordedBy.fullName}` : ''}`
                         : 'Nothing recorded yet'}
@@ -1446,7 +1465,7 @@ function ConsentTab({ patientId, role }: { patientId: string; role: StaffRole | 
                 key={entry.id}
                 className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 py-3 text-sm"
               >
-                <span className="tabular w-40 shrink-0 text-fg-muted">
+                <span className="tabular font-mono w-40 shrink-0 text-fg-muted">
                   {formatDate(entry.createdAt)}, {formatTime(entry.createdAt)}
                 </span>
                 <span className="font-medium text-fg">{CONSENT_LABEL[entry.consentType]}</span>
