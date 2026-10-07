@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, LockSimple, PaperPlaneRight } from '@phosphor-icons/react';
 import { Button, Card, CardsSkeleton, ErrorNote, Skeleton } from '../../../../components/ui';
 import { Field, TextArea } from '../../../../components/form';
+import { EmergencyNote } from '../emergency-note';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, formatTime } from '../../../../lib/format';
 import type { MessageThreadDetail, ThreadMessage } from '../../../../lib/types';
@@ -65,16 +66,14 @@ export default function ThreadPage() {
                 </p>
               </Card>
             ) : (
-              <ReplyBox threadId={id} onSent={thread.reload} />
+              <>
+                <ReplyBox threadId={id} onSent={thread.reload} />
+                <EmergencyNote />
+              </>
             )}
           </>
         )
       )}
-
-      <p className="rounded-2xl bg-info-bg px-5 py-4 text-info-fg">
-        The clinic replies during opening hours. This is not for emergencies.{' '}
-        <strong>For an emergency, call 108.</strong>
-      </p>
     </div>
   );
 }

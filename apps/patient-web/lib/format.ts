@@ -21,6 +21,13 @@ export const formatDate = (iso: string) =>
 export const formatDay = (iso: string) =>
   fmt({ weekday: 'long', day: 'numeric', month: 'long' }, iso);
 
+/** `October 2026` */
+export const formatMonthYear = (iso: string) => fmt({ month: 'long', year: 'numeric' }, iso);
+
+/** `2026-10-07` in clinic time, for grouping by day. */
+export const clinicDayKey = (iso: string) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: CLINIC_TZ }).format(new Date(iso));
+
 /** `Wed` and `14` for a date tile. */
 export const formatWeekdayShort = (iso: string) => fmt({ weekday: 'short' }, iso);
 export const formatDayNumber = (iso: string) => fmt({ day: 'numeric' }, iso);

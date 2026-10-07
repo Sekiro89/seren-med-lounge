@@ -3,7 +3,9 @@
 import {
   CalendarCheck,
   ClipboardText,
+  ClockCounterClockwise,
   Flask,
+  Folder,
   Heartbeat,
   Pill,
   Warning,
@@ -26,6 +28,7 @@ import type {
   Diagnosis,
   HistoryEntry,
   LabOrder,
+  PatientDocument,
   Prescription,
 } from '../../../lib/types';
 import { useApi, useNow, type ApiState } from '../../../lib/use-api';
@@ -50,6 +53,8 @@ export default function RecordsPage() {
   const appointments = useApi<Appointment[]>('/patients/me/appointments');
   const diagnoses = useApi<Diagnosis[]>('/patients/me/diagnoses');
   const history = useApi<HistoryEntry[]>('/patients/me/medical-history');
+  const documents = useApi<PatientDocument[]>('/patients/me/documents');
+  const documentCount = documents.data?.length ?? 0;
 
   // Same rule as the Medicines page: an active course that has not run out.
   const takingNow = (prescriptions.data ?? [])
@@ -101,7 +106,7 @@ export default function RecordsPage() {
       href: '/results',
       icon: Flask,
       tone: 'info',
-      title: 'Reports',
+      title: 'Test results',
       state: labs,
       summary:
         results.length > 0
@@ -132,8 +137,8 @@ export default function RecordsPage() {
     <div>
       <PageTitle title="Records" description="Your health record in one place." />
 
-      <div className="flex flex-col gap-10">
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+      <div className="flex flex-col gap-4">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {hubs.map((hub) => (
             <li key={hub.href}>
               <LinkCard href={hub.href} className="h-full">
@@ -155,7 +160,37 @@ export default function RecordsPage() {
           ))}
         </ul>
 
-        <section aria-labelledby="health-summary">
+        <LinkCard href="/records/timeline">
+          <div className="flex items-center gap-4">
+            <IconBadge icon={ClockCounterClockwise} tone="primary" />
+            <div className="min-w-0">
+              <p className="font-bold">Your timeline</p>
+              <p className="text-fg-muted">Everything in order, newest first</p>
+            </div>
+          </div>
+        </LinkCard>
+
+        <LinkCard href="/records/documents">
+          <div className="flex items-center gap-4">
+            <IconBadge icon={Folder} tone="neutral" />
+            <div className="min-w-0">
+              <p className="font-bold">Documents</p>
+              {documents.loading ? (
+                <Skeleton className="mt-1 h-5 w-32" />
+              ) : documents.error ? (
+                <p className="text-fg-muted">Tap to open</p>
+              ) : (
+                <p className="text-fg-muted">
+                  {documentCount > 0
+                    ? plural(documentCount, 'document on file', 'documents on file')
+                    : 'No documents yet'}
+                </p>
+              )}
+            </div>
+          </div>
+        </LinkCard>
+
+        <section aria-labelledby="health-summary" className="mt-6">
           <SectionHeading>
             <span id="health-summary">Health summary</span>
           </SectionHeading>

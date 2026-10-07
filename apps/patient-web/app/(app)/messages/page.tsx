@@ -19,6 +19,7 @@ import { apiClient } from '../../../lib/api-client';
 import { formatDate, relativeDay } from '../../../lib/format';
 import type { MessageThread } from '../../../lib/types';
 import { useApi } from '../../../lib/use-api';
+import { EmergencyNote } from './emergency-note';
 
 // Limits match createMessageThreadSchema in packages/validation.
 const SUBJECT_MAX = 200;
@@ -43,17 +44,18 @@ export default function MessagesPage() {
     <div>
       <PageTitle
         title="Messages"
-        description="Ask the clinic a question, or ask to book or change a visit."
+        description="Ask the clinic a question. We reply during opening hours."
       />
 
       <div className="flex flex-col gap-10">
-        <EmergencyNote />
-
         {composing ? (
-          <NewMessageForm
-            onCancel={() => setComposing(false)}
-            onSent={(id) => router.push(`/messages/${id}`)}
-          />
+          <div className="flex flex-col gap-4">
+            <NewMessageForm
+              onCancel={() => setComposing(false)}
+              onSent={(id) => router.push(`/messages/${id}`)}
+            />
+            <EmergencyNote />
+          </div>
         ) : (
           <Button
             full
@@ -103,15 +105,6 @@ export default function MessagesPage() {
         </section>
       </div>
     </div>
-  );
-}
-
-function EmergencyNote() {
-  return (
-    <p className="rounded-2xl bg-info-bg px-5 py-4 text-info-fg">
-      The clinic replies during opening hours. This is not for emergencies.{' '}
-      <strong>For an emergency, call 108.</strong>
-    </p>
   );
 }
 

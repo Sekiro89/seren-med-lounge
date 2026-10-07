@@ -10,6 +10,7 @@ import {
   Heartbeat,
   Phone,
   Receipt,
+  ShieldCheck,
   SignOut,
   Warning,
 } from '@phosphor-icons/react';
@@ -28,7 +29,13 @@ import {
 import { apiClient } from '../../../lib/api-client';
 import { clearPatientToken } from '../../../lib/auth';
 import { ageFrom, formatDate } from '../../../lib/format';
-import type { HistoryEntry, MessageThread, Profile, ReviewRequest } from '../../../lib/types';
+import type {
+  HistoryEntry,
+  InsurancePolicy,
+  MessageThread,
+  Profile,
+  ReviewRequest,
+} from '../../../lib/types';
 import { useApi, useNow } from '../../../lib/use-api';
 
 const SEVERITY: Record<NonNullable<HistoryEntry['severity']>, string> = {
@@ -45,8 +52,9 @@ const HEALTH_GROUPS: Array<{ category: HistoryEntry['category']; title: string }
 
 /**
  * Who this record belongs to (name and date of birth, so a family member
- * using the phone can confirm it), allergies first, then conditions,
- * links to payments, feedback, notifications and messages, and sign out. Design system 18.3.
+ * using the phone can confirm it), allergies first, then conditions and
+ * insurance, links to payments, feedback, notifications and messages, and
+ * sign out. Design system 18.3.
  */
 export default function MePage() {
   const router = useRouter();
@@ -56,6 +64,7 @@ export default function MePage() {
     '/patients/me/message-threads',
   );
   const reviewRequests = useApi<ReviewRequest[]>('/patients/me/review-requests');
+  const policies = useApi<InsurancePolicy[]>('/patients/me/insurance-policies');
   const now = useNow();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -134,6 +143,19 @@ export default function MePage() {
             <CardsSkeleton count={1} />
           ) : history.error ? null : (
             <HealthConditions entries={history.data ?? []} />
+          )}
+        </section>
+
+        <section aria-labelledby="insurance">
+          <SectionHeading>
+            <span id="insurance">Insurance</span>
+          </SectionHeading>
+          {policies.loading ? (
+            <CardsSkeleton count={1} />
+          ) : policies.error ? (
+            <ErrorNote message={policies.error} onRetry={policies.reload} />
+          ) : (
+            <InsuranceCard policies={policies.data ?? []} />
           )}
         </section>
 
@@ -236,6 +258,49 @@ function IdentityCard({ profile }: { profile: Profile }) {
           </dd>
         </div>
       </dl>
+    </Card>
+  );
+}
+
+/** "•••• 8812": only the last four characters of a policy number are shown. */
+const maskPolicy = (number: string) => {
+  const tail = number.replace(/\s/g, '').slice(-4);
+  return `•••• ${tail}`;
+};
+
+function InsuranceCard({ policies }: { policies: InsurancePolicy[] }) {
+  if (policies.length === 0) {
+    return (
+      <Card className="flex items-center gap-4">
+        <IconBadge icon={ShieldCheck} tone="neutral" />
+        <p className="text-fg-muted">
+          No insurance on file. Tell the front desk if you have a policy.
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card as="div" className="p-0 sm:p-0">
+      <ul className="divide-y divide-line">
+        {policies.map((p) => (
+          <li key={p.id} className="flex items-start gap-4 px-5 py-5 sm:px-6">
+            <IconBadge icon={ShieldCheck} tone={p.isActive ? 'primary' : 'neutral'} />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="font-bold">{p.insurerName}</p>
+                {!p.isActive && <Chip>No longer active</Chip>}
+              </div>
+              <p className="text-fg-muted">
+                Policy number <span className="tabular">{maskPolicy(p.policyNumber)}</span>
+              </p>
+              <p className="text-fg-muted">
+                {p.validTo ? `Valid until ${formatDate(p.validTo)}` : 'No end date on file'}
+              </p>
+              {p.tpaName && <p className="text-sm text-fg-subtle">Handled through {p.tpaName}</p>}
+            </div>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

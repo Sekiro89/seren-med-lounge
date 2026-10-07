@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError } from '@serenemed/api-client';
 import {
@@ -95,9 +96,13 @@ export default function BookPage() {
  */
 function BookingFlow() {
   const router = useRouter();
-  const requested = Number(useSearchParams().get('step')) || 1;
+  const params = useSearchParams();
+  const requested = Number(params.get('step')) || 1;
 
-  const [mode, setMode] = useState<BookingMode>();
+  // Home's "Video consult" tile arrives with the type already chosen.
+  const [mode, setMode] = useState<BookingMode | undefined>(() =>
+    params.get('mode') === 'video' ? 'VIDEO' : undefined,
+  );
   const [doctor, setDoctor] = useState<BookingDoctor>();
   const [date, setDate] = useState<string>();
   const [slot, setSlot] = useState<Slot>();
@@ -171,10 +176,16 @@ function BookingFlow() {
             Back
           </button>
         ) : (
-          <span />
+          <Link
+            href="/appointments"
+            className="-ml-3 inline-flex min-h-12 items-center gap-2 rounded-xl px-3 font-semibold text-primary hover:bg-primary-subtle"
+          >
+            <ArrowLeft size={20} aria-hidden="true" />
+            Back
+          </Link>
         )}
         <div className="flex items-center gap-3">
-          <p className="font-semibold text-fg-muted" aria-live="polite">
+          <p className="whitespace-nowrap font-semibold text-fg-muted" aria-live="polite">
             Step {step} of {STEPS}
           </p>
           <div className="flex gap-1" aria-hidden="true">

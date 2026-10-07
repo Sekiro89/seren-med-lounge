@@ -8,7 +8,6 @@ import {
   ChatCircleText,
   ClipboardText,
   CreditCard,
-  FileText,
   Flask,
   Heartbeat,
   Receipt,
@@ -42,6 +41,7 @@ import type {
   QueueToken,
 } from '../../../lib/types';
 import { useApi, useNow } from '../../../lib/use-api';
+import { isComingUp, ModeChip, visitStatus } from '../appointments/shared';
 
 const STEP_LABEL: Record<CarePlan['followUps'][number]['type'], string> = {
   REVIEW_APPOINTMENT: 'review visit',
@@ -54,10 +54,10 @@ const STEP_LABEL: Record<CarePlan['followUps'][number]['type'], string> = {
 /** The Patient Interface of the SereneMed architecture, one tap each. */
 const ACTIONS: Array<{ href: string; label: string; icon: Icon }> = [
   { href: '/appointments/book', label: 'Book a visit', icon: CalendarPlus },
-  { href: '/appointments/book', label: 'Video consult', icon: VideoCamera },
+  { href: '/appointments/book?mode=video&step=2', label: 'Video consult', icon: VideoCamera },
   { href: '/bills', label: 'Payments', icon: CreditCard },
   { href: '/records', label: 'Records', icon: ClipboardText },
-  { href: '/results', label: 'Reports', icon: FileText },
+  { href: '/results', label: 'Test results', icon: Flask },
   { href: '/messages', label: 'Messages', icon: ChatCircleText },
 ];
 
@@ -69,7 +69,7 @@ function QuickActions() {
           <li key={label}>
             <Link
               href={href}
-              className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-line bg-surface px-2 py-4 text-center shadow-card transition-transform active:scale-[0.98]"
+              className="flex h-full min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-line bg-surface px-2 py-4 text-center shadow-card transition-transform active:scale-[0.98]"
             >
               <span className="flex size-11 items-center justify-center rounded-full bg-primary-subtle text-primary">
                 <ActionIcon size={24} aria-hidden="true" />
@@ -120,12 +120,9 @@ export default function HomePage() {
 
   const token = queue.data?.find((t) => t.status !== 'COMPLETED');
   const now = useNow();
+  // Same rule as the Appointments page, so Home and the list never disagree.
   const next = appointments.data
-    ?.filter(
-      (a) =>
-        (a.status === 'CONFIRMED' || a.status === 'REQUESTED') &&
-        new Date(a.scheduledAt).getTime() > now,
-    )
+    ?.filter((a) => isComingUp(a, now))
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0];
 
   const owed = (invoices.data ?? [])
@@ -349,32 +346,24 @@ function QueueCard({ token, onRefresh }: { token: QueueToken; onRefresh: () => v
 }
 
 function NextVisit({ appointment }: { appointment: Appointment }) {
-  const confirmed = appointment.status === 'CONFIRMED';
+  const status = visitStatus(appointment.status, true);
   return (
-    <Card className="flex gap-5">
-      <DateTile iso={appointment.scheduledAt} />
-      <div className="min-w-0 flex-1">
-        <p className="text-lg font-bold">
-          {formatDay(appointment.scheduledAt)}, {formatTime(appointment.scheduledAt)}
-        </p>
-        <p className="text-fg-muted">
-          With {doctorName(appointment.doctor)} · {relativeDay(appointment.scheduledAt)}
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Chip tone={confirmed ? 'success' : 'warning'}>
-            {confirmed ? 'Confirmed' : 'Waiting for the clinic to confirm'}
-          </Chip>
-          {appointment.entrySource === 'VIDEO_CONSULTATION' && (
-            <Chip tone="info">Video consultation</Chip>
-          )}
-          <Link
-            href={`/appointments/${appointment.id}`}
-            className="font-semibold text-primary underline-offset-4 hover:underline"
-          >
-            Details
-          </Link>
+    <LinkCard href={`/appointments/${appointment.id}`}>
+      <div className="flex gap-5">
+        <DateTile iso={appointment.scheduledAt} />
+        <div className="min-w-0 flex-1">
+          <p className="text-lg font-bold">
+            {formatDay(appointment.scheduledAt)}, {formatTime(appointment.scheduledAt)}
+          </p>
+          <p className="text-fg-muted">
+            With {doctorName(appointment.doctor)} · {relativeDay(appointment.scheduledAt)}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ModeChip entrySource={appointment.entrySource} />
+            <Chip tone={status.tone}>{status.label}</Chip>
+          </div>
         </div>
       </div>
-    </Card>
+    </LinkCard>
   );
 }

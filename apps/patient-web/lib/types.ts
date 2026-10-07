@@ -218,3 +218,60 @@ export interface PatientReview {
   moderationStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
   createdAt: string;
 }
+
+// ---- Timeline and insurance (/patients/me/timeline, /patients/me/insurance-policies)
+
+export type TimelineKind =
+  | 'appointment'
+  | 'visit'
+  | 'vitals'
+  | 'note'
+  | 'diagnosis'
+  | 'prescription'
+  | 'lab_order'
+  | 'lab_result'
+  | 'procedure'
+  | 'dispensing'
+  | 'invoice'
+  | 'payment'
+  | 'follow_up'
+  | 'history';
+
+/** One row of GET /patients/me/timeline (newest first, signed-off records only). */
+export interface TimelineEntry {
+  id: string;
+  kind: TimelineKind;
+  at: string;
+  title: string;
+  detail?: string;
+  status?: string;
+  entityType: string;
+  entityId: string;
+  encounterId?: string | null;
+  /** Visits: the appointment they belong to. */
+  appointmentId?: string | null;
+  /** Diagnoses: the ICD code, shown small. */
+  code?: string | null;
+}
+
+/** GET /patients/me/insurance-policies (newest first). */
+export interface InsurancePolicy {
+  id: string;
+  insurerName: string;
+  tpaName: string | null;
+  policyNumber: string;
+  memberId: string | null;
+  sumInsuredMinor: number | null;
+  validFrom: string | null;
+  validTo: string | null;
+  isActive: boolean;
+}
+
+/** GET /patients/me/documents (newest first); the file itself streams from /patients/me/documents/:id/file. */
+export interface PatientDocument {
+  id: string;
+  documentType: 'PHOTO' | 'ID_PROOF' | 'INSURANCE_CARD' | 'PAN_CARD' | 'CONSENT_FORM' | 'OTHER';
+  fileName: string;
+  mimeType: string;
+  createdAt: string;
+}
