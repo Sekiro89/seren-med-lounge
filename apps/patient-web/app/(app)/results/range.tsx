@@ -161,20 +161,17 @@ export function RangeRuler({
 
   return (
     <div className="mt-4">
-      <div className="relative h-[26px]" aria-hidden="true">
-        <div className="absolute inset-x-0 top-3 h-px bg-fg-subtle" />
+      <div className="relative h-[24px] border-b border-control" aria-hidden="true">
         <div
-          className="absolute top-1.5 h-[13px] border-x border-success-fg bg-success-bg"
+          className="absolute -bottom-px h-2 border-x border-t border-success-fg bg-success-bg"
           style={{ left: `${from}%`, width: `${Math.max(to - from, 0.5)}%` }}
         />
-        <div className="absolute left-0 top-2 h-[9px] w-px bg-fg-subtle" />
-        <div className="absolute right-0 top-2 h-[9px] w-px bg-fg-subtle" />
         <div
-          className={`absolute top-0 h-[26px] w-[3px] -translate-x-1/2 ${ok ? 'bg-fg' : 'bg-warning-fg'}`}
+          className={`absolute -bottom-px h-[24px] w-[3px] -translate-x-1/2 ${ok ? 'bg-fg' : 'bg-warning-fg'}`}
           style={{ left: `${at}%` }}
         />
       </div>
-      <div className="relative mt-1 h-5 font-mono text-sm text-fg-muted" aria-hidden="true">
+      <div className="relative mt-1.5 h-5 font-mono text-[0.8rem] text-fg-muted" aria-hidden="true">
         {marks.map((m) => (
           <span
             key={`${m.at}-${m.text}`}
@@ -195,7 +192,7 @@ export function RangeRuler({
           </span>
         ))}
       </div>
-      {rangeText && <p className="mt-1.5 text-sm text-success-fg">{rangeText}</p>}
+      {rangeText && <p className="mt-1.5 text-sm text-fg-muted">{rangeText}</p>}
     </div>
   );
 }

@@ -23,6 +23,7 @@ import {
   EmptyState,
   ErrorNote,
   PageTitle,
+  SegmentRule,
 } from '../../../../components/ui';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDay, formatTime } from '../../../../lib/format';
@@ -168,36 +169,30 @@ function BookingFlow() {
 
   return (
     <div className={`flex flex-col gap-6 ${step === 3 && slot ? 'pb-28 lg:pb-24' : ''}`}>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2">
         {step > 1 ? (
           <button
             type="button"
             onClick={back}
-            aria-label="Back"
-            className="-ml-3 flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-control text-fg hover:bg-surface-muted"
+            className="-ml-2 inline-flex min-h-11 cursor-pointer items-center gap-2 self-start rounded-control px-2 text-[0.94rem] text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
           >
-            <ArrowLeft size={24} aria-hidden="true" />
+            <ArrowLeft size={18} aria-hidden="true" />
+            Back
           </button>
         ) : (
           <Link
             href="/appointments"
-            aria-label="Back to visits"
-            className="-ml-3 flex size-12 shrink-0 items-center justify-center rounded-control text-fg hover:bg-surface-muted"
+            className="-ml-2 inline-flex min-h-11 items-center gap-2 self-start rounded-control px-2 text-[0.94rem] text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
           >
-            <ArrowLeft size={24} aria-hidden="true" />
+            <ArrowLeft size={18} aria-hidden="true" />
+            Visits
           </Link>
         )}
-        <div className="flex-1">
-          <p className="text-sm text-fg-muted" aria-live="polite">
-            Step <span className="font-mono text-fg">{step}</span> of{' '}
-            <span className="font-mono">{STEPS}</span> · {STEP_NAME[step - 1]}
-          </p>
-          <div className="mt-1.5 grid grid-cols-4 gap-1" aria-hidden="true">
-            {Array.from({ length: STEPS }, (_, i) => (
-              <span key={i} className={`h-0.5 ${i < step ? 'bg-primary' : 'bg-control'}`} />
-            ))}
-          </div>
-        </div>
+        <p className="text-fg-muted" aria-live="polite">
+          Step <span className="font-mono">{step}</span> of{' '}
+          <span className="font-mono">{STEPS}</span> · {STEP_NAME[step - 1]}
+        </p>
+        <SegmentRule total={STEPS} done={step} />
       </div>
 
       {step === 1 && (
@@ -248,7 +243,7 @@ function BookingFlow() {
 
       {step === 3 && doctor && (
         <div>
-          <h1 className="mb-4 text-[1.65rem] font-semibold leading-tight tracking-[-0.01em]">
+          <h1 className="mb-4 text-[1.6rem] font-semibold leading-tight tracking-[-0.01em] lg:text-[1.9rem]">
             Pick a time
           </h1>
           <div className="mb-5 flex items-center gap-3 border-y border-line py-3">
@@ -516,7 +511,7 @@ function Success({
     <div className="flex flex-col gap-8" role="status">
       <div>
         <CheckCircle size={48} className="text-success-fg" aria-hidden="true" />
-        <h1 className="mt-3 text-[1.65rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
+        <h1 className="mt-3 text-[1.6rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
           You&apos;re booked
         </h1>
         <p className="mt-1.5 text-fg-muted">We look forward to seeing you.</p>

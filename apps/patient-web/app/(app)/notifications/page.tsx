@@ -11,6 +11,7 @@ import {
   type Icon,
 } from '@phosphor-icons/react';
 import {
+  BackLink,
   Button,
   CardsSkeleton,
   Chip,
@@ -102,6 +103,7 @@ export default function NotificationsPage() {
 
   return (
     <div>
+      <BackLink href="/me">Me</BackLink>
       <PageTitle title="Notifications" description="Updates from the clinic. Tap one to open it." />
 
       {notifications.loading ? (
@@ -115,9 +117,18 @@ export default function NotificationsPage() {
           description="New results, replies and reminders from the clinic will show up here."
         />
       ) : (
-        <div className="flex flex-col gap-4">
-          {unread.length > 0 && (
-            <div className="flex justify-end">
+        <div className="flex flex-col">
+          <div className="flex min-h-12 items-center justify-between gap-3 border-t border-fg pt-1">
+            <p className="text-fg-muted">
+              {unread.length > 0 ? (
+                <>
+                  <span className="font-mono text-fg">{unread.length}</span> new
+                </>
+              ) : (
+                'All read'
+              )}
+            </p>
+            {unread.length > 0 && (
               <Button
                 variant="quiet"
                 loading={markingAll}
@@ -126,10 +137,10 @@ export default function NotificationsPage() {
               >
                 Mark all as read
               </Button>
-            </div>
-          )}
+            )}
+          </div>
           {error && <ErrorNote message={error} />}
-          <ul className="divide-y divide-line border-y border-fg border-b-line">
+          <ul className="divide-y divide-line border-y border-line">
             {list.map((n) => {
               const fresh = isUnread(n);
               const look = ICON[n.entityType ?? ''] ?? { icon: Bell, tone: 'neutral' as Tone };

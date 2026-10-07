@@ -22,11 +22,11 @@ import {
 import {
   BackLink,
   CardsSkeleton,
-  Chip,
   EmptyState,
   ErrorNote,
   PageTitle,
   type Tone,
+  StatusWord,
 } from '../../../../components/ui';
 import { clinicDayKey, formatDay, formatMonthYear, formatTime } from '../../../../lib/format';
 import type { TimelineEntry, TimelineKind } from '../../../../lib/types';
@@ -239,7 +239,7 @@ export default function TimelinePage() {
                 onClick={() => setFilter(f.id)}
                 className={`-ml-px min-h-12 flex-auto shrink-0 cursor-pointer whitespace-nowrap border px-2.5 text-[0.94rem] font-medium transition-colors first:ml-0 first:rounded-l-control last:rounded-r-control ${
                   active
-                    ? 'relative z-10 border-primary bg-primary text-on-primary'
+                    ? 'relative z-10 border-fg bg-fg text-on-primary'
                     : 'border-control bg-surface text-fg hover:bg-surface-muted'
                 }`}
               >
@@ -326,9 +326,9 @@ function Row({ entry }: { entry: TimelineEntry }) {
           </p>
         )}
         {status && (
-          <div className="mt-1.5">
-            <Chip tone={status.tone}>{status.label}</Chip>
-          </div>
+          <p className="mt-0.5">
+            <StatusWord tone={status.tone}>{status.label}</StatusWord>
+          </p>
         )}
       </div>
       {href && (

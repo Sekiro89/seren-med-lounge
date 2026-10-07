@@ -1,13 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
   ChatCircleText,
-  Envelope,
   Star,
-  Phone,
   Receipt,
   ShieldCheck,
   SignOut,
@@ -19,15 +17,17 @@ import {
   Chip,
   ErrorNote,
   IconBadge,
+  KeyValues,
   LinkCard,
   PageTitle,
   Rows,
   SectionHeading,
   Skeleton,
+  StatusWord,
 } from '../../../components/ui';
 import { apiClient } from '../../../lib/api-client';
 import { clearPatientToken } from '../../../lib/auth';
-import { ageFrom, formatDate } from '../../../lib/format';
+import { ageFrom, formatDate, formatPhone } from '../../../lib/format';
 import type {
   HistoryEntry,
   InsurancePolicy,
@@ -88,7 +88,7 @@ export default function MePage() {
     <div>
       <PageTitle title="Me" description="Your details and health record at the clinic." />
 
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-8">
         {profile.loading ? (
           <Skeleton className="h-32" />
         ) : profile.error ? (
@@ -112,23 +112,22 @@ export default function MePage() {
           ) : (
             <Rows>
               {allergies.map((a) => (
-                <li key={a.id} className="flex items-start gap-3 py-4">
+                <li key={a.id} className="flex items-start gap-3 py-3">
                   <Warning
-                    size={24}
-                    className="mt-0.5 shrink-0 text-danger-fg"
+                    size={22}
+                    className={`mt-0.5 shrink-0 ${a.status === 'RESOLVED' ? 'text-fg-subtle' : 'text-danger-fg'}`}
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold">
+                    <p
+                      className={`font-semibold ${a.status === 'RESOLVED' ? 'text-fg' : 'text-danger-fg'}`}
+                    >
                       <span className="sr-only">Allergy: </span>
                       {a.description}
                     </p>
                     {a.severity && <p className="text-sm text-fg-muted">{SEVERITY[a.severity]}</p>}
-                    {a.status === 'RESOLVED' && (
-                      <p className="text-sm text-fg-muted">No longer a problem</p>
-                    )}
                   </div>
-                  <Chip tone={a.status === 'RESOLVED' ? 'neutral' : 'danger'}>Allergy</Chip>
+                  {a.status === 'RESOLVED' && <StatusWord>Resolved</StatusWord>}
                 </li>
               ))}
             </Rows>
@@ -220,44 +219,50 @@ export default function MePage() {
   );
 }
 
+/** Whose record this is, as the prototype's key and value list. */
 function IdentityCard({ profile }: { profile: Profile }) {
-  const initials = `${profile.firstName.charAt(0)}${profile.lastName.charAt(0)}`.toUpperCase();
   return (
-    <section aria-label="Whose record this is" className="border-y border-line py-5">
-      <div className="flex items-center gap-4">
-        <span
-          className="flex size-14 shrink-0 items-center justify-center rounded-full bg-neutral-bg text-lg font-semibold text-neutral-fg"
-          aria-hidden="true"
-        >
-          {initials}
-        </span>
-        <div className="min-w-0">
-          <p className="text-[1.18rem] font-semibold">
-            {profile.firstName} {profile.lastName}
-          </p>
-          <p className="text-fg-muted">
-            Born {formatDate(profile.dateOfBirth)} · {ageFrom(profile.dateOfBirth)} years
-          </p>
-        </div>
-      </div>
-      <dl className="mt-5 flex flex-col gap-3 border-t border-line pt-4">
-        <div className="flex items-center gap-3">
-          <dt>
-            <Phone size={20} className="text-fg-subtle" aria-hidden="true" />
-            <span className="sr-only">Phone</span>
-          </dt>
-          <dd className="break-all font-mono">{profile.phone}</dd>
-        </div>
-        <div className="flex items-center gap-3">
-          <dt>
-            <Envelope size={20} className="text-fg-subtle" aria-hidden="true" />
-            <span className="sr-only">Email</span>
-          </dt>
-          <dd className="break-all">
-            {profile.email ?? <span className="text-fg-muted">No email on file</span>}
-          </dd>
-        </div>
-      </dl>
+    <section aria-label="Whose record this is">
+      <KeyValues
+        className="border-t-fg"
+        rows={[
+          [
+            'Name',
+            <span key="n" className="font-medium">
+              {profile.firstName} {profile.lastName}
+            </span>,
+          ],
+          ['Born', `${formatDate(profile.dateOfBirth)} · ${ageFrom(profile.dateOfBirth)} years`],
+          ...(profile.mrn
+            ? ([
+                [
+                  'Patient number',
+                  <span key="m" className="tabular font-mono">
+                    {profile.mrn}
+                  </span>,
+                ],
+              ] as Array<[string, ReactNode]>)
+            : []),
+          [
+            'Phone',
+            <span key="p" className="tabular font-mono">
+              {formatPhone(profile.phone)}
+            </span>,
+          ],
+          [
+            'Email',
+            profile.email ? (
+              <span key="e" className="break-all">
+                {profile.email}
+              </span>
+            ) : (
+              <span key="e" className="text-fg-muted">
+                None on file
+              </span>
+            ),
+          ],
+        ]}
+      />
     </section>
   );
 }

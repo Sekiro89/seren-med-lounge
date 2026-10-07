@@ -5,6 +5,7 @@ import { ApiError } from '@serenemed/api-client';
 import { ChatCenteredText, CheckCircle, Star } from '@phosphor-icons/react';
 import { Field, FormError, TextArea, apiMessage } from '../../../components/form';
 import {
+  BackLink,
   Button,
   CardsSkeleton,
   Chip,
@@ -53,6 +54,7 @@ export default function FeedbackPage() {
 
   return (
     <div>
+      <BackLink href="/me">Me</BackLink>
       <PageTitle title="Feedback" description="Tell us how your visits went." />
 
       <div className="flex flex-col gap-10">

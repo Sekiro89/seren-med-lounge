@@ -2,6 +2,7 @@
 
 import { CheckCircle, Receipt, Storefront } from '@phosphor-icons/react';
 import {
+  BackLink,
   CardsSkeleton,
   Chip,
   EmptyState,
@@ -37,6 +38,7 @@ export default function BillsPage() {
 
   return (
     <div>
+      <BackLink href="/me">Me</BackLink>
       <PageTitle title="Payments" description="Your bills, what you've paid, and what's left." />
       {invoices.loading ? (
         <div className="flex flex-col gap-10">

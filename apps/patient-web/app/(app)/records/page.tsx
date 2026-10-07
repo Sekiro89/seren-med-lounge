@@ -12,7 +12,6 @@ import {
   type Icon,
 } from '@phosphor-icons/react';
 import {
-  Chip,
   ErrorNote,
   IconBadge,
   LinkCard,
@@ -249,7 +248,7 @@ function HealthSummary({
       </div>
 
       <div>
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-fg-muted">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-danger-fg">
           <Warning size={20} aria-hidden="true" />
           Allergies
         </h3>
@@ -258,9 +257,11 @@ function HealthSummary({
         ) : (
           <Rows className="mt-1">
             {allergies.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center gap-3 py-3">
-                <Chip tone="danger">Allergy</Chip>
-                <span className="font-medium">
+              <li key={a.id} className="py-3">
+                <span
+                  className={`font-semibold ${a.status === 'RESOLVED' ? 'text-fg' : 'text-danger-fg'}`}
+                >
+                  <span className="sr-only">Allergy: </span>
                   {a.description}
                   {a.status === 'RESOLVED' && (
                     <span className="font-normal text-fg-muted"> · no longer a problem</span>

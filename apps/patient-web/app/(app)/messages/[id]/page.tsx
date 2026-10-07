@@ -9,6 +9,12 @@ import { Field, TextArea } from '../../../../components/form';
 import { EmergencyNote } from '../emergency-note';
 import { apiClient } from '../../../../lib/api-client';
 import { formatDate, formatTime } from '../../../../lib/format';
+
+/** `5 Oct`, with the year only when it is not this year. */
+const formatDayShort = (iso: string) => {
+  const full = formatDate(iso);
+  return full.endsWith(String(new Date().getFullYear())) ? full.replace(/\s\d{4}$/, '') : full;
+};
 import type { MessageThreadDetail, ThreadMessage } from '../../../../lib/types';
 import { useApi } from '../../../../lib/use-api';
 
@@ -40,11 +46,11 @@ export default function ThreadPage() {
       ) : (
         thread.data && (
           <>
-            <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
+            <h1 className="text-[1.4rem] font-semibold leading-tight tracking-[-0.01em] text-fg lg:text-[1.6rem]">
               {thread.data.subject}
             </h1>
 
-            <ol className="border-t border-fg" aria-label="Messages">
+            <ol className="-mt-2 flex flex-col gap-3" aria-label="Messages">
               {thread.data.messages.map((m) => (
                 <Bubble key={m.id} message={m} />
               ))}
@@ -75,28 +81,29 @@ export default function ThreadPage() {
 }
 
 /**
- * One message as a ruled entry: who wrote it and when on one line, the
- * text under it. The patient's own messages carry a cobalt rule at the
- * left so the two voices are easy to tell apart.
+ * One message as a square bubble (the prototype's thread): the
+ * patient's own on the right on a cobalt tint, the clinic's on the left
+ * inside a hairline. Who and when sit small above the words.
  */
 function Bubble({ message }: { message: ThreadMessage }) {
   const mine = message.senderType === 'PATIENT';
   return (
-    <li className="border-b border-line py-4">
-      <div
-        className={`flex flex-col gap-1 ${mine ? 'border-l-2 border-primary pl-4' : 'pl-[18px]'}`}
-      >
-        <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-          <span className={`font-semibold ${mine ? 'text-primary' : 'text-fg'}`}>
-            {mine ? 'You' : 'SereneMed clinic'}
-          </span>
-          <time dateTime={message.createdAt} className="text-fg-muted">
-            {formatDate(message.createdAt)},{' '}
-            <span className="tabular font-mono">{formatTime(message.createdAt)}</span>
-          </time>
-        </p>
-        <p className="whitespace-pre-wrap break-words text-fg">{message.body}</p>
-      </div>
+    <li
+      className={`flex max-w-[85%] flex-col gap-0.5 border px-3.5 py-2.5 lg:max-w-[75%] ${
+        mine ? 'self-end border-primary-subtle bg-primary-subtle' : 'self-start border-line'
+      }`}
+    >
+      <p className="text-sm text-fg-muted">
+        <span className={mine ? 'font-medium text-primary-subtle-fg' : 'font-medium text-fg'}>
+          {mine ? 'You' : 'SereneMed clinic'}
+        </span>{' '}
+        ·{' '}
+        <time dateTime={message.createdAt}>
+          {formatDayShort(message.createdAt)},{' '}
+          <span className="tabular font-mono">{formatTime(message.createdAt)}</span>
+        </time>
+      </p>
+      <p className="whitespace-pre-wrap break-words text-fg">{message.body}</p>
     </li>
   );
 }
@@ -128,7 +135,7 @@ function ReplyBox({ threadId, onSent }: { threadId: string; onSent: () => void }
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-3">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-3 border-t border-fg pt-3">
       <Field label="Your reply" htmlFor="reply" error={error} required>
         <TextArea
           id="reply"

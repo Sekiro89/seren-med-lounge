@@ -140,14 +140,14 @@ export function ButtonLink({
   );
 }
 
-/** "← Records": the way back from a detail page. */
+/** "← Records": the way back from a detail page, quiet so the title leads. */
 export function BackLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
-      className="-ml-2 mb-4 inline-flex min-h-12 items-center gap-2 rounded-control px-2 font-medium text-primary hover:bg-primary-subtle"
+      className="-ml-2 mb-3 inline-flex min-h-11 items-center gap-2 self-start rounded-control px-2 text-[0.94rem] text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
     >
-      <ArrowLeft size={20} aria-hidden="true" />
+      <ArrowLeft size={18} aria-hidden="true" />
       {children}
     </Link>
   );
@@ -164,9 +164,9 @@ export function PageTitle({
   eyebrow?: string;
 }) {
   return (
-    <header className="mb-8">
+    <header className="mb-6 lg:mb-8">
       {eyebrow && <p className="mb-1 text-sm text-fg-muted">{eyebrow}</p>}
-      <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.01em] text-fg">
+      <h1 className="text-[1.6rem] font-semibold leading-tight tracking-[-0.01em] text-fg lg:text-[1.9rem]">
         {title}
       </h1>
       {description && <p className="mt-1.5 text-fg-muted">{description}</p>}
@@ -232,20 +232,117 @@ export function IconBadge({ icon: IconComponent, tone = 'neutral' }: { icon: Ico
   );
 }
 
-/** A calm note with a 2px rule at its left: cobalt for information. */
+/**
+ * A calm note set like a quotation: a 2px cobalt rule at its left, an
+ * optional bold first line, then the words. No box, no fill.
+ */
 export function Note({
   children,
-  icon = true,
+  title,
+  icon = false,
   className = '',
 }: {
   children: ReactNode;
+  title?: ReactNode;
   icon?: boolean;
   className?: string;
 }) {
   return (
     <div className={`flex gap-3 border-l-2 border-primary py-1 pl-4 ${className}`}>
       {icon && <Info size={22} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />}
-      <div className="min-w-0 text-fg">{children}</div>
+      <div className="min-w-0 text-fg">
+        {title && <p className="font-semibold">{title}</p>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A ruled block (design system 18, the phone's sections): a 1px ink rule
+ * above and the content under it. `label` sits on the rule's first line,
+ * `aside` at its right (a tag, a count).
+ */
+export function Section({
+  label,
+  aside,
+  children,
+  className = '',
+  labelledBy,
+}: {
+  label?: ReactNode;
+  aside?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+  labelledBy?: string;
+}) {
+  return (
+    <section
+      aria-labelledby={labelledBy}
+      className={`flex flex-col gap-1.5 border-t border-fg pt-3 ${className}`}
+    >
+      {(label || aside) && (
+        <div className="flex items-center justify-between gap-3">
+          {label && <div className="min-w-0 font-semibold">{label}</div>}
+          {aside && <div className="ml-auto shrink-0">{aside}</div>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+/** Key and value on one hairline row each, value at the right (the phone's "Me" list). */
+export function KeyValues({
+  rows,
+  className = '',
+}: {
+  rows: Array<[string, ReactNode]>;
+  className?: string;
+}) {
+  return (
+    <dl className={`border-t border-line ${className}`}>
+      {rows.map(([label, value]) => (
+        <div
+          key={label}
+          className="flex items-baseline justify-between gap-4 border-b border-line py-3"
+        >
+          <dt className="shrink-0 text-fg-muted">{label}</dt>
+          <dd className="min-w-0 text-right text-fg">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Steps done as a segmented 3px rule (cobalt done, hairline to come). */
+export function SegmentRule({
+  total,
+  done,
+  tone = 'primary',
+}: {
+  total: number;
+  done: number;
+  tone?: 'primary' | 'success';
+}) {
+  if (total <= 0) return null;
+  const on = tone === 'success' ? 'bg-success-fg' : 'bg-primary';
+  if (total > 8) {
+    return (
+      <div aria-hidden="true" className="flex h-[3px] bg-line">
+        <span className={on} style={{ width: `${(done / total) * 100}%` }} />
+      </div>
+    );
+  }
+  return (
+    <div
+      aria-hidden="true"
+      className="grid gap-1"
+      style={{ gridTemplateColumns: `repeat(${total}, 1fr)` }}
+    >
+      {Array.from({ length: total }, (_, i) => (
+        <span key={i} className={`h-[3px] ${i < done ? on : 'bg-line'}`} />
+      ))}
     </div>
   );
 }
@@ -297,19 +394,17 @@ export function Skeleton({ className = '' }: { className?: string }) {
 }
 
 /**
- * The day number set large in Plex Mono with the month under it, closed by
- * a hairline on the right. `muted` for visits that are over.
+ * The day number set large in Plex Mono with the month under it (the
+ * prototype's next-visit block). `muted` for visits that are over.
  */
 export function DateTile({ iso, muted = false }: { iso: string; muted?: boolean }) {
   return (
     <div
-      className={`flex w-14 shrink-0 flex-col items-center self-start border-r border-line pr-4 ${
+      className={`flex w-12 shrink-0 flex-col items-center self-start ${
         muted ? 'text-fg-muted' : 'text-fg'
       }`}
     >
-      <span className="tabular font-mono text-[2rem] font-medium leading-none">
-        {formatDayNumber(iso)}
-      </span>
+      <span className="tabular font-mono text-[2.1rem] leading-none">{formatDayNumber(iso)}</span>
       <span className="mt-1 text-sm text-fg-muted">{formatMonthShort(iso)}</span>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { CalendarPlus, ClipboardText } from '@phosphor-icons/react';
 import {
+  BackLink,
   ButtonLink,
   CardsSkeleton,
   Chip,
@@ -11,6 +12,7 @@ import {
   PageTitle,
   Rows,
   SectionHeading,
+  SegmentRule,
 } from '../../../components/ui';
 import { formatDate, formatDayNumber, formatMonthShort, relativeDay } from '../../../lib/format';
 import type { CarePlan } from '../../../lib/types';
@@ -47,6 +49,7 @@ export default function CarePage() {
 
   return (
     <div>
+      <BackLink href="/records">Records</BackLink>
       <PageTitle
         title="Care plan"
         description="What your doctor asked you to do, and what's next."
@@ -108,7 +111,7 @@ function PlanCard({ plan, compact = false }: { plan: CarePlan; compact?: boolean
           <p className="text-sm text-fg-muted">From your visit on {shortDate(plan.createdAt)}</p>
         </div>
         {!compact && counted.length > 0 && (
-          <p className="text-sm font-semibold text-success-fg">
+          <p className="text-success-fg">
             <span className="font-mono">{doneCount}</span> of{' '}
             <span className="font-mono">{counted.length}</span> done
           </p>
@@ -117,20 +120,14 @@ function PlanCard({ plan, compact = false }: { plan: CarePlan; compact?: boolean
         {stopped && <Chip>Stopped by the clinic</Chip>}
       </div>
 
-      {!compact && counted.length > 0 && counted.length <= 8 && (
-        <div
-          aria-hidden="true"
-          className="mt-3 grid gap-1"
-          style={{ gridTemplateColumns: `repeat(${counted.length}, 1fr)` }}
-        >
-          {counted.map((f, i) => (
-            <span key={f.id} className={`h-1 ${i < doneCount ? 'bg-success-fg' : 'bg-line'}`} />
-          ))}
+      {!compact && counted.length > 0 && (
+        <div className="mt-3">
+          <SegmentRule total={counted.length} done={doneCount} />
         </div>
       )}
 
       {plan.dischargeInstructions && (
-        <Note className="mt-5">
+        <Note className="mt-5" title="What your doctor asked">
           <p className="whitespace-pre-line">{plan.dischargeInstructions}</p>
         </Note>
       )}

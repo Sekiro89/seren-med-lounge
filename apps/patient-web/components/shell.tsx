@@ -27,6 +27,9 @@ const TABS: Tab[] = [
   { label: 'Me', href: '/me' },
 ];
 
+/** Pages laid out in two columns from `lg` (Home); the rest keep a reading column. */
+const WIDE = ['/home'];
+
 /** Pages reached from a hub highlight the tab they belong to. */
 const PARENT: Record<string, string> = {
   '/visits': '/appointments',
@@ -124,7 +127,9 @@ export function PatientShell({ children }: { children: ReactNode }) {
         <main
           id="main"
           tabIndex={-1}
-          className="pb-tabbar mx-auto w-full max-w-2xl flex-1 bg-surface px-5 pt-6 outline-none sm:px-6 lg:my-8 lg:flex-none lg:px-10 lg:pb-14 lg:pt-10"
+          className={`pb-tabbar mx-auto w-full flex-1 bg-surface px-5 pt-6 outline-none sm:px-6 lg:my-8 lg:flex-none lg:px-10 lg:pb-14 lg:pt-10 ${
+            WIDE.includes(pathname) ? 'max-w-2xl lg:max-w-5xl lg:px-12' : 'max-w-2xl'
+          }`}
         >
           {children}
         </main>

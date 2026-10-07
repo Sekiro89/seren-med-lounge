@@ -1,7 +1,8 @@
 'use client';
 
-import { Flask } from '@phosphor-icons/react';
+import { Flask, TrendDown, TrendUp } from '@phosphor-icons/react';
 import {
+  BackLink,
   CardsSkeleton,
   Chip,
   EmptyState,
@@ -78,29 +79,49 @@ function historyByTest(orders: LabOrder[]): Map<string, Point[]> {
 const drawable = (r: LabResult | undefined) =>
   !!r && parseValue(r.resultValue) !== null && parseRange(r.referenceRange) !== null;
 
-/** Test results by date, each value against its normal range (design system 18.3, 18.6). */
+/** Out of range first, so the result that matters most is the one shown in full. */
+function pickFeatured(tests: Test[]): Test | undefined {
+  const drawn = tests.filter((t) => drawable(t.result));
+  const out = drawn.find((t) => {
+    const r = t.result!;
+    return judge(parseValue(r.resultValue)!, parseRange(r.referenceRange)!) !== 'within';
+  });
+  return out ?? drawn[0];
+}
+
+/**
+ * Test results by date (design system 18.3, 18.6; the prototype's
+ * results screen): tests still at the lab as one ruled line, the newest
+ * visit's most telling result in full (big value, ruler, trend), and
+ * every other result as a compact row with its value and a word.
+ */
 export default function ResultsPage() {
   const labs = useApi<LabOrder[]>('/patients/me/lab-orders');
   const groups = labs.data ? groupByDay(labs.data) : [];
   const history = labs.data ? historyByTest(labs.data) : new Map<string, Point[]>();
-  // The newest visit with a result we can draw is shown in full; the rest are ruled rows.
-  const featuredIndex = groups.findIndex((g) => g.tests.some((t) => drawable(t.result)));
-  const featuredGroup = groups[featuredIndex];
+  // Tests still waiting for the lab, from every visit, newest first.
+  const waiting = groups.flatMap((g) => g.tests.filter((t) => !t.result));
+  const withResults = groups
+    .map((g) => ({ ...g, tests: g.tests.filter((t) => t.result) }))
+    .filter((g) => g.tests.length > 0);
+  const featuredIndex = withResults.findIndex((g) => g.tests.some((t) => drawable(t.result)));
+  const featuredGroup = withResults[featuredIndex];
+  const featured = featuredGroup ? pickFeatured(featuredGroup.tests) : undefined;
 
   return (
     <div>
+      <BackLink href="/records">Records</BackLink>
       <PageTitle
         title="Test results"
         description={
           featuredGroup
-            ? `Latest results from your visit on ${formatDayMonth(featuredGroup.date)}`
+            ? `From your visit on ${formatDayMonth(featuredGroup.date)}`
             : 'Your test results, newest first.'
         }
       />
-      <div className="flex flex-col gap-8">
-        <Note>
-          Your doctor will go through these results with you. A value outside the range is not
-          always a cause for worry.
+      <div className="flex flex-col gap-7">
+        <Note title="Your doctor will go through these with you">
+          A value outside the range is not always a cause for worry.
         </Note>
 
         {labs.loading ? (
@@ -114,45 +135,58 @@ export default function ResultsPage() {
             description="When your doctor orders a test, it will show up here, and the result will follow once the lab has it."
           />
         ) : (
-          groups.map((group, index) => {
-            const featured =
-              index === featuredIndex ? group.tests.filter((t) => drawable(t.result)) : [];
-            const others = group.tests.filter((t) => !featured.includes(t));
-            return (
-              <section key={group.date} aria-labelledby={`tests-${index}`}>
-                <h2
-                  id={`tests-${index}`}
-                  className="flex items-baseline justify-between gap-4 border-t border-fg pt-3 text-sm text-fg-muted"
-                >
-                  <span className="font-semibold text-fg">
-                    {index === 0
-                      ? 'Latest tests'
-                      : index === featuredIndex
-                        ? 'Results'
-                        : 'Earlier tests'}
-                  </span>
-                  <span>{formatDate(group.date)}</span>
-                </h2>
-                {featured.map((test, i) => (
-                  <FeaturedTest
-                    key={test.id}
-                    test={test}
-                    points={history.get(test.testName.trim().toLowerCase()) ?? []}
-                    first={i === 0}
-                  />
-                ))}
-                {others.length > 0 && (
-                  <Rows className={featured.length > 0 ? 'mt-2 border-t border-fg' : 'mt-1'}>
-                    {others.map((test) => (
-                      <li key={test.id}>
-                        <TestRow test={test} />
-                      </li>
-                    ))}
-                  </Rows>
-                )}
+          <>
+            {waiting.length > 0 && (
+              <section
+                aria-labelledby="waiting"
+                className="flex flex-col gap-1 border-t border-fg pt-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 id="waiting" className="font-semibold">
+                    Tests at the lab
+                  </h2>
+                  <Chip>Waiting for results</Chip>
+                </div>
+                <p className="text-fg-muted">{waiting.map((t) => t.testName).join(', ')}</p>
               </section>
-            );
-          })
+            )}
+
+            {withResults.map((group, index) => {
+              const others = group.tests.filter((t) => t !== featured);
+              return (
+                <section key={group.date} aria-labelledby={`tests-${index}`}>
+                  <h2
+                    id={`tests-${index}`}
+                    className={
+                      index === featuredIndex
+                        ? 'sr-only'
+                        : 'flex items-baseline justify-between gap-4 pb-1 text-sm text-fg-muted'
+                    }
+                  >
+                    <span className="font-semibold text-fg">
+                      {index === featuredIndex ? 'Results' : 'Earlier results'}
+                    </span>{' '}
+                    <span>{formatDate(group.date)}</span>
+                  </h2>
+                  {index === featuredIndex && featured && (
+                    <FeaturedTest
+                      test={featured}
+                      points={history.get(featured.testName.trim().toLowerCase()) ?? []}
+                    />
+                  )}
+                  {others.length > 0 && (
+                    <Rows className="border-t border-fg">
+                      {others.map((test) => (
+                        <li key={test.id}>
+                          <TestRow test={test} />
+                        </li>
+                      ))}
+                    </Rows>
+                  )}
+                </section>
+              );
+            })}
+          </>
         )}
       </div>
     </div>
@@ -160,22 +194,25 @@ export default function ResultsPage() {
 }
 
 /** One result in full: the big value, the ruler, and the trend when there is more than one. */
-function FeaturedTest({ test, points, first }: { test: Test; points: Point[]; first: boolean }) {
+function FeaturedTest({ test, points }: { test: Test; points: Point[] }) {
   const result = test.result!;
   const value = parseValue(result.resultValue)!;
   const range = parseRange(result.referenceRange)!;
   const verdict = judge(value, range);
   return (
-    <article className={`pb-6 pt-4 ${first ? '' : 'border-t border-line'}`}>
+    <article className="border-t border-fg pb-6 pt-3">
       <div className="flex items-start justify-between gap-4">
-        <h3 className="text-[1.06rem] font-semibold">{test.testName}</h3>
+        <div className="min-w-0">
+          <h3 className="font-semibold">{test.testName}</h3>
+          <p className="text-sm text-fg-muted">Tested {formatDate(result.createdAt)}</p>
+        </div>
         <VerdictWord verdict={verdict} />
       </div>
-      <p className="mt-2 flex items-baseline">
-        <span className="tabular font-mono text-[4.2rem] font-medium leading-none tracking-[-0.03em]">
+      <p className="mt-3 flex items-baseline">
+        <span className="tabular font-mono text-[3.8rem] font-medium leading-none tracking-[-0.02em]">
           {result.resultValue}
         </span>
-        {result.unit && <span className="ml-2 text-lg text-fg-muted">{result.unit}</span>}
+        {result.unit && <span className="ml-1.5 text-fg-muted">{result.unit}</span>}
       </p>
       <RangeRuler
         value={result.resultValue}
@@ -206,48 +243,16 @@ function Trend({ points, range }: { points: Point[]; range: ParsedRange }) {
           ? { text: 'Within the range again', tone: 'text-success-fg' }
           : { text: 'About the same', tone: 'text-fg-muted' };
 
-  const lo = Math.min(...shown.map((p) => p.value));
-  const hi = Math.max(...shown.map((p) => p.value));
-  const W = 96;
-  const H = 34;
-  const xy = shown.map((p, i) => ({
-    x: 4 + (i * (W - 8)) / (shown.length - 1),
-    y: hi === lo ? H / 2 : 4 + ((hi - p.value) / (hi - lo)) * (H - 8),
-  }));
-  const lastOut = judge(last.value, range) !== 'within';
+  const Arrow = last.value < before.value ? TrendDown : last.value > before.value ? TrendUp : null;
 
   return (
-    <div className="mt-5 flex items-center gap-4 border-t border-line pt-3">
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" className="shrink-0">
-        <polyline
-          points={xy.map((p) => `${p.x},${p.y}`).join(' ')}
-          fill="none"
-          strokeWidth={1.5}
-          className="stroke-fg"
-        />
-        {xy.map((p, i) =>
-          i === xy.length - 1 ? (
-            <rect
-              key={i}
-              x={p.x - 4}
-              y={p.y - 4}
-              width={8}
-              height={8}
-              className={lastOut ? 'fill-warning-fg' : 'fill-fg'}
-            />
-          ) : (
-            <rect key={i} x={p.x - 3} y={p.y - 3} width={6} height={6} className="fill-fg" />
-          ),
-        )}
-      </svg>
-      <div className="min-w-0">
-        <p className={`text-sm font-semibold ${words.tone}`}>{words.text}</p>
-        <p className="text-sm text-fg-muted">
-          <span className="tabular font-mono">{shown.map((p) => p.value).join(' → ')}</span> since{' '}
-          {formatMonthShort(shown[0]!.at)}
-        </p>
-      </div>
-    </div>
+    <p className={`mt-4 flex flex-wrap items-center gap-x-1.5 text-sm ${words.tone}`}>
+      {Arrow && <Arrow size={16} aria-hidden="true" />}
+      <span className="font-medium">{words.text}</span>
+      <span aria-hidden="true">·</span>
+      <span className="tabular font-mono">{shown.map((p) => p.value).join(' → ')}</span>
+      <span>since {formatMonthShort(shown[0]!.at)}</span>
+    </p>
   );
 }
 
@@ -266,9 +271,9 @@ function TestRow({ test }: { test: Test }) {
   const range = parseRange(result.referenceRange);
   const verdict = value !== null && range ? judge(value, range) : null;
   return (
-    <div className="flex items-center gap-3 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{test.testName}</p>
+    <div className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-3 py-3">
+      <div className="min-w-0">
+        <p className="font-semibold">{test.testName}</p>
         {result.referenceRange && (
           <p className="text-sm text-fg-muted">
             Normal {result.referenceRange}
@@ -276,13 +281,13 @@ function TestRow({ test }: { test: Test }) {
           </p>
         )}
       </div>
-      <p className="tabular text-right font-mono text-2xl">
+      <p className="tabular text-right font-mono text-[1.3rem]">
         {result.resultValue}
         {!result.referenceRange && result.unit && (
           <span className="ml-1 font-sans text-sm text-fg-muted">{result.unit}</span>
         )}
       </p>
-      <span className="w-16 shrink-0 text-right">
+      <span className="text-right">
         {verdict && <StatusWord tone={TONE[verdict]}>{SHORT[verdict]}</StatusWord>}
       </span>
     </div>

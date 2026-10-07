@@ -2,6 +2,7 @@
 
 import { Pill } from '@phosphor-icons/react';
 import {
+  BackLink,
   CardsSkeleton,
   Chip,
   EmptyState,
@@ -64,6 +65,7 @@ export default function MedicinesPage() {
 
   return (
     <div>
+      <BackLink href="/records">Records</BackLink>
       <PageTitle title="Medicines" description="What to take, how often, and for how long." />
 
       {prescriptions.loading ? (

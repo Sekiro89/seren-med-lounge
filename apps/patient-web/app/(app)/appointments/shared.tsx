@@ -26,7 +26,7 @@ export function ModeChip({ entrySource }: { entrySource: Appointment['entrySourc
 const UPCOMING_STATUS: Partial<Record<AppointmentStatus, { label: string; tone: Tone }>> = {
   CONFIRMED: { label: 'Confirmed', tone: 'success' },
   REQUESTED: { label: 'Waiting for the clinic to confirm', tone: 'warning' },
-  CHECKED_IN: { label: 'You are checked in', tone: 'info' },
+  CHECKED_IN: { label: 'Checked in', tone: 'info' },
 };
 
 const PAST_STATUS: Record<AppointmentStatus, { label: string; tone: Tone }> = {

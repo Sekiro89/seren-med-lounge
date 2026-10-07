@@ -2,15 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
-import {
-  CheckCircle,
-  Flask,
-  Pill,
-  Receipt,
-  Stethoscope,
-  VideoCamera,
-  type Icon,
-} from '@phosphor-icons/react';
+import { CheckCircle, VideoCamera } from '@phosphor-icons/react';
 import { ApiError } from '@serenemed/api-client';
 import { apiMessage } from '../../../../components/form';
 import {
@@ -18,14 +10,16 @@ import {
   Button,
   Chip,
   ErrorNote,
-  IconBadge,
+  KeyValues,
   LinkCard,
   Note,
   Rows,
   SectionHeading,
   Skeleton,
+  StatusWord,
   type Tone,
 } from '../../../../components/ui';
+import { judge, parseRange, parseValue, SHORT, TONE } from '../../results/range';
 import { apiClient } from '../../../../lib/api-client';
 import {
   doctorName,
@@ -39,7 +33,7 @@ import {
 } from '../../../../lib/format';
 import type { VisitDetail } from '../../../../lib/types';
 import { useApi, useNow } from '../../../../lib/use-api';
-import { isComingUp, ModeChip, visitStatus } from '../shared';
+import { isComingUp, visitStatus } from '../shared';
 
 const BILL_STATUS: Record<string, { label: string; tone: Tone }> = {
   ISSUED: { label: 'To pay', tone: 'warning' },
@@ -109,31 +103,40 @@ function Visit({
   const visited = visit.status === 'COMPLETED' || visit.status === 'CHECKED_IN';
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       <header>
         <p className="mb-1 text-sm text-fg-muted">{upcoming ? 'Your visit' : 'Past visit'}</p>
-        <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.01em]">
-          {formatDay(visit.scheduledAt)},{' '}
-          <span className="tabular font-mono font-medium">{formatTime(visit.scheduledAt)}</span>
+        <h1 className="text-[1.6rem] font-semibold leading-tight tracking-[-0.01em] lg:text-[1.9rem]">
+          {formatDay(visit.scheduledAt)}
         </h1>
-        <div className="mt-5 border-y border-line py-4">
-          <div className="min-w-0">
-            <p className="text-fg-muted">
-              With {doctorName(visit.doctor)}
-              {upcoming && <> · {relativeDay(visit.scheduledAt)}</>}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <ModeChip entrySource={visit.entrySource} />
-              <Chip tone={status.tone}>{status.label}</Chip>
-            </div>
-            {visit.notes && (
-              <div className="mt-4 border-t border-line pt-4">
-                <p className="text-sm text-fg-muted">What you told us</p>
-                <p className="mt-1 whitespace-pre-line">{visit.notes}</p>
-              </div>
-            )}
+        <KeyValues
+          className="mt-5 border-t-fg"
+          rows={[
+            ['Doctor', doctorName(visit.doctor)],
+            ['Where', isVideo ? <span className="text-primary">Video call</span> : 'At the clinic'],
+            [
+              'Time',
+              <span key="t">
+                <span className="tabular font-mono">{formatTime(visit.scheduledAt)}</span>
+                {upcoming && (
+                  <span className="text-fg-muted"> · {relativeDay(visit.scheduledAt)}</span>
+                )}
+              </span>,
+            ],
+            [
+              'Status',
+              <StatusWord key="s" tone={status.tone}>
+                {status.label}
+              </StatusWord>,
+            ],
+          ]}
+        />
+        {visit.notes && (
+          <div className="border-b border-line py-3">
+            <p className="text-fg-muted">What you told us</p>
+            <p className="mt-1 whitespace-pre-line">{visit.notes}</p>
           </div>
-        </div>
+        )}
       </header>
 
       {justCancelled && visit.status === 'CANCELLED' && (
@@ -292,12 +295,12 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
 
   return (
     <section aria-labelledby="from-this-visit" className="flex flex-col gap-8">
-      <h2 id="from-this-visit" className="-mb-4 text-[1.25rem] font-semibold text-fg">
+      <h2 id="from-this-visit" className="-mb-4 text-[1.18rem] font-semibold text-fg">
         From this visit
       </h2>
 
       {diagnoses.length > 0 && (
-        <Group icon={Stethoscope} title="Diagnosis">
+        <Group title="Diagnosis">
           {diagnoses.map((d) => (
             <li key={d.id} className="py-3">
               <p className="font-semibold">{d.latest.description}</p>
@@ -312,7 +315,7 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
       )}
 
       {medicines.length > 0 && (
-        <Group icon={Pill} title="Medicines prescribed">
+        <Group title="Medicines prescribed">
           {medicines.map((m) => (
             <li key={m.id} className="py-3">
               <p className="font-medium">{m.medicationName}</p>
@@ -325,21 +328,34 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
       )}
 
       {tests.length > 0 && (
-        <Group icon={Flask} title="Tests">
+        <Group title="Tests">
           {tests.map((t) => {
             const result = t.results[0];
             return (
-              <li key={t.id} className="flex flex-wrap items-baseline justify-between gap-x-4 py-3">
-                <p className="font-medium">{t.testName}</p>
+              <li key={t.id} className="grid grid-cols-[1fr_auto_4.5rem] items-center gap-x-3 py-3">
+                <div className="min-w-0">
+                  <p className="font-semibold">{t.testName}</p>
+                  {result?.referenceRange && (
+                    <p className="text-sm text-fg-muted">
+                      Normal {result.referenceRange}
+                      {result.unit && ` ${result.unit}`}
+                    </p>
+                  )}
+                </div>
                 {result ? (
-                  <p className="tabular font-mono text-lg">
-                    {result.resultValue}
-                    {result.unit && (
-                      <span className="ml-1.5 font-sans text-sm text-fg-muted">{result.unit}</span>
-                    )}
-                  </p>
+                  <>
+                    <p className="tabular text-right font-mono text-[1.3rem]">
+                      {result.resultValue}
+                      {!result.referenceRange && result.unit && (
+                        <span className="ml-1 font-sans text-sm text-fg-muted">{result.unit}</span>
+                      )}
+                    </p>
+                    <span className="text-right">
+                      <Verdict value={result.resultValue} range={result.referenceRange} />
+                    </span>
+                  </>
                 ) : (
-                  <p className="text-fg-muted">Waiting for results</p>
+                  <p className="col-span-2 text-right text-sm text-fg-muted">Waiting for results</p>
                 )}
               </li>
             );
@@ -350,10 +366,7 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
       {bills.length > 0 && (
         <div>
           <SectionHeading>
-            <span className="flex items-center gap-2">
-              <Receipt size={20} aria-hidden="true" />
-              Bills
-            </span>
+            <span>Bills</span>
           </SectionHeading>
           <Rows>
             {bills.map((b) => {
@@ -383,14 +396,20 @@ function FromThisVisit({ encounter }: { encounter: NonNullable<VisitDetail['enco
   );
 }
 
-function Group({ icon, title, children }: { icon: Icon; title: string; children: ReactNode }) {
+function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div className="flex min-h-12 items-center gap-2 border-t border-fg pt-3">
-        <IconBadge icon={icon} />
-        <h3 className="text-[1.06rem] font-semibold">{title}</h3>
-      </div>
+      <h3 className="border-t border-fg pb-1 pt-3 font-semibold">{title}</h3>
       <Rows>{children}</Rows>
     </div>
   );
+}
+
+/** "High", "Low" or "Normal" when the value and its range can be read; nothing otherwise. */
+function Verdict({ value, range }: { value: string; range: string | null }) {
+  const n = parseValue(value);
+  const r = parseRange(range);
+  if (n === null || !r) return null;
+  const v = judge(n, r);
+  return <StatusWord tone={TONE[v]}>{SHORT[v]}</StatusWord>;
 }

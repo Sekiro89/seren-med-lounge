@@ -84,3 +84,10 @@ export function courseLength(days: number): string {
   if (days % 7 === 0 && days >= 14) return `${days / 7} weeks`;
   return days === 1 ? '1 day' : `${days} days`;
 }
+
+/** An Indian mobile number in two groups of five: 9890123456 -> "98901 23456". */
+export function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+  return local.length === 10 ? `${local.slice(0, 5)} ${local.slice(5)}` : phone;
+}

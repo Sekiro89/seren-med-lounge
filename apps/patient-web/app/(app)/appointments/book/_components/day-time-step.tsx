@@ -42,7 +42,7 @@ function dayWord(works: boolean, free: number | undefined): { word: string; tone
   if (!works) return { word: 'Closed', tone: 'text-fg-subtle' };
   if (free === 0) return { word: 'Full', tone: 'text-fg-subtle' };
   if (free !== undefined && free <= 3) return { word: 'Few left', tone: 'text-warning-fg' };
-  return { word: 'Open', tone: 'text-success-fg' };
+  return { word: 'Open', tone: 'text-fg' };
 }
 
 /**
@@ -130,7 +130,7 @@ export function DayTimeStep({
                     {formatWeekdayShort(iso)}
                     {showMonth && ` ${formatMonthShort(iso)}`}
                   </span>
-                  <span className="tabular font-mono text-[1.3rem] leading-tight">
+                  <span className="tabular font-mono text-[1.25rem] font-medium leading-tight">
                     {formatDayNumber(iso)}
                   </span>
                   <span className={`text-sm ${selected ? 'font-medium' : tone}`}>{word}</span>
@@ -226,13 +226,13 @@ function TimeGrid({
             const open = group.filter((s) => s.available !== false).length;
             return (
               <div key={period.label}>
-                <div className="flex items-baseline justify-between border-b border-fg pb-1.5">
+                <div className="flex items-baseline justify-between border-t border-fg pt-2.5">
                   <h3 className="font-semibold">{period.label}</h3>
                   <p className="text-sm text-fg-muted">
                     <span className="font-mono">{open}</span> free
                   </p>
                 </div>
-                <ul className="mt-2.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {group.map((s) => {
                     const taken = s.available === false;
                     const selected = !taken && s.start === slot?.start;
@@ -246,9 +246,9 @@ function TimeGrid({
                           onClick={() => {
                             if (!taken) onSlot({ start: s.start, end: s.end });
                           }}
-                          className={`tabular h-12 w-full rounded-control font-mono text-base transition-colors ${
+                          className={`tabular h-12 w-full rounded-control font-mono text-[1.06rem] transition-colors ${
                             taken
-                              ? 'cursor-not-allowed bg-surface-muted text-fg-subtle line-through'
+                              ? 'cursor-not-allowed border border-line bg-surface-muted text-fg-subtle line-through'
                               : selected
                                 ? 'cursor-pointer bg-primary font-medium text-on-primary'
                                 : 'cursor-pointer border border-control bg-surface text-fg hover:border-fg'

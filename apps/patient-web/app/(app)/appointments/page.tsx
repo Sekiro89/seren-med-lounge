@@ -4,7 +4,6 @@ import { CalendarBlank, CalendarPlus } from '@phosphor-icons/react';
 import {
   ButtonLink,
   CardsSkeleton,
-  Chip,
   DateTile,
   EmptyState,
   ErrorNote,
@@ -12,11 +11,12 @@ import {
   PageTitle,
   Rows,
   SectionHeading,
+  StatusWord,
 } from '../../../components/ui';
-import { doctorName, formatDay, formatTime, relativeDay } from '../../../lib/format';
+import { doctorName, formatTime, formatWeekdayShort, relativeDay } from '../../../lib/format';
 import type { Appointment } from '../../../lib/types';
 import { useApi, useNow } from '../../../lib/use-api';
-import { isComingUp, ModeChip, visitStatus } from './shared';
+import { isComingUp, visitStatus } from './shared';
 
 /**
  * Appointments hub: book a visit, then what is coming up (soonest first)
@@ -41,7 +41,7 @@ export default function AppointmentsPage() {
         description="Book a visit at the clinic or by video, and see your visits."
       />
 
-      <div className="mb-10 sm:w-fit">
+      <div className="mb-8 sm:w-fit">
         <ButtonLink
           href="/appointments/book"
           full
@@ -56,7 +56,7 @@ export default function AppointmentsPage() {
       ) : appointments.error ? (
         <ErrorNote message={appointments.error} onRetry={appointments.reload} />
       ) : (
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-8">
           <section aria-labelledby="coming-up">
             <SectionHeading>
               <span id="coming-up">Coming up</span>
@@ -113,22 +113,23 @@ export default function AppointmentsPage() {
 function VisitRow({ appointment, upcoming }: { appointment: Appointment; upcoming: boolean }) {
   const status = visitStatus(appointment.status, upcoming);
   const iso = appointment.scheduledAt;
+  const video = appointment.entrySource === 'VIDEO_CONSULTATION';
   return (
     <LinkCard href={`/appointments/${appointment.id}`}>
       <div className="flex gap-4">
         <DateTile iso={iso} muted={!upcoming} />
         <div className="min-w-0 flex-1">
           <p className={upcoming ? 'font-semibold' : 'font-medium'}>
-            {formatDay(iso)}, <span className="tabular font-mono">{formatTime(iso)}</span>
+            {formatWeekdayShort(iso)}, <span className="tabular font-mono">{formatTime(iso)}</span>
+            {upcoming && <span className="font-normal text-fg-muted"> · {relativeDay(iso)}</span>}
           </p>
-          <p className="text-sm text-fg-muted">
-            With {doctorName(appointment.doctor)}
-            {upcoming && <> · {relativeDay(iso)}</>}
+          <p className="text-fg-muted">
+            {video ? <span className="text-primary">Video call</span> : 'At the clinic'} with{' '}
+            {doctorName(appointment.doctor)}
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <ModeChip entrySource={appointment.entrySource} />
-            <Chip tone={status.tone}>{status.label}</Chip>
-          </div>
+          <p className="mt-0.5">
+            <StatusWord tone={status.tone}>{status.label}</StatusWord>
+          </p>
         </div>
       </div>
     </LinkCard>

@@ -9,6 +9,8 @@ export interface Profile {
   email: string | null;
   phone: string;
   dateOfBirth: string;
+  /** The clinic's patient number, e.g. SM-004812 (absent on older API builds). */
+  mrn?: string | null;
 }
 
 export type AppointmentStatus =

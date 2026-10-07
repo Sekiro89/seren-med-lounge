@@ -15,9 +15,6 @@ const STAGE_OF: Record<QueueStation, number> = {
   PHARMACY: 4,
 };
 
-/** Where each marker sits along the axis, in percent. */
-const AT = [0, 28, 52, 76, 100];
-
 /**
  * The time to print under a finished stage: check-in is the token's first
  * event; any other stage is when the patient was seen there (or, failing
@@ -44,73 +41,63 @@ const NOW_WORD: Record<QueueToken['status'], string> = {
 };
 
 /**
- * Check-in → Nurse → Doctor → Lab → Pay on a hairline axis: finished
- * stages in ink with their time (when the API sends the history), the
- * current stage in cobalt, the rest outlined.
+ * Check-in → Nurse → Doctor → Lab → Pay as five equal columns hanging
+ * from one hairline axis (the prototype's ruler): finished stages as ink
+ * squares with their time (when the API sends the history), the current
+ * stage in cobalt with a word, the rest outlined.
  */
 export function VisitProgress({ token }: { token: QueueToken }) {
   const current = STAGE_OF[token.station];
   const times = stageTimes(token);
-  const inkTo = AT[current]!;
 
   return (
-    <div className="relative mt-6 h-[4.6rem]">
-      {/* The axis, and the ink covering the stages already passed. */}
-      <div aria-hidden="true" className="absolute inset-x-[5px] top-[5px] h-px bg-control" />
-      <div
-        aria-hidden="true"
-        className="absolute left-[5px] top-1 h-[3px] bg-fg"
-        style={{ width: `calc(${inkTo}% - ${current === 4 ? 10 : 5}px)` }}
-      />
-      <ol aria-label="Your visit today" className="text-sm">
-        {STAGES.map((label, i) => {
-          const done = i < current;
-          const now = i === current;
-          const align =
-            i === 0
-              ? 'items-start text-left'
-              : i === STAGES.length - 1
-                ? 'items-end text-right -translate-x-full'
-                : 'items-center text-center -translate-x-1/2';
-          const time = done ? times[i] : undefined;
-          return (
-            <li
-              key={label}
-              aria-current={now ? 'step' : undefined}
-              className={`absolute top-0 flex flex-col ${align}`}
-              style={{ left: `${AT[i]}%` }}
-            >
-              <span
-                aria-hidden="true"
-                className={`block size-[11px] ${
-                  now
-                    ? 'bg-primary outline outline-[3px] outline-primary-subtle'
-                    : done
-                      ? 'bg-fg'
-                      : 'border border-fg-subtle bg-surface'
-                }`}
-              />
-              <span
-                className={`mt-2 whitespace-nowrap ${now ? 'font-semibold text-fg' : 'text-fg-muted'}`}
-              >
-                {label}
-                <span className="sr-only">
-                  {done ? ', done' : now ? ', where you are now' : ', still to come'}
-                </span>
+    <ol
+      aria-label="Your visit today"
+      className="mt-3 grid grid-cols-5 border-t border-control text-[0.8rem] leading-snug"
+    >
+      {STAGES.map((label, i) => {
+        const done = i < current;
+        const now = i === current;
+        const time = done ? times[i] : undefined;
+        return (
+          <li
+            key={label}
+            aria-current={now ? 'step' : undefined}
+            className={`relative flex min-w-0 flex-col pt-3 ${
+              now ? 'font-semibold text-primary' : done ? 'text-fg' : 'text-fg-muted'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`absolute -top-[6px] left-0 size-[11px] border ${
+                now
+                  ? 'border-primary bg-primary'
+                  : done
+                    ? 'border-fg bg-fg'
+                    : 'border-control bg-surface'
+              }`}
+            />
+            <span className="truncate">
+              {label}
+              <span className="sr-only">
+                {done ? ', done' : now ? ', where you are now' : ', still to come'}
               </span>
-              {now ? (
-                <span className="font-mono text-primary">{NOW_WORD[token.status]}</span>
-              ) : (
-                time && (
-                  <time dateTime={time} className="tabular font-mono text-fg-muted">
-                    {formatTime(time)}
-                  </time>
-                )
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+            </span>
+            {now ? (
+              <span className="font-mono text-[0.75rem]">{NOW_WORD[token.status]}</span>
+            ) : (
+              time && (
+                <time
+                  dateTime={time}
+                  className="tabular font-mono text-[0.75rem] font-normal text-fg-muted"
+                >
+                  {formatTime(time)}
+                </time>
+              )
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
