@@ -188,7 +188,10 @@ export class PharmacyService {
     return this.prisma.withTenant(organizationId, (tx) =>
       tx.dispensing.findMany({
         where: filter,
-        include: { medication: { select: { name: true, strength: true, unit: true } } },
+        include: {
+          medication: { select: { name: true, strength: true, unit: true } },
+          patient: { select: { id: true, firstName: true, lastName: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 200,
       }),

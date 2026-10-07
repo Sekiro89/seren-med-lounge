@@ -61,6 +61,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
   ],
   [StaffRole.NURSE]: [
     'patient:read',
+    'appointment:read',
     'patient-record:read-clinical',
     'vitals:write',
     'queue:manage',
@@ -70,6 +71,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
   ],
   [StaffRole.JUNIOR_DOCTOR]: [
     'patient:read',
+    'appointment:read',
     'patient-record:read-clinical',
     'clinical-note:write-draft',
     'diagnosis:write-draft',
@@ -84,6 +86,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
   ],
   [StaffRole.SENIOR_DOCTOR]: [
     'patient:read',
+    'appointment:read',
     'patient-record:read-clinical',
     'patient-record:write-clinical',
     'clinical-note:write-draft',

@@ -316,6 +316,29 @@ describe('Billing (e2e)', () => {
     });
   });
 
+  describe('patient identity on invoices', () => {
+    it('names the patient in the list and the detail', async () => {
+      const issued = await issueInvoice(billingToken, {
+        patientId: patientAId,
+        items: [consultation],
+      }).expect(201);
+      const list = await request(app.getHttpServer())
+        .get('/invoices')
+        .set('Authorization', `Bearer ${billingToken}`)
+        .expect(200);
+      expect(list.body[0].patient).toEqual({
+        id: patientAId,
+        firstName: 'Billing',
+        lastName: 'Patient',
+      });
+      const detail = await request(app.getHttpServer())
+        .get(`/invoices/${issued.body.id}`)
+        .set('Authorization', `Bearer ${billingToken}`)
+        .expect(200);
+      expect(detail.body.patient.firstName).toBe('Billing');
+    });
+  });
+
   describe('RBAC', () => {
     it('limits billing actions to roles holding the billing permissions', async () => {
       await issueInvoice(juniorToken, { patientId: patientAId, items: [consultation] }).expect(403);

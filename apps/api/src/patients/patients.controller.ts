@@ -175,4 +175,14 @@ export class PatientsController {
     const user = this.requirePatient(request);
     return this.carePlansService.listForPatient(user.organizationId, user.userId);
   }
+
+  /**
+   * Declared last on purpose: the static `me/...` routes above must win
+   * over this catch-all `:id`.
+   */
+  @Get(':id')
+  @RequirePermissions('patient:read')
+  getOne(@Param('id') id: string) {
+    return this.patientsService.findForStaff(this.tenantContext.organizationId, id);
+  }
 }

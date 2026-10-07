@@ -1,3 +1,4 @@
+import type { StaffRole } from '@prisma/client';
 import { ConflictException, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import type { CreateUserInput } from '@serenemed/validation';
@@ -67,6 +68,22 @@ export class UsersService {
     });
 
     return { ...user, role: toAppStaffRole(user.role) };
+  }
+
+  /**
+   * A minimal staff directory for choosing someone (assign a task, escalate
+   * a follow-up). Names and roles only, active staff only: no email, no
+   * clinic, nothing from the admin list. Open to every signed-in staff
+   * member, since they already work alongside these people.
+   */
+  async directory(organizationId: string, role?: StaffRole) {
+    return this.prisma.withTenant(organizationId, (tx) =>
+      tx.user.findMany({
+        where: { isActive: true, role },
+        select: { id: true, fullName: true, role: true },
+        orderBy: { fullName: 'asc' },
+      }),
+    );
   }
 
   async listForOrganization(organizationId: string) {

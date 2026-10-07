@@ -16,6 +16,7 @@ import { clinicDateString, toDbDate } from '../common/clinic-time';
 
 export interface Allocation {
   batchId: string;
+  batchNumber: string;
   quantity: number;
 }
 
@@ -280,8 +281,10 @@ export class InventoryService {
     dispensingId: string,
   ): Promise<Allocation[]> {
     const today = toDbDate(clinicDateString());
-    const batches = await tx.$queryRaw<Array<{ id: string; quantityOnHand: number }>>`
-      SELECT id, "quantityOnHand" FROM stock_batches
+    const batches = await tx.$queryRaw<
+      Array<{ id: string; batchNumber: string; quantityOnHand: number }>
+    >`
+      SELECT id, "batchNumber", "quantityOnHand" FROM stock_batches
       WHERE "medicationId" = ${medicationId} AND "quantityOnHand" > 0 AND "expiryDate" >= ${today}
       ORDER BY "expiryDate" ASC, "createdAt" ASC
       FOR UPDATE`;
@@ -311,7 +314,7 @@ export class InventoryService {
           actorId,
         },
       });
-      allocations.push({ batchId: batch.id, quantity: take });
+      allocations.push({ batchId: batch.id, batchNumber: batch.batchNumber, quantity: take });
       remaining -= take;
     }
     return allocations;

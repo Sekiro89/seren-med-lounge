@@ -182,8 +182,8 @@ describe('Pharmacy and inventory (e2e)', () => {
       }).expect(201);
       expect(res.body.status).toBe('PREPARED');
       expect(res.body.allocations).toEqual([
-        { batchId: sooner.body.id, quantity: 5 },
-        { batchId: later.body.id, quantity: 2 },
+        { batchId: sooner.body.id, batchNumber: 'SOON', quantity: 5 },
+        { batchId: later.body.id, batchNumber: 'LATE', quantity: 2 },
       ]);
 
       const batches = await ctx.admin.stockBatch.findMany({ where: { medicationId: med } });

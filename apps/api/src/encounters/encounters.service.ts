@@ -108,6 +108,9 @@ export class EncountersService {
       tx.encounter.findUnique({
         where: { id: encounterId },
         include: {
+          patient: {
+            select: { id: true, firstName: true, lastName: true, dateOfBirth: true, phone: true },
+          },
           vitals: { orderBy: { recordedAt: 'desc' } },
           metabolicWorkups: { orderBy: { createdAt: 'desc' } },
           registration: true,

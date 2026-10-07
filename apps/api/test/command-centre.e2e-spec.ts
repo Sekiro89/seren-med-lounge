@@ -195,7 +195,7 @@ describe('Clinic command centre (e2e)', () => {
       await ctx
         .http()
         .get(`/doctors/${ctx.ids.senior}/slots?date=${futureDate}`)
-        .set(ctx.as('nurse'))
+        .set(ctx.as('labtech'))
         .expect(403);
     });
 

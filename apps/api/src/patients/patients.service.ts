@@ -838,6 +838,25 @@ export class PatientsService {
   }
 
   /**
+   * One patient for the staff record page. `hasAccount` says whether they
+   * have a portal login; the password hash itself never leaves this method.
+   * Tenant-scoped by RLS: another organization's patient is a 404.
+   */
+  async findForStaff(organizationId: string, patientId: string) {
+    const patient = await this.prisma.withTenant(organizationId, (tx) =>
+      tx.patient.findUnique({
+        where: { id: patientId },
+        select: { ...PATIENT_PROFILE_SELECT, passwordHash: true },
+      }),
+    );
+    if (!patient) {
+      throw new NotFoundException('Patient not found.');
+    }
+    const { passwordHash, ...profile } = patient;
+    return { ...profile, hasAccount: passwordHash !== null };
+  }
+
+  /**
    * "Me" lookup for an already-authenticated patient — id comes from
    * the verified JWT's `sub`, never from client input, so there's no
    * way to request a different patient's record through this method.

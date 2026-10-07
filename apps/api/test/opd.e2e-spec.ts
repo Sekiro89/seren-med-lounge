@@ -448,6 +448,58 @@ describe('OPD registration, queue and intake (e2e)', () => {
     });
   });
 
+  describe('single patient for staff', () => {
+    it('returns the profile with hasAccount, never the password hash, and 404s across tenants', async () => {
+      const res = await http().get(`/patients/${patientAId}`).set(as('nurse')).expect(200);
+      expect(res.body).toMatchObject({ id: patientAId, firstName: 'Opd', hasAccount: true });
+      expect(JSON.stringify(res.body)).not.toContain('passwordHash');
+      expect(res.body).not.toHaveProperty('passwordHash');
+
+      const noAccount = await http()
+        .get(`/patients/${otherPatientAId}`)
+        .set(as('nurse'))
+        .expect(200);
+      expect(noAccount.body.hasAccount).toBe(false);
+
+      await http().get(`/patients/${patientAId}`).set(as('adminB')).expect(404);
+      await http().get(`/patients/${patientAId}`).set(as('billing')).expect(200);
+    });
+  });
+
+  describe('staff directory', () => {
+    it('lists active staff (name and role only) for any staff member, filtered by role, and refuses patients', async () => {
+      const all = await http().get('/users/directory').set(as('nurse')).expect(200);
+      expect(all.body.map((u: { fullName: string }) => u.fullName)).toEqual(
+        expect.arrayContaining(['nurse', 'junior', 'senior']),
+      );
+      expect(Object.keys(all.body[0]).sort()).toEqual(['fullName', 'id', 'role']);
+
+      const doctors = await http()
+        .get('/users/directory?role=SENIOR_DOCTOR')
+        .set(as('billing'))
+        .expect(200);
+      expect(doctors.body.map((u: { role: string }) => u.role)).toEqual(['SENIOR_DOCTOR']);
+      await http().get('/users/directory?role=NOPE').set(as('nurse')).expect(400);
+
+      // Another organization's staff never appear.
+      const other = await http().get('/users/directory').set(as('adminB')).expect(200);
+      expect(other.body).toHaveLength(1);
+
+      const login = await http()
+        .post('/auth/patient/login')
+        .send({
+          organizationId: orgA.id,
+          email: 'patient@opd-a.example.com',
+          password: patientPassword,
+        })
+        .expect(201);
+      await http()
+        .get('/users/directory')
+        .set('Authorization', `Bearer ${login.body.accessToken}`)
+        .expect(403);
+    });
+  });
+
   describe('tenant isolation and audit', () => {
     it("never lets org B register, see, or move org A's visits", async () => {
       const encounterId = await checkedInEncounter();

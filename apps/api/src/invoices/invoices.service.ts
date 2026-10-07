@@ -10,6 +10,7 @@ import { PrismaService, type ExtendedPrismaClient } from '../prisma/prisma.servi
 import { AuditService } from '../audit/audit.service';
 
 const INVOICE_DETAIL_INCLUDE = {
+  patient: { select: { id: true, firstName: true, lastName: true } },
   items: true,
   payments: { include: { refunds: true }, orderBy: { createdAt: 'asc' } },
 } as const;
@@ -103,6 +104,7 @@ export class InvoicesService {
     return this.prisma.withTenant(organizationId, (tx) =>
       tx.invoice.findMany({
         where: { patientId: filter.patientId },
+        include: { patient: { select: { id: true, firstName: true, lastName: true } } },
         orderBy: { number: 'desc' },
         take: 100,
       }),
