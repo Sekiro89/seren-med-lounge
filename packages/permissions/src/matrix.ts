@@ -4,7 +4,10 @@ import type { Permission } from './permissions';
 /**
  * Draft role → permission matrix. This encodes an initial, conservative
  * assumption per docs/architecture/open-questions.md (exact permission
- * boundaries per role need product sign-off). ADMINISTRATOR is granted
+ * boundaries per role need product sign-off). The grants added with the
+ * 2026-10 backend build (medical-history, referral, follow-up, queue for
+ * doctors, templates, reviews, schedules, messages) are listed in
+ * open-questions.md#16 for that same sign-off. ADMINISTRATOR is granted
  * everything; every other role starts scoped to its named workspace.
  */
 export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
@@ -39,6 +42,12 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     'user:manage',
     'role:manage',
     'audit-log:read',
+    'medical-history:write',
+    'referral:write',
+    'clinical-template:manage',
+    'review:manage',
+    'schedule:manage',
+    'message:manage',
   ],
   [StaffRole.RECEPTION]: [
     'patient:read',
@@ -47,12 +56,17 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     'appointment:write',
     'queue:manage',
     'lead:read',
+    'schedule:manage',
+    'message:manage',
   ],
   [StaffRole.NURSE]: [
     'patient:read',
     'patient-record:read-clinical',
     'vitals:write',
     'queue:manage',
+    'medical-history:write',
+    'follow-up:manage',
+    'message:manage',
   ],
   [StaffRole.JUNIOR_DOCTOR]: [
     'patient:read',
@@ -62,6 +76,11 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     'prescription:write',
     'lab-order:write',
     'procedure:manage',
+    'queue:manage',
+    'medical-history:write',
+    'referral:write',
+    'follow-up:manage',
+    'message:manage',
   ],
   [StaffRole.SENIOR_DOCTOR]: [
     'patient:read',
@@ -75,6 +94,12 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     'lab-order:write',
     'procedure:manage',
     'surgery:manage',
+    'queue:manage',
+    'medical-history:write',
+    'referral:write',
+    'follow-up:manage',
+    'clinical-template:manage',
+    'message:manage',
   ],
   [StaffRole.SURGERY_COORDINATOR]: [
     'patient:read',
@@ -91,7 +116,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
   [StaffRole.PHARMACY]: ['patient:read', 'pharmacy:dispense', 'inventory:manage'],
   [StaffRole.BILLING]: ['patient:read', 'invoice:manage', 'payment:manage', 'refund:issue'],
   [StaffRole.INSURANCE]: ['patient:read', 'insurance:manage'],
-  [StaffRole.MARKETING]: ['lead:read', 'lead:write', 'campaign:manage'],
+  [StaffRole.MARKETING]: ['lead:read', 'lead:write', 'campaign:manage', 'review:manage'],
 };
 
 export function roleHasPermission(role: StaffRole, permission: Permission): boolean {

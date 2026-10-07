@@ -37,4 +37,10 @@ export type Permission =
   | 'campaign:manage'
   | 'user:manage'
   | 'role:manage'
-  | 'audit-log:read';
+  | 'audit-log:read'
+  | 'medical-history:write'
+  | 'referral:write'
+  | 'clinical-template:manage'
+  | 'review:manage'
+  | 'schedule:manage'
+  | 'message:manage';
